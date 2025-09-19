@@ -1,8 +1,11 @@
 """
-Shared test utilities for rpsd-storage.
+Test utilities for rpsd-storage tests.
 
-This module provides common utilities that can be used by both tests and examples
-to avoid code duplication while maintaining separation of concerns.
+This module provides test-specific utilities and imports shared utilities
+from the examples module to avoid code duplication.
+
+Test-specific utilities focus on verification and edge cases,
+while shared utilities provide common data and helper functions.
 """
 
 import json
@@ -10,65 +13,49 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
+from ..examples.shared import (
+    SampleContent,
+    create_sample_file,
+    create_temp_storage_dir,
+    get_metadata_preset,
+)
 
+
+# Legacy aliases for backward compatibility with existing tests
 class TestContent:
-    """Container for test content with various formats."""
+    """Legacy class - use SampleContent from shared module instead."""
+    SIMPLE_TEXT = SampleContent.SIMPLE_TEXT
+    FAKE_PNG = SampleContent.FAKE_PNG
 
-    # Text content samples
-    SIMPLE_TEXT = b"Hello, this is a test file!"
+    @classmethod
+    def get_json_bytes(cls) -> bytes:
+        return SampleContent.get_user_data_json()
+
+    # Additional test-specific content that's not in examples
     LOG_CONTENT = (
         b"2024-01-15 10:30:00 INFO Application started\n"
         b"2024-01-15 10:30:01 INFO User login successful"
     )
-    MULTILINE_TEXT = b"""This is a multi-line document.
-It contains several lines of text.
-Each line serves as a test case.
-End of document."""
 
-    # Structured data samples
     JSON_DATA = {
-        "users": [
-            {"name": "Alice", "age": 30, "city": "New York"},
-            {"name": "Bob", "age": 25, "city": "Los Angeles"},
-        ],
-        "metadata": {"version": "1.0", "created": "2024-01-15"},
+        "test": "data",
+        "users": [{"name": "Test User", "id": 1}]
     }
-
-    CSV_DATA = b"name,age,city\nJohn,30,New York\nJane,25,Los Angeles\nBob,35,Chicago"
-
-    XML_DATA = (
-        b'<?xml version="1.0" encoding="UTF-8"?>'
-        b"<root><message>Hello World</message>"
-        b"<timestamp>2024-01-15</timestamp></root>"
-    )
-
-    # Binary content samples
-    FAKE_PDF = b"%PDF-1.4\nfake PDF content for demonstration purposes"
-    FAKE_PNG = b"\x89PNG\r\n\x1a\n" + b"fake PNG image data for testing"
-
-    @classmethod
-    def get_json_bytes(cls) -> bytes:
-        """Get JSON data as bytes."""
-        return json.dumps(cls.JSON_DATA).encode("utf-8")
 
 
 class SampleMetadata:
-    """Container for sample metadata configurations."""
-
+    """Legacy class - use CommonMetadata and get_metadata_preset() instead."""
     BASIC = {"who": "test_user", "what": "test_data"}
-
     FULL = {
         "who": "admin",
         "what": "configuration",
-        "source_url": "https://api.example.com/config.json",
+        "source_url": "https://api.example.com/config.json"
     }
-
     MINIMAL = {}
-
     USER_EXPORT = {
         "who": "data_team",
         "what": "user_export",
-        "source_url": "https://api.example.com/users.csv",
+        "source_url": "https://api.example.com/users.csv"
     }
 
 
@@ -76,44 +63,54 @@ def create_temp_directory() -> tempfile.TemporaryDirectory:
     """
     Create a temporary directory for testing.
 
-    Returns:
-        TemporaryDirectory: Context manager for temporary directory
+    Note: Consider using create_temp_storage_dir() from shared module instead.
     """
-    return tempfile.TemporaryDirectory()
+    return create_temp_storage_dir()
 
 
 def create_test_file_data(content_type: str = "text") -> tuple[bytes, str, str]:
     """
     Create test file data based on content type.
 
+    Note: This wraps create_sample_file() from shared module with additional
+    test-specific content types for backward compatibility.
+
     Args:
-        content_type: Type of content to create (text, json, xml, csv, pdf, png)
+        content_type: Type of content to create (text, json, xml, csv, pdf, png, log)
 
     Returns:
         tuple: (content_bytes, filename, mime_type)
     """
-    content_map = {
-        "text": (TestContent.SIMPLE_TEXT, "test.txt", "text/plain"),
-        "log": (TestContent.LOG_CONTENT, "application.log", "text/plain"),
-        "multiline": (TestContent.MULTILINE_TEXT, "document.txt", "text/plain"),
-        "json": (TestContent.get_json_bytes(), "data.json", "application/json"),
-        "xml": (TestContent.XML_DATA, "data.xml", "application/xml"),
-        "csv": (TestContent.CSV_DATA, "users.csv", "text/csv"),
-        "pdf": (TestContent.FAKE_PDF, "document.pdf", "application/pdf"),
-        "png": (TestContent.FAKE_PNG, "image.png", "image/png"),
-    }
+    # Try to use shared module first for common content types
+    try:
+        return create_sample_file(content_type)
+    except ValueError:
+        # Fall back to test-specific content types not in shared module
+        test_specific_content = {
+            "log": (TestContent.LOG_CONTENT, "application.log", "text/plain"),
+        }
 
-    if content_type not in content_map:
-        available = list(content_map.keys())
-        msg = f"Unknown content type: {content_type}. Available: {available}"
+        if content_type in test_specific_content:
+            return test_specific_content[content_type]
+
+        # Re-raise the original error with both available types
+        try:
+            shared_types = ["text", "json", "csv", "xml", "pdf", "png"]
+        except Exception:
+            shared_types = []
+
+        test_types = list(test_specific_content.keys())
+        all_types = shared_types + test_types
+        msg = f"Unknown content type: {content_type}. Available: {all_types}"
         raise ValueError(msg)
-
-    return content_map[content_type]
 
 
 def create_test_metadata(preset: str = "basic") -> dict[str, Any]:
     """
     Create test metadata based on preset.
+
+    Note: Consider using get_metadata_preset() from shared module instead.
+    This function provides backward compatibility and test-specific presets.
 
     Args:
         preset: Metadata preset to use (basic, full, minimal, user_export)
@@ -121,6 +118,21 @@ def create_test_metadata(preset: str = "basic") -> dict[str, Any]:
     Returns:
         dict: Metadata dictionary
     """
+    # Map test presets to shared presets where possible
+    preset_mapping = {
+        "basic": "minimal",
+        "full": "document",
+        "minimal": "minimal",
+        "user_export": "data_export"
+    }
+
+    if preset in preset_mapping:
+        try:
+            return get_metadata_preset(preset_mapping[preset])
+        except ValueError:
+            pass
+
+    # Fall back to legacy test-specific metadata
     preset_map = {
         "basic": SampleMetadata.BASIC,
         "full": SampleMetadata.FULL,
@@ -129,9 +141,9 @@ def create_test_metadata(preset: str = "basic") -> dict[str, Any]:
     }
 
     if preset not in preset_map:
-        raise ValueError(
-            f"Unknown preset: {preset}. Available: {list(preset_map.keys())}"
-        )
+        available = list(preset_map.keys())
+        msg = f"Unknown preset: {preset}. Available: {available}"
+        raise ValueError(msg)
 
     return preset_map[preset].copy()
 

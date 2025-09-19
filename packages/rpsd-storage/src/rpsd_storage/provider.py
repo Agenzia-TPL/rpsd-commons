@@ -15,6 +15,7 @@ class StorageProvider(ABC):
         source_url=None,
         who=None,
         what=None,
+        custom_metadata=None,
     ):
         """
         Saves content to the storage provider.

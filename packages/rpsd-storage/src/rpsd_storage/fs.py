@@ -9,11 +9,6 @@ from rpsd_storage.provider import StorageProvider
 logger = logging.getLogger()
 
 
-def test_function(x, y, z):
-    result = x + y + z
-    return result
-
-
 class FSStorageProvider(StorageProvider):
     def __init__(self, base_path):
         if not base_path:
@@ -29,6 +24,7 @@ class FSStorageProvider(StorageProvider):
         source_url=None,
         who=None,
         what=None,
+        custom_metadata=None,
     ):
         """
         Saves content to the file system.
@@ -59,6 +55,8 @@ class FSStorageProvider(StorageProvider):
             metadata["who"] = who
         if what:
             metadata["what"] = what
+        if custom_metadata:
+            metadata["custom_metadata"] = custom_metadata
 
         with open(file_path, "wb") as f:
             f.write(content)
@@ -88,7 +86,7 @@ class FSStorageProvider(StorageProvider):
             raise FileNotFoundError(f"No file found for object_id: {object_id}")
 
         if len(matching_files) > 1:
-            raise Exception(f"Multiple files found for object_id {object_id}: {matching_files}")
+            raise Exception(f"Multiple files found for {object_id}: {matching_files}")
 
         file_name = matching_files[0]
         file_path = os.path.join(self.base_path, file_name)
@@ -103,7 +101,7 @@ class FSStorageProvider(StorageProvider):
 
         # Load the metadata
         try:
-            with open(meta_path, "r") as f:
+            with open(meta_path) as f:
                 metadata = json.load(f)
         except FileNotFoundError:
             raise FileNotFoundError(f"Metadata file not found: {meta_path}")

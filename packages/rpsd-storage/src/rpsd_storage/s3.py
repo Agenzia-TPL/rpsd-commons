@@ -1,3 +1,4 @@
+import json
 import logging
 import os
 import uuid
@@ -25,6 +26,7 @@ class S3StorageProvider(StorageProvider):
         source_url=None,
         who=None,
         what=None,
+        custom_metadata=None,
     ):
         """
         Saves content to S3
@@ -54,6 +56,9 @@ class S3StorageProvider(StorageProvider):
             metadata["who"] = who
         if what:
             metadata["what"] = what
+        if custom_metadata:
+            # S3 metadata values must be strings
+            metadata["custom_metadata"] = json.dumps(custom_metadata)
 
         self.s3_client.put_object(
             Bucket=self.bucket_name,
@@ -98,7 +103,7 @@ class S3StorageProvider(StorageProvider):
             raise FileNotFoundError(f"No S3 object found for object_id: {object_id}")
 
         if len(matching_keys) > 1:
-            raise Exception(f"Multiple S3 objects found for object_id {object_id}: {matching_keys}")
+            raise Exception(f"Multiple S3 objects for {object_id}: {matching_keys}")
 
         s3_key = matching_keys[0]
 
@@ -125,6 +130,8 @@ class S3StorageProvider(StorageProvider):
                 metadata["who"] = s3_metadata["who"]
             if "what" in s3_metadata:
                 metadata["what"] = s3_metadata["what"]
+            if "custom_metadata" in s3_metadata:
+                metadata["custom_metadata"] = json.loads(s3_metadata["custom_metadata"])
 
         except self.s3_client.exceptions.NoSuchKey:
             raise FileNotFoundError(f"S3 object not found: {s3_key}")
