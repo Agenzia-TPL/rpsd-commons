@@ -86,11 +86,11 @@ if command -v node &> /dev/null && command -v npm &> /dev/null; then
     NPM_VERSION=$(npm --version)
     print_success "Node.js already available: $NODE_VERSION"
     print_success "npm already available: $NPM_VERSION"
-    
+
     # Update npm to latest version
     print_status "Updating npm to latest version..."
     npm install -g npm@latest
-    
+
     # Refresh PATH and verify npm update
     hash -r 2>/dev/null || true
     NEW_NPM_VERSION=$(npm --version)
@@ -106,11 +106,11 @@ else
     NPM_VERSION=$(npm --version)
     print_success "Node.js installed: $NODE_VERSION"
     print_success "npm installed: $NPM_VERSION"
-    
+
     # Update npm to latest version
     print_status "Updating npm to latest version..."
     npm install -g npm@latest
-    
+
     # Refresh PATH and verify npm update
     hash -r 2>/dev/null || true
     NEW_NPM_VERSION=$(npm --version)
@@ -134,7 +134,7 @@ CLAUDE_INSTALLED=false
 # Method 1: Check npm global packages first
 if npm list -g @anthropic-ai/claude-code &> /dev/null; then
     print_success "Claude Code package is installed in npm global packages"
-    
+
     # Find where npm installs global binaries
     NPM_PREFIX=$(npm config get prefix 2>/dev/null || echo "/usr/local")
     POSSIBLE_PATHS=(
@@ -145,14 +145,14 @@ if npm list -g @anthropic-ai/claude-code &> /dev/null; then
         "/usr/local/bin/claude"
         "/usr/local/bin/claude-code"
     )
-    
+
     print_status "Checking for claude binary in common locations..."
     for path in "${POSSIBLE_PATHS[@]}"; do
         print_status "  Checking: $path"
         if [ -f "$path" ] && [ -x "$path" ]; then
             CLAUDE_INSTALLED=true
             print_success "Found Claude binary at: $path"
-            
+
             # Test if it works
             if "$path" --version &> /dev/null; then
                 CLAUDE_VERSION=$("$path" --version 2>/dev/null || echo "unknown")
@@ -163,7 +163,7 @@ if npm list -g @anthropic-ai/claude-code &> /dev/null; then
             break
         fi
     done
-    
+
     if [ "$CLAUDE_INSTALLED" = false ]; then
         print_warning "Package installed but binary not found in expected locations"
         print_status "npm prefix: $NPM_PREFIX"
@@ -217,7 +217,7 @@ mkdir -p .claude
 # Create local settings file for project-specific, non-committed settings
 if [ ! -f ".claude/settings.local.json" ]; then
     print_status "Creating .claude/settings.local.json..."
-    
+
     cat > .claude/settings.local.json << 'EOF'
 {
   "permissions": {
@@ -227,10 +227,10 @@ if [ ! -f ".claude/settings.local.json" ]; then
       "Bash(uv run ruff format)",
       "Bash(uv run ruff check)",
       "Bash(uv sync)",
-      "Bash(uv add*)",
-      "Bash(uv remove*)",
-      "Bash(git add*)",
-      "Bash(git commit*)",
+      "Bash(uv add:*)",
+      "Bash(uv remove:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
       "Read"
     ]
   }
@@ -242,7 +242,7 @@ fi
 # Create CLAUDE.local.md - this is git-ignored and personal to each developer
 if [ ! -f "CLAUDE.local.md" ]; then
     print_status "Creating CLAUDE.local.md (personal, git-ignored)..."
-    
+
     cat > CLAUDE.local.md << 'EOF'
 # Personal Claude Code Context
 
@@ -290,7 +290,7 @@ fi
 # Create the generic ai-context.md for team documentation (optional)
 if [ ! -f "ai-context.md" ]; then
     print_status "Creating ai-context.md (optional team documentation)..."
-    
+
     cat > ai-context.md << 'EOF'
 # AI Development Assistant Context
 
@@ -342,7 +342,7 @@ project-root/
 - Use `uv run pytest` to run tests after making changes
 - Use `uv run ruff format` and `uv run ruff check --fix` for code quality
 - For workspace projects, use `--package <member>` when targeting specific packages
-- Follow existing code patterns and structure  
+- Follow existing code patterns and structure
 - Consider security implications of changes
 - Write comprehensive documentation
 

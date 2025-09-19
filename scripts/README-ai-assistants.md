@@ -15,7 +15,7 @@ This directory contains setup scripts for various AI-powered development assista
 ```
 
 ### 🐙 GitHub Copilot CLI
-**File:** `setup-github-copilot.sh`  
+**File:** `setup-github-copilot.sh`
 **What it does:** Installs GitHub CLI and Copilot CLI extension
 **Requirements:** GitHub Copilot subscription
 **Best for:** Command suggestions and explanations in terminal
@@ -53,7 +53,7 @@ Consider creating an `ai-context.md` file (or similar) that helps AI assistants 
 ## Architecture
 [Key architectural decisions and patterns]
 
-## Coding Standards  
+## Coding Standards
 [Style guides, conventions, best practices]
 
 ## Common Tasks
@@ -77,7 +77,7 @@ To add support for other AI tools, follow this pattern:
 set -e
 
 # Tool-specific setup logic
-# - Check prerequisites  
+# - Check prerequisites
 # - Install dependencies
 # - Install the tool
 # - Verify installation

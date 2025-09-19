@@ -12,6 +12,7 @@ wheels/
 # Other
 mnt/
 
-# Claude Code local files (personal, not shared)
+# AI assistants local files (personal, not shared)
+ai-history.local.md
 CLAUDE.local.md
 .claude/settings.local.json

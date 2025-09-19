@@ -48,7 +48,7 @@ project-root/
 - Use `uv run pytest` to run tests after making changes
 - Use `uv run ruff format` and `uv run ruff check --fix` for code quality
 - For workspace projects, use `--package <member>` when targeting specific packages
-- Follow existing code patterns and structure  
+- Follow existing code patterns and structure
 - Consider security implications of changes
 - Write comprehensive documentation
 

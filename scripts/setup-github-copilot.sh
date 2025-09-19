@@ -113,7 +113,7 @@ print_warning "Note: Requires GitHub Copilot subscription and authentication."
 # Create the generic ai-context.md for team documentation (same as Claude Code script)
 if [ ! -f "ai-context.md" ]; then
     print_status "Creating ai-context.md (team documentation for AI assistants)..."
-    
+
     cat > ai-context.md << 'EOF'
 # AI Development Assistant Context
 
@@ -165,7 +165,7 @@ project-root/
 - Use `uv run pytest` to run tests after making changes
 - Use `uv run ruff format` and `uv run ruff check --fix` for code quality
 - For workspace projects, use `--package <member>` when targeting specific packages
-- Follow existing code patterns and structure  
+- Follow existing code patterns and structure
 - Consider security implications of changes
 - Write comprehensive documentation
 
@@ -186,7 +186,7 @@ fi
 
 if [ ! -f ".github/copilot-instructions.md" ]; then
     print_status "Creating .github/copilot-instructions.md (for VS Code Copilot integration)..."
-    
+
     cat > .github/copilot-instructions.md << 'EOF'
 # GitHub Copilot Instructions
 
