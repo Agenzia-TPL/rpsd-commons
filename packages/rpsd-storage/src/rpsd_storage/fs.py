@@ -68,3 +68,50 @@ class FSStorageProvider(StorageProvider):
 
         logger.info(f"Saved to file system: {file_path}")
         return object_id
+
+    def load(self, object_id):
+        """
+        Loads content and metadata from the file system using the object_id.
+        """
+        # Find the file by searching for files that start with the object_id
+        # Since object_id might have prefixes from who/what, we need to be flexible
+        matching_files = []
+        for file_path in os.listdir(self.base_path):
+            if file_path.endswith(".meta"):
+                continue  # Skip metadata files in the search
+            # Check if this file belongs to our object_id
+            base_name = os.path.splitext(file_path)[0]
+            if base_name == object_id or base_name.endswith(f"-{object_id}"):
+                matching_files.append(file_path)
+
+        if not matching_files:
+            raise FileNotFoundError(f"No file found for object_id: {object_id}")
+
+        if len(matching_files) > 1:
+            raise Exception(f"Multiple files found for object_id {object_id}: {matching_files}")
+
+        file_name = matching_files[0]
+        file_path = os.path.join(self.base_path, file_name)
+        meta_path = f"{file_path}.meta"
+
+        # Load the file content
+        try:
+            with open(file_path, "rb") as f:
+                content = f.read()
+        except FileNotFoundError:
+            raise FileNotFoundError(f"Content file not found: {file_path}")
+
+        # Load the metadata
+        try:
+            with open(meta_path, "r") as f:
+                metadata = json.load(f)
+        except FileNotFoundError:
+            raise FileNotFoundError(f"Metadata file not found: {meta_path}")
+        except json.JSONDecodeError as e:
+            raise Exception(f"Invalid metadata file {meta_path}: {e}")
+
+        logger.info(f"Loaded from file system: {file_path}")
+        return {
+            "content": content,
+            "metadata": metadata
+        }
