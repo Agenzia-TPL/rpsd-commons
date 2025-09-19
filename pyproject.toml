@@ -1,0 +1,27 @@
+[project]
+name = "rpsd-commons"
+version = "0.1.0"
+description = "Collection of common useful packages"
+readme = "README.md"
+authors = [
+    { name = "caipirginka", email = "github@oicom.com" }
+]
+requires-python = ">=3.13"
+dependencies = [
+    "rpsd-messaging",
+    "rpsd-storage",
+    "rpsd-workflow"
+]
+
+[tool.uv.sources]
+# Tell uv these dependencies come from workspace, not PyPI
+rpsd-messaging = { workspace = true }
+rpsd-storage = { workspace = true }
+rpsd-workflow = { workspace = true }
+
+[tool.uv.workspace]
+members = ["packages/*"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

@@ -1,0 +1,20 @@
+[project]
+name = "rpsd-storage"
+version = "0.1.0"
+description = "Storage utilities (part of rpsd-commons)"
+readme = "README.md"
+authors = [
+    { name = "caipirginka", email = "github@oicom.com" }
+]
+requires-python = ">=3.13"
+dependencies = [
+    "boto3==1.39.14"
+]
+
+[tool.uv.sources]
+# Internal workspace dependencies
+#my-collection-utils = { workspace = true }
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

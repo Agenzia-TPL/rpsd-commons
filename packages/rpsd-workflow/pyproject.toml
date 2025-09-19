@@ -1,0 +1,21 @@
+[project]
+name = "rpsd-workflow"
+version = "0.1.0"
+description = "Workflow utilities (part of rpsd-commons)"
+readme = "README.md"
+authors = [
+    { name = "caipirginka", email = "github@oicom.com" }
+]
+requires-python = ">=3.13"
+dependencies = [
+    "dapr>=1.15.0",
+    "dapr-ext-workflow>=1.15.0"
+]
+
+[tool.uv.sources]
+# Internal workspace dependencies
+#my-collection-utils = { workspace = true }
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

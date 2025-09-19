@@ -1,0 +1,21 @@
+[project]
+name = "rpsd-messaging"
+version = "0.1.0"
+description = "Messaging utilities (part of rpsd-commons)"
+readme = "README.md"
+authors = [
+    { name = "caipirginka", email = "github@oicom.com" }
+]
+requires-python = ">=3.13"
+dependencies = [
+    "fastapi[standard]>=0.116.0,<0.117.0",
+    "rpsd-storage"
+]
+
+[tool.uv.sources]
+# Internal workspace dependencies
+rpsd-storage = { workspace = true }
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
