@@ -29,6 +29,8 @@ build-backend = "hatchling.build"
 [dependency-groups]
 dev = [
     "ruff>=0.13.1",
+    "pytest>=8.0.0",
+    "moto[s3]>=5.0.0",
 ]
 
 [tool.ruff]
@@ -43,3 +45,10 @@ ignore = []
 [tool.ruff.format]
 quote-style = "double"
 indent-style = "space"
+
+[tool.pytest.ini_options]
+testpaths = ["packages/*/tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "-v --tb=short"
