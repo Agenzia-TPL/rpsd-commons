@@ -52,6 +52,16 @@ project-root/
 - Consider security implications of changes
 - Write comprehensive documentation
 
+## Code Quality Requirements
+- **IMPORTANT:** Generate code that passes the configured Ruff rules.
+- Use modern Python type hints: `dict` instead of `Dict`, `list` instead of `List`, `str | None` instead of `Optional[str]`
+- Keep lines under 88 characters (project's line length limit)
+- Sort and format imports properly (standard library, third-party, local imports in separate groups)
+- Remove unused imports
+- Add trailing newlines to all files
+- Avoid f-strings without placeholders - use regular strings instead
+- Break long lines using parentheses, multi-line strings, or temporary variables
+
 ---
 *This file can be used by any AI coding assistant to understand the project context.*
 *Individual developers may have their own tool-specific context files (e.g., CLAUDE.local.md)*
