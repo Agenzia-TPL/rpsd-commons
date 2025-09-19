@@ -11,3 +11,7 @@ wheels/
 
 # Other
 mnt/
+
+# Claude Code local files (personal, not shared)
+CLAUDE.local.md
+.claude/settings.local.json
