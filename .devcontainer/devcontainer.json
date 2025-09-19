@@ -56,7 +56,16 @@
 					".",
 					"-p",
 					"test*.py"
-				]
+				],
+				// Ruff configuration
+				"editor.formatOnSave": true,
+				"editor.codeActionsOnSave": {
+					"source.fixAll.ruff": "explicit",
+					"source.organizeImports.ruff": "explicit"
+				},
+				"[python]": {
+					"editor.formatOnSave": true
+				}
 				/* 				"python.linting.enabled": true,
 				"python.linting.pylintEnabled": true,
 				"python.formatting.autopep8Path": "/usr/local/py-utils/bin/autopep8",
@@ -73,7 +82,7 @@
 			"extensions": [
 				"ms-python.python",
 				"ms-python.vscode-pylance",
-				"ms-python.autopep8",
+				"charliermarsh.ruff",
 				"rioj7.command-variable"
 			]
 		}
