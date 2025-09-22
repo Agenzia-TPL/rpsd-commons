@@ -6,9 +6,11 @@ from unittest.mock import patch
 
 import boto3
 import pytest
+import respx
 from botocore.exceptions import ClientError
 from moto import mock_aws
 
+from rpsd_storage.http import HTTPStorageProvider
 from rpsd_storage.s3 import S3StorageProvider
 
 from .test_utils import (
@@ -440,3 +442,115 @@ class TestS3StorageProviderIntegration:
         # S3 metadata keys are lowercase, but values should preserve case
         assert metadata_loaded["who"] == "TestUser"
         assert metadata_loaded["what"] == "TestData"
+
+    @respx.mock
+    def test_s3_presigned_url_with_http_provider(
+        self, s3_storage_provider, mock_s3_setup
+    ):
+        """Test loading S3 object via presigned URL using HTTP provider."""
+        s3_client, bucket_name = mock_s3_setup
+        content = TestContent.get_json_bytes()
+        filename = "presigned_test.json"
+
+        # Save file using S3 provider
+        s3_url, s3_metadata = s3_storage_provider.save(
+            content=content,
+            filename=filename,
+            content_type="application/json",
+            who="test_user",
+            what="presigned_data",
+        )
+
+        # Extract S3 key from the URL
+        # URL format: s3://bucket-name/who/what/object_id
+        s3_key = s3_url.split(f"s3://{bucket_name}/", 1)[1]
+
+        # Generate presigned URL (valid for 1 hour)
+        presigned_url = s3_client.generate_presigned_url(
+            "get_object",
+            Params={"Bucket": bucket_name, "Key": s3_key},
+            ExpiresIn=3600,
+        )
+
+        # Mock the presigned URL request to return the S3 object content
+        # In a real scenario, this would be handled by AWS, but we need to mock it
+        respx.get(presigned_url).mock(
+            return_value=respx.MockResponse(
+                200,
+                content=content,
+                headers={
+                    "content-type": "application/json",
+                    "content-length": str(len(content)),
+                    "etag": '"test-etag"',
+                    "last-modified": "Wed, 21 Oct 2023 07:28:00 GMT",
+                    "server": "AmazonS3",
+                    "x-amz-request-id": "test-request-id",
+                },
+            )
+        )
+
+        # Load using HTTP provider with the presigned URL
+        http_provider = HTTPStorageProvider()
+        http_content, http_metadata = http_provider.load(presigned_url)
+
+        # Verify content matches exactly
+        assert http_content == content
+
+        # Verify HTTP metadata includes S3-specific headers
+        assert http_metadata["provider"] == "http"
+        assert http_metadata["status_code"] == 200
+        assert http_metadata["content_type"] == "application/json"
+        assert http_metadata["content_length"] == len(content)
+
+        # Verify S3-specific headers are captured
+        headers = http_metadata["headers"]
+        assert headers["etag"] == '"test-etag"'
+        assert headers["server"] == "AmazonS3"
+        assert "x-amz-request-id" in headers
+
+        # The URL in HTTP metadata should be the presigned URL
+        assert http_metadata["url"] == presigned_url
+
+    def test_s3_presigned_url_binary_content(self, s3_storage_provider, mock_s3_setup):
+        """Test presigned URL integration with binary content."""
+        s3_client, bucket_name = mock_s3_setup
+        content = TestContent.FAKE_PNG
+        filename = "test_image.png"
+
+        # Save binary file using S3 provider
+        s3_url, s3_metadata = s3_storage_provider.save(
+            content=content,
+            filename=filename,
+            content_type="image/png",
+        )
+
+        # Extract S3 key and generate presigned URL
+        s3_key = s3_url.split(f"s3://{bucket_name}/", 1)[1]
+        presigned_url = s3_client.generate_presigned_url(
+            "get_object",
+            Params={"Bucket": bucket_name, "Key": s3_key},
+            ExpiresIn=3600,
+        )
+
+        # Mock the presigned URL to return binary content
+        with respx.mock:
+            respx.get(presigned_url).mock(
+                return_value=respx.MockResponse(
+                    200,
+                    content=content,
+                    headers={
+                        "content-type": "image/png",
+                        "content-length": str(len(content)),
+                        "server": "AmazonS3",
+                    },
+                )
+            )
+
+            # Load binary content via HTTP provider
+            http_provider = HTTPStorageProvider()
+            http_content, http_metadata = http_provider.load(presigned_url)
+
+            # Verify binary content is preserved exactly
+            assert http_content == content
+            assert http_metadata["content_type"] == "image/png"
+            assert http_metadata["content_length"] == len(content)
