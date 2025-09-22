@@ -14,15 +14,59 @@ What you'll learn:
 This builds on concepts from 01_getting_started.py and 02_basic_usage.py
 """
 
-from shared import (
-    create_sample_file,
-    create_temp_storage_dir,
-    get_metadata_preset,
-    print_file_info,
-    print_metadata_info,
-)
+import tempfile
+from typing import Any
 
 from rpsd_storage import FSStorageProvider
+
+
+# Simple utilities for this example
+def create_sample_file(file_type: str) -> tuple[bytes, str, str]:
+    """Create sample file content for demonstration."""
+    samples = {
+        "text": (b"This is a sample document for metadata demonstration.", "document.txt", "text/plain"),
+        "json": (b'{"export_type": "user_data", "count": 150}', "export.json", "application/json"),
+        "pdf": (b"%PDF-1.4\nSample PDF document", "report.pdf", "application/pdf"),
+        "csv": (b"name,role,active\nAlice,developer,true\nBob,designer,true", "users.csv", "text/csv"),
+        "xml": (b'<?xml version="1.0"?><config><setting>value</setting></config>', "config.xml", "application/xml"),
+        "png": (b"\x89PNG\r\n\x1a\n" + b"Sample PNG image data", "image.png", "image/png"),
+        "log": (b"2024-01-15 10:30:00 INFO Application started", "app.log", "text/plain"),
+    }
+    return samples[file_type]
+
+
+def get_metadata_preset(preset: str) -> dict[str, Any]:
+    """Get predefined metadata for demonstration."""
+    presets = {
+        "document": {"who": "document_processor", "what": "archived_document"},
+        "data_export": {"who": "data_team", "what": "daily_export"},
+        "logs": {"who": "log_collector", "what": "application_logs"},
+        "config": {"who": "devops_team", "what": "config_backup"},
+        "minimal": {},
+    }
+    return presets[preset].copy()
+
+
+def print_file_info(content: bytes, filename: str, mime_type: str) -> None:
+    """Print file information for demonstration."""
+    size_kb = len(content) / 1024
+    preview = content[:40].decode("utf-8", errors="replace")
+    if len(content) > 40:
+        preview += "..."
+    print(f"  📄 {filename}")
+    print(f"     Type: {mime_type}")
+    print(f"     Size: {size_kb:.1f} KB")
+    print(f"     Preview: \"{preview}\"")
+
+
+def print_metadata_info(metadata: dict[str, Any]) -> None:
+    """Print metadata information in a readable format."""
+    if not metadata:
+        print("     Metadata: (none)")
+        return
+    print("     Metadata:")
+    for key, value in metadata.items():
+        print(f"       {key}: {value}")
 
 
 def demonstrate_basic_metadata():
@@ -37,7 +81,7 @@ def demonstrate_basic_metadata():
     print("• WHERE it came from (source URL, system)")
     print()
 
-    with create_temp_storage_dir() as temp_dir:
+    with tempfile.TemporaryDirectory() as temp_dir:
         storage = FSStorageProvider(base_path=temp_dir)
 
         # Example 1: User Document Upload
@@ -99,7 +143,7 @@ def demonstrate_metadata_presets():
     print("For common scenarios, use predefined metadata patterns:")
     print()
 
-    with create_temp_storage_dir() as temp_dir:
+    with tempfile.TemporaryDirectory() as temp_dir:
         storage = FSStorageProvider(base_path=temp_dir)
 
         scenarios = [
@@ -140,7 +184,7 @@ def demonstrate_metadata_benefits():
     print("Let's see how metadata helps in real scenarios:")
     print()
 
-    with create_temp_storage_dir() as temp_dir:
+    with tempfile.TemporaryDirectory() as temp_dir:
         storage = FSStorageProvider(base_path=temp_dir)
 
         # Save multiple files with different metadata
@@ -203,7 +247,7 @@ def demonstrate_advanced_patterns():
     print("=" * 30)
     print()
 
-    with create_temp_storage_dir() as temp_dir:
+    with tempfile.TemporaryDirectory() as temp_dir:
         storage = FSStorageProvider(base_path=temp_dir)
 
         # Pattern 1: Versioned Documents

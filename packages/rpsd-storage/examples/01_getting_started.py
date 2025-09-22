@@ -13,7 +13,7 @@ What you'll learn:
 This is a 5-minute introduction to get you up and running.
 """
 
-from shared import SampleContent, create_temp_storage_dir
+import tempfile
 
 from rpsd_storage import FSStorageProvider
 
@@ -29,7 +29,7 @@ def main():
     print("Step 1: Setting up storage")
     print("-" * 25)
 
-    with create_temp_storage_dir() as temp_dir:
+    with tempfile.TemporaryDirectory() as temp_dir:
         # For this example, we'll store files in a temporary directory
         storage = FSStorageProvider(base_path=temp_dir)
         print(f"✅ Created file storage in: {temp_dir}")
@@ -40,7 +40,7 @@ def main():
         print("-" * 20)
 
         # Let's save a simple text document
-        document_content = SampleContent.SIMPLE_TEXT
+        document_content = b"Hello, World! This is my first file with rpsd-storage."
 
         # The save() method returns an "object_id" - think of it as a receipt
         # You'll use this ID later to retrieve your file

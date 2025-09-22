@@ -13,19 +13,75 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-from ..examples.shared import (
-    SampleContent,
-    create_sample_file,
-    create_temp_storage_dir,
-    get_metadata_preset,
-)
+# Test-specific utilities - self-contained
+
+class SampleContent:
+    """Sample content for testing different file types."""
+    SIMPLE_TEXT = b"Hello, this is a test file!"
+    FAKE_PNG = b"\x89PNG\r\n\x1a\n" + b"fake PNG image data for testing"
+    CONFIG_XML = (
+        b'<?xml version="1.0" encoding="UTF-8"?>'
+        b"<configuration>"
+        b"  <database>"
+        b"    <host>localhost</host>"
+        b"    <port>5432</port>"
+        b"  </database>"
+        b"</configuration>"
+    )
+
+    @classmethod
+    def get_user_data_json(cls) -> bytes:
+        return b'{"test": "data", "users": [{"name": "Test User", "id": 1}]}'
+
+
+class CommonMetadata:
+    """Common metadata patterns for testing."""
+    MINIMAL = {}
+
+
+def create_sample_file(file_type: str) -> tuple[bytes, str, str]:
+    """Create sample file content for testing."""
+    samples = {
+        "text": (SampleContent.SIMPLE_TEXT, "test.txt", "text/plain"),
+        "json": (SampleContent.get_user_data_json(), "test.json", "application/json"),
+        "xml": (SampleContent.CONFIG_XML, "test.xml", "application/xml"),
+        "png": (SampleContent.FAKE_PNG, "test.png", "image/png"),
+        "csv": (b"name,value\ntest,123\nsample,456", "test.csv", "text/csv"),
+        "pdf": (b"%PDF-1.4\nTest PDF content for testing", "test.pdf", "application/pdf"),
+        "log": (b"2024-01-15 10:30:00 INFO Test log entry", "test.log", "text/plain"),
+    }
+
+    if file_type not in samples:
+        available = ", ".join(samples.keys())
+        raise ValueError(f"Unknown file type: {file_type}. Available: {available}")
+
+    return samples[file_type]
+
+
+def get_metadata_preset(preset: str) -> dict[str, Any]:
+    """Get predefined metadata for testing."""
+    presets = {
+        "minimal": CommonMetadata.MINIMAL,
+        "basic": {"who": "test_user", "what": "test_data"},
+    }
+
+    if preset not in presets:
+        raise ValueError(f"Unknown preset: {preset}")
+
+    return presets[preset].copy()
+
+
+def create_temp_storage_dir() -> tempfile.TemporaryDirectory:
+    """Create temporary directory for testing."""
+    return tempfile.TemporaryDirectory()
 
 
 # Legacy aliases for backward compatibility with existing tests
 class TestContent:
-    """Legacy class - use SampleContent from shared module instead."""
+    """Legacy class for backward compatibility."""
     SIMPLE_TEXT = SampleContent.SIMPLE_TEXT
     FAKE_PNG = SampleContent.FAKE_PNG
+    XML_DATA = SampleContent.CONFIG_XML
 
     @classmethod
     def get_json_bytes(cls) -> bytes:

@@ -18,9 +18,29 @@ This is the advanced guide - make sure you've completed the earlier examples fir
 import os
 import tempfile
 
-from shared import create_sample_file, get_metadata_preset
+from typing import Any
 
 from rpsd_storage import FSStorageProvider, get_storage_provider
+
+
+# Simple utilities for this example
+def create_sample_file(file_type: str) -> tuple[bytes, str, str]:
+    """Create sample file content for demonstration."""
+    samples = {
+        "text": (b"Sample document for advanced features demonstration.", "document.txt", "text/plain"),
+        "json": (b'{"status": "processing", "items": 42}', "data.json", "application/json"),
+        "csv": (b"month,sales,region\nJan,1500,North\nFeb,2300,South", "report.csv", "text/csv"),
+    }
+    return samples[file_type]
+
+
+def get_metadata_preset(preset: str) -> dict[str, Any]:
+    """Get predefined metadata for demonstration."""
+    presets = {
+        "data_export": {"who": "data_pipeline", "what": "export_data"},
+        "minimal": {},
+    }
+    return presets[preset].copy()
 
 
 def demonstrate_error_handling():

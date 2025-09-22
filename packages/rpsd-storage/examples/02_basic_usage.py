@@ -14,14 +14,50 @@ What you'll learn:
 This builds on the concepts from 01_getting_started.py
 """
 
-from shared import (
-    SampleContent,
-    create_sample_file,
-    create_temp_storage_dir,
-    print_file_info,
-)
+import tempfile
 
 from rpsd_storage import FSStorageProvider
+
+
+# Simple utilities for this example
+def create_sample_file(file_type: str) -> tuple[bytes, str, str]:
+    """Create sample file content for demonstration."""
+    samples = {
+        "text": (b"This is a sample article about cloud storage technology.",
+                 "article.txt", "text/plain"),
+        "json": (b'{"users": [{"id": 1, "name": "Alice"}, {"id": 2, "name": "Bob"}]}',
+                 "users.json", "application/json"),
+        "csv": (
+            b"date,product,amount\n2024-01-01,Widget A,1500\n2024-01-02,Widget B,2300",
+            "sales.csv",
+            "text/csv"
+        ),
+        "pdf": (b"%PDF-1.4\nSample PDF content for demonstration",
+                "document.pdf", "application/pdf"),
+        "xml": (b'<?xml version="1.0"?><config><host>localhost</host></config>',
+                "config.xml", "application/xml"),
+    }
+    return samples[file_type]
+
+
+def print_file_info(content: bytes, filename: str, mime_type: str) -> None:
+    """Print file information for demonstration."""
+    size_kb = len(content) / 1024
+    preview = content[:50].decode("utf-8", errors="replace")
+    if len(content) > 50:
+        preview += "..."
+    print(f"  📄 {filename}")
+    print(f"     Type: {mime_type}")
+    print(f"     Size: {size_kb:.1f} KB")
+    print(f"     Preview: \"{preview}\"")
+
+
+class SampleContent:
+    """Sample content for examples."""
+    LOG_ENTRY = (
+        b"2024-01-15 10:30:00 INFO Application started successfully\n"
+        b"2024-01-15 10:30:01 INFO Database connection established"
+    )
 
 
 def demonstrate_file_types():
@@ -31,7 +67,7 @@ def demonstrate_file_types():
     print("=" * 38)
     print()
 
-    with create_temp_storage_dir() as temp_dir:
+    with tempfile.TemporaryDirectory() as temp_dir:
         storage = FSStorageProvider(base_path=temp_dir)
 
         # We'll save several different file types to demonstrate versatility
@@ -125,7 +161,7 @@ def demonstrate_real_world_scenarios():
     print("=" * 24)
     print()
 
-    with create_temp_storage_dir() as temp_dir:
+    with tempfile.TemporaryDirectory() as temp_dir:
         storage = FSStorageProvider(base_path=temp_dir)
 
         # Scenario 1: Log File Archival
