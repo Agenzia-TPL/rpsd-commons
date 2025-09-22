@@ -55,7 +55,7 @@ project-root/
 ## Code Quality Requirements
 - **IMPORTANT:** Generate code that passes the configured Ruff rules.
 - Use modern Python type hints: `dict` instead of `Dict`, `list` instead of `List`, `str | None` instead of `Optional[str]`
-- Keep lines under 88 characters (project's line length limit)
+- **VERY IMPORTANT:** Keep lines under 88 characters (project's line length limit)
 - Sort and format imports properly (standard library, third-party, local imports in separate groups)
 - Remove unused imports
 - Add trailing newlines to all files
