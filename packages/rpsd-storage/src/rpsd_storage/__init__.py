@@ -1,6 +1,7 @@
 from rpsd_commons.config import config
 
 from rpsd_storage.fs import FSStorageProvider
+from rpsd_storage.http import HTTPStorageProvider as HTTPStorageProvider
 from rpsd_storage.provider import StorageProvider
 from rpsd_storage.s3 import S3StorageProvider
 

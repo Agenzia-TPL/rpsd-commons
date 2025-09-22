@@ -108,6 +108,11 @@ class StorageProvider(ABC):
             with tempfile.TemporaryDirectory() as temp_dir:
                 provider = FSStorageProvider(temp_dir)
                 return provider.load(url)
+        elif scheme in ("http", "https"):
+            from rpsd_storage.http import HTTPStorageProvider
+
+            provider = HTTPStorageProvider()
+            return provider.load(url)
         else:
             raise ValueError(f"Unsupported URL scheme: {scheme}")
 

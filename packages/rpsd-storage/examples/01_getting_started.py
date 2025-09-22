@@ -138,7 +138,7 @@ def main():
         # Show static methods
         print("📦 Static methods (work with any provider):")
         print("-" * 44)
-        from rpsd_storage import load_from_url, load_from_parts
+        from rpsd_storage import load_from_url
 
         content3, metadata3 = load_from_url(url)
         assert content == content3

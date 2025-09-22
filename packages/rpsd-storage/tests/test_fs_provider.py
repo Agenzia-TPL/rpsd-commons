@@ -180,10 +180,7 @@ class TestFSStorageProviderSave:
         assert metadata_loaded["original_filename"] == "testfile"
 
         # Should default to .xml extension
-        files = [
-            f
-            for f in Path(fs_storage_provider.base_path).rglob("*.xml")
-        ]
+        files = [f for f in Path(fs_storage_provider.base_path).rglob("*.xml")]
         assert len(files) == 1
 
 
@@ -360,9 +357,7 @@ class TestFSStorageProviderIntegration:
                 content=content, filename=filename, content_type=mime_type, **metadata
             )
 
-            saved_files.append(
-                {"url": url, "content": content, "scenario": scenario}
-            )
+            saved_files.append({"url": url, "content": content, "scenario": scenario})
 
         assert len(saved_files) == 3
 

@@ -2,7 +2,6 @@
 Tests for S3StorageProvider.
 """
 
-import uuid
 from unittest.mock import patch
 
 import boto3
