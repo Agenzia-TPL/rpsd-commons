@@ -3,6 +3,8 @@ import logging
 import os
 import uuid
 from datetime import UTC, datetime
+from typing import Any
+from urllib.parse import urlparse
 
 import boto3
 
@@ -18,6 +20,15 @@ class S3StorageProvider(StorageProvider):
         self.bucket_name = bucket_name
         self.s3_client = boto3.client("s3")
 
+    def _build_url(self, who: str, what: str, object_id: str) -> str:
+        """
+        Builds the complete S3 URL for the given parameters.
+        Format: s3://bucket-name/who/what/object_id
+        Note: object_id now includes the extension
+        """
+        s3_key = f"{who}/{what}/{object_id}"
+        return f"s3://{self.bucket_name}/{s3_key}"
+
     def save(
         self,
         content,
@@ -27,23 +38,25 @@ class S3StorageProvider(StorageProvider):
         who=None,
         what=None,
         custom_metadata=None,
-    ):
+    ) -> tuple[str, dict[str, Any]]:
         """
         Saves content to S3
         """
-        object_id = str(uuid.uuid4())
-        if who:
-            object_id = f"{who}-{object_id}"
-        if what:
-            object_id = f"{what}-{object_id}"
-
+        uuid_part = str(uuid.uuid4())
         timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
 
         file_extension = os.path.splitext(filename)[1] if filename else ".xml"
         if not file_extension:
             file_extension = ".xml"
 
-        s3_key = f"ingested/{object_id}{file_extension}"
+        # Include extension in object_id to make it complete
+        object_id = f"{uuid_part}{file_extension}"
+
+        # Create S3 key with new structure: who/what/object_id
+        if who and what:
+            s3_key = f"{who}/{what}/{object_id}"
+        else:
+            s3_key = f"ingested/{object_id}"
 
         metadata = {
             "object_id": object_id,
@@ -68,48 +81,36 @@ class S3StorageProvider(StorageProvider):
             Metadata=metadata,
         )
 
+        # Build the complete URL
+        url = f"s3://{self.bucket_name}/{s3_key}"
+
+        # Add content_type to metadata for consistency with return value
+        metadata["content_type"] = content_type
+
         logger.info(f"Uploaded to S3: {s3_key}")
-        return object_id
+        return url, metadata
 
-    def load(self, object_id: str) -> tuple[bytes, dict]:
+    def load(self, url: str) -> tuple[bytes, dict[str, Any]]:
         """
-        Loads content and metadata from S3 using the object_id.
+        Loads content and metadata from S3 using the URL.
         """
-        # Search for objects that match the object_id pattern
-        # Since object_id might have prefixes from who/what, we need to be flexible
-        try:
-            response = self.s3_client.list_objects_v2(
-                Bucket=self.bucket_name,
-                Prefix="ingested/"
+        # Parse the URL to get bucket and key
+        parsed = urlparse(url)
+        if parsed.scheme != "s3":
+            raise ValueError(f"Invalid URL scheme for S3 provider: {parsed.scheme}")
+
+        bucket_name = parsed.netloc
+        s3_key = parsed.path.lstrip("/")  # Remove leading slash
+
+        if bucket_name != self.bucket_name:
+            raise ValueError(
+                f"URL bucket {bucket_name} doesn't match provider bucket "
+                f"{self.bucket_name}"
             )
-        except Exception as e:
-            raise Exception(f"Failed to list S3 objects: {e}")
-
-        if "Contents" not in response:
-            raise FileNotFoundError(f"No objects found in bucket {self.bucket_name}")
-
-        # Find matching objects
-        matching_keys = []
-        for obj in response["Contents"]:
-            key = obj["Key"]
-            # Extract the object name part (without ingested/ prefix and file extension)
-            if key.startswith("ingested/"):
-                obj_name = key[9:]  # Remove "ingested/" prefix
-                base_name = os.path.splitext(obj_name)[0]
-                if base_name == object_id or base_name.endswith(f"-{object_id}"):
-                    matching_keys.append(key)
-
-        if not matching_keys:
-            raise FileNotFoundError(f"No S3 object found for object_id: {object_id}")
-
-        if len(matching_keys) > 1:
-            raise Exception(f"Multiple S3 objects for {object_id}: {matching_keys}")
-
-        s3_key = matching_keys[0]
 
         # Load the object content and metadata
         try:
-            response = self.s3_client.get_object(Bucket=self.bucket_name, Key=s3_key)
+            response = self.s3_client.get_object(Bucket=bucket_name, Key=s3_key)
             content = response["Body"].read()
 
             # Extract metadata from S3 object metadata
@@ -120,7 +121,7 @@ class S3StorageProvider(StorageProvider):
                 "object_id": s3_metadata.get("object_id"),
                 "original_filename": s3_metadata.get("original_filename"),
                 "ingestion_timestamp": s3_metadata.get("ingestion_timestamp"),
-                "content_type": response.get("ContentType", "application/octet-stream")
+                "content_type": response.get("ContentType", "application/octet-stream"),
             }
 
             # Add optional metadata if present
@@ -133,10 +134,11 @@ class S3StorageProvider(StorageProvider):
             if "custom_metadata" in s3_metadata:
                 metadata["custom_metadata"] = json.loads(s3_metadata["custom_metadata"])
 
-        except self.s3_client.exceptions.NoSuchKey:
-            raise FileNotFoundError(f"S3 object not found: {s3_key}")
         except Exception as e:
-            raise Exception(f"Failed to load S3 object {s3_key}: {e}")
+            if "NoSuchKey" in str(e):
+                raise FileNotFoundError(f"Object not found: {url}")
+            else:
+                raise Exception(f"Failed to get S3 object: {e}")
 
         logger.info(f"Loaded from S3: {s3_key}")
         return content, metadata

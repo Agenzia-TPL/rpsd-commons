@@ -30,9 +30,9 @@ class TestTupleInterface:
         # Check the type hints of the abstract load method
         type_hints = get_type_hints(StorageProvider.load)
 
-        assert "object_id" in type_hints
+        assert "url" in type_hints
         assert "return" in type_hints
-        assert type_hints["object_id"] is str
+        assert type_hints["url"] is str
         # The return type should be tuple[bytes, dict[str, Any]]
         return_type = str(type_hints["return"])
         assert "tuple" in return_type.lower()
@@ -48,14 +48,12 @@ class TestTupleFunctionality:
         content, filename, mime_type = create_sample_file("json")
 
         # Save a file
-        object_id = fs_storage_provider.save(
-            content=content,
-            filename=filename,
-            content_type=mime_type
+        url, metadata = fs_storage_provider.save(
+            content=content, filename=filename, content_type=mime_type
         )
 
         # Load with tuple result
-        content_loaded, metadata_loaded = fs_storage_provider.load(object_id)
+        content_loaded, metadata_loaded = fs_storage_provider.load(url)
 
         # Test type-safe access
         assert isinstance(content_loaded, bytes)
@@ -71,14 +69,12 @@ class TestTupleFunctionality:
         content, filename, mime_type = create_sample_file("json")
 
         # Save a file
-        object_id = s3_storage_provider.save(
-            content=content,
-            filename=filename,
-            content_type=mime_type
+        url, metadata = s3_storage_provider.save(
+            content=content, filename=filename, content_type=mime_type
         )
 
         # Load with tuple result
-        content_loaded, metadata_loaded = s3_storage_provider.load(object_id)
+        content_loaded, metadata_loaded = s3_storage_provider.load(url)
 
         # Test type-safe access
         assert isinstance(content_loaded, bytes)
@@ -93,13 +89,11 @@ class TestTupleFunctionality:
         """Test utility function that extracts content with type safety."""
         content, filename, mime_type = create_sample_file("text")
 
-        object_id = fs_storage_provider.save(
-            content=content,
-            filename=filename,
-            content_type=mime_type
+        url, metadata = fs_storage_provider.save(
+            content=content, filename=filename, content_type=mime_type
         )
 
-        content_loaded, metadata_loaded = fs_storage_provider.load(object_id)
+        content_loaded, metadata_loaded = fs_storage_provider.load(url)
 
         # Create a LoadResult-like dict for the utility function
         result = {"content": content_loaded, "metadata": metadata_loaded}
@@ -125,14 +119,12 @@ class TestTupleFunctionality:
         """Test the demonstration function that shows tuple benefits."""
         content, filename, mime_type = create_sample_file("pdf")
 
-        object_id = fs_storage_provider.save(
-            content=content,
-            filename=filename,
-            content_type=mime_type
+        url, metadata = fs_storage_provider.save(
+            content=content, filename=filename, content_type=mime_type
         )
 
         # Run the demonstration function
-        demonstrate_typed_load_result(fs_storage_provider, object_id)
+        demonstrate_typed_load_result(fs_storage_provider, url)
 
         # Check that it printed the expected output
         captured = capsys.readouterr()
@@ -154,8 +146,8 @@ class TestTupleValidation:
                 "object_id": "test-123",
                 "original_filename": "test.txt",
                 "content_type": "text/plain",
-                "who": "test_user"
-            }
+                "who": "test_user",
+            },
         }
 
         assert validate_load_result_structure(valid_result) is True
@@ -163,21 +155,17 @@ class TestTupleValidation:
     def test_validate_load_result_structure_invalid(self):
         """Test validation with invalid tuple-based structures."""
         # Missing content key
-        invalid_result1 = {
-            "metadata": {"object_id": "test-123"}
-        }
+        invalid_result1 = {"metadata": {"object_id": "test-123"}}
         assert validate_load_result_structure(invalid_result1) is False
 
         # Missing metadata key
-        invalid_result2 = {
-            "content": b"test"
-        }
+        invalid_result2 = {"content": b"test"}
         assert validate_load_result_structure(invalid_result2) is False
 
         # Wrong content type
         invalid_result3 = {
             "content": "should be bytes not string",
-            "metadata": {"object_id": "test-123"}
+            "metadata": {"object_id": "test-123"},
         }
         assert validate_load_result_structure(invalid_result3) is False
 
@@ -186,7 +174,7 @@ class TestTupleValidation:
             "content": b"test",
             "metadata": {
                 "object_id": "test-123"
-            }  # Missing original_filename and content_type
+            },  # Missing original_filename and content_type
         }
         assert validate_load_result_structure(invalid_result4) is False
 
@@ -201,22 +189,22 @@ class TestTupleIntegration:
             storage = FSStorageProvider(base_path=temp_dir)
 
             # Save multiple files
-            saved_ids = []
+            saved_urls = []
             for file_type in ["text", "json", "csv"]:
                 content, filename, mime_type = create_sample_file(file_type)
-                object_id = storage.save(
+                url, metadata = storage.save(
                     content=content,
                     filename=f"test_{file_type}.{file_type}",
                     content_type=mime_type,
                     who="integration_test",
-                    what=f"{file_type}_data"
+                    what=f"{file_type}_data",
                 )
-                saved_ids.append(object_id)
+                saved_urls.append(url)
 
             # Load all files with tuples
             all_results = []
-            for object_id in saved_ids:
-                content_loaded, metadata_loaded = storage.load(object_id)
+            for url in saved_urls:
+                content_loaded, metadata_loaded = storage.load(url)
                 result = {"content": content_loaded, "metadata": metadata_loaded}
                 assert validate_load_result_structure(result)
                 all_results.append(result)

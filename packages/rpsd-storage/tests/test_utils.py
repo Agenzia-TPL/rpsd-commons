@@ -17,8 +17,10 @@ from typing import Any
 
 # Test-specific utilities - self-contained
 
+
 class SampleContent:
     """Sample content for testing different file types."""
+
     SIMPLE_TEXT = b"Hello, this is a test file!"
     FAKE_PNG = b"\x89PNG\r\n\x1a\n" + b"fake PNG image data for testing"
     CONFIG_XML = (
@@ -38,6 +40,7 @@ class SampleContent:
 
 class CommonMetadata:
     """Common metadata patterns for testing."""
+
     MINIMAL = {}
 
 
@@ -52,7 +55,7 @@ def create_sample_file(file_type: str) -> tuple[bytes, str, str]:
         "pdf": (
             b"%PDF-1.4\nTest PDF content for testing",
             "test.pdf",
-            "application/pdf"
+            "application/pdf",
         ),
         "log": (b"2024-01-15 10:30:00 INFO Test log entry", "test.log", "text/plain"),
     }
@@ -85,6 +88,7 @@ def create_temp_storage_dir() -> tempfile.TemporaryDirectory:
 # Legacy aliases for backward compatibility with existing tests
 class TestContent:
     """Legacy class for backward compatibility."""
+
     SIMPLE_TEXT = SampleContent.SIMPLE_TEXT
     FAKE_PNG = SampleContent.FAKE_PNG
     XML_DATA = SampleContent.CONFIG_XML
@@ -99,25 +103,23 @@ class TestContent:
         b"2024-01-15 10:30:01 INFO User login successful"
     )
 
-    JSON_DATA = {
-        "test": "data",
-        "users": [{"name": "Test User", "id": 1}]
-    }
+    JSON_DATA = {"test": "data", "users": [{"name": "Test User", "id": 1}]}
 
 
 class SampleMetadata:
     """Legacy class - use CommonMetadata and get_metadata_preset() instead."""
+
     BASIC = {"who": "test_user", "what": "test_data"}
     FULL = {
         "who": "admin",
         "what": "configuration",
-        "source_url": "https://api.example.com/config.json"
+        "source_url": "https://api.example.com/config.json",
     }
     MINIMAL = {}
     USER_EXPORT = {
         "who": "data_team",
         "what": "user_export",
-        "source_url": "https://api.example.com/users.csv"
+        "source_url": "https://api.example.com/users.csv",
     }
 
 
@@ -185,7 +187,7 @@ def create_test_metadata(preset: str = "basic") -> dict[str, Any]:
         "basic": "minimal",
         "full": "document",
         "minimal": "minimal",
-        "user_export": "data_export"
+        "user_export": "data_export",
     }
 
     if preset in preset_mapping:
@@ -451,5 +453,5 @@ def process_multiple_load_results(results: list[dict[str, Any]]) -> dict[str, An
         "total_size_bytes": total_size,
         "content_type_distribution": content_types,
         "filenames": filenames,
-        "average_size_bytes": total_size / len(results) if results else 0
+        "average_size_bytes": total_size / len(results) if results else 0,
     }

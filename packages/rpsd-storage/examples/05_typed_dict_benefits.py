@@ -55,11 +55,13 @@ def analyze_file_content(content: bytes, metadata: dict[str, Any]) -> dict[str, 
     if content_type.startswith("text/"):
         try:
             text_content: str = content.decode("utf-8")
-            analysis.update({
-                "line_count": len(text_content.splitlines()),
-                "char_count": len(text_content),
-                "word_count": len(text_content.split()),
-            })
+            analysis.update(
+                {
+                    "line_count": len(text_content.splitlines()),
+                    "char_count": len(text_content),
+                    "word_count": len(text_content.split()),
+                }
+            )
         except UnicodeDecodeError:
             analysis["encoding_error"] = True
 
@@ -67,24 +69,24 @@ def analyze_file_content(content: bytes, metadata: dict[str, Any]) -> dict[str, 
 
 
 def batch_process_files(
-    storage: FSStorageProvider, object_ids: list[str]
+    storage: FSStorageProvider, urls: list[str]
 ) -> list[dict[str, Any]]:
     """
     Process multiple files with tuple unpacking throughout.
 
     Args:
         storage: Storage provider instance
-        object_ids: List of object IDs to process
+        urls: List of URLs to process
 
     Returns:
         list: Analysis results for each file
     """
     results: list[dict[str, Any]] = []
 
-    for object_id in object_ids:
+    for url in urls:
         try:
             # Load with tuple unpacking - direct access to values
-            content, metadata = storage.load(object_id)
+            content, metadata = storage.load(url)
 
             # Direct analysis with unpacked values
             analysis = analyze_file_content(content, metadata)
@@ -95,10 +97,10 @@ def batch_process_files(
         except Exception as e:
             # Error handling with type safety
             error_result = {
-                "object_id": object_id,
+                "url": url,
                 "status": "error",
                 "error_message": str(e),
-                "error_type": type(e).__name__
+                "error_type": type(e).__name__,
             }
             results.append(error_result)
 
@@ -175,29 +177,31 @@ def demonstrate_tuple_unpacking_benefits():
             (
                 b'{"name": "TypedDict", "awesome": true}',
                 "data.json",
-                "application/json"
+                "application/json",
             ),
             (
                 b"name,value\nTypedDict,excellent\nType Safety,important",
                 "report.csv",
-                "text/csv"
+                "text/csv",
             ),
         ]
 
         print("📁 Creating Test Files")
         print("-" * 22)
 
-        object_ids = []
+        urls = []
         for content, filename, content_type in test_files:
-            object_id = storage.save(
+            url, metadata = storage.save(
                 content=content,
                 filename=filename,
                 content_type=content_type,
                 who="typed_demo",
-                what="type_safety_example"
+                what="type_safety_example",
             )
-            object_ids.append(object_id)
-            print(f"   ✅ Created: {filename} ({object_id})")
+            urls.append(url)
+            print(f"   ✅ Created: {filename}")
+            print(f"       URL: {url}")
+            print(f"       Object ID: {metadata['object_id']}")
 
         print()
 
@@ -205,14 +209,14 @@ def demonstrate_tuple_unpacking_benefits():
         print("🔒 Tuple Unpacking File Loading")
         print("-" * 32)
 
-        for i, object_id in enumerate(object_ids):
+        for i, url in enumerate(urls):
             # Load with tuple unpacking - direct access!
-            content, metadata = storage.load(object_id)
+            content, metadata = storage.load(url)
 
             # Direct access to unpacked values
             filename: str = metadata["original_filename"]
 
-            print(f"   📄 File {i+1}: {filename}")
+            print(f"   📄 File {i + 1}: {filename}")
             print(f"      Content type: {type(content).__name__}")
             print(f"      Metadata type: {type(metadata).__name__}")
             print(f"      Size: {len(content)} bytes")
@@ -226,7 +230,7 @@ def demonstrate_tuple_unpacking_benefits():
         print("📊 Batch Processing with Tuple Unpacking")
         print("-" * 42)
 
-        analysis_results = batch_process_files(storage, object_ids)
+        analysis_results = batch_process_files(storage, urls)
 
         for result in analysis_results:
             if result["status"] == "success":
@@ -242,7 +246,7 @@ def demonstrate_tuple_unpacking_benefits():
         print("🏷️  Tuple-Based Metadata Extraction")
         print("-" * 37)
 
-        content, metadata = storage.load(object_ids[0])
+        content, metadata = storage.load(urls[0])
 
         # Safe extraction with unpacked metadata
         who = extract_metadata_safely(metadata, "who", "unknown")

@@ -100,7 +100,7 @@ def test_scenario(request):
 # Custom markers for organizing tests
 def pytest_configure(config):
     """Configure custom pytest markers."""
-    config.addinivalue_line("markers", "fs: tests for file system storage provider")
+    config.addinivalue_line("markers", "file: tests for file system storage provider")
     config.addinivalue_line("markers", "s3: tests for S3 storage provider")
     config.addinivalue_line("markers", "integration: integration tests")
     config.addinivalue_line("markers", "unit: unit tests")

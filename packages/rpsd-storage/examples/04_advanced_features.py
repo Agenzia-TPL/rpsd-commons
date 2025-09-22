@@ -29,17 +29,17 @@ def create_sample_file(file_type: str) -> tuple[bytes, str, str]:
         "text": (
             b"Sample document for advanced features demonstration.",
             "document.txt",
-            "text/plain"
+            "text/plain",
         ),
         "json": (
             b'{"status": "processing", "items": 42}',
             "data.json",
-            "application/json"
+            "application/json",
         ),
         "csv": (
             b"month,sales,region\nJan,1500,North\nFeb,2300,South",
             "report.csv",
-            "text/csv"
+            "text/csv",
         ),
     }
     return samples[file_type]
@@ -67,8 +67,11 @@ def demonstrate_error_handling():
 
         # Save a file first
         content, filename, mime_type = create_sample_file("json")
-        object_id = storage.save(content, filename, mime_type)
-        print(f"✅ Saved test file: {object_id}")
+        url, metadata = storage.save(
+            content, filename, mime_type, who="test_user", what="test_data"
+        )
+        print(f"✅ Saved test file: {url}")
+        print(f"   Object ID: {metadata['object_id']}")
         print()
 
         # Error 1: Loading non-existent file
@@ -76,7 +79,7 @@ def demonstrate_error_handling():
         print("-" * 26)
 
         try:
-            storage.load("non-existent-id-12345")
+            storage.load("file:///non/existent/path.txt")
             print("   ❌ This shouldn't happen!")
         except FileNotFoundError as e:
             print(f"   ✅ Caught FileNotFoundError: {e}")
@@ -105,8 +108,11 @@ def demonstrate_error_handling():
 
         try:
             # This will work but save empty content
-            object_id = storage.save(b"", "empty.txt", "text/plain")
-            print(f"   ✅ Empty file saved: {object_id}")
+            url, metadata = storage.save(
+                b"", "empty.txt", "text/plain", who="test_user", what="empty_test"
+            )
+            print(f"   ✅ Empty file saved: {url}")
+            print(f"       Object ID: {metadata['object_id']}")
             print("   💡 Consider validating content before saving")
         except Exception as e:
             print(f"   ⚠️  Save failed: {e}")
@@ -140,8 +146,11 @@ def demonstrate_configuration_patterns():
 
     # Test it
     content, filename, mime_type = create_sample_file("text")
-    object_id = storage.save(content, filename, mime_type)
-    print(f"   ✅ Test file saved: {object_id}")
+    url, metadata = storage.save(
+        content, filename, mime_type, who="env_test", what="config_test"
+    )
+    print(f"   ✅ Test file saved: {url}")
+    print(f"       Object ID: {metadata['object_id']}")
     print()
 
     # Pattern 2: Direct Configuration
@@ -153,8 +162,11 @@ def demonstrate_configuration_patterns():
     print(f"   ✅ Direct storage created at: {custom_storage_path}")
 
     content, filename, mime_type = create_sample_file("json")
-    object_id = direct_storage.save(content, filename, mime_type)
-    print(f"   ✅ Test file saved: {object_id}")
+    url, metadata = direct_storage.save(
+        content, filename, mime_type, who="direct_test", what="direct_config"
+    )
+    print(f"   ✅ Test file saved: {url}")
+    print(f"       Object ID: {metadata['object_id']}")
     print()
 
     # Pattern 3: Application-Specific Directories
@@ -171,13 +183,15 @@ def demonstrate_configuration_patterns():
 
     for purpose, storage_provider in app_directories.items():
         content, filename, mime_type = create_sample_file("text")
-        object_id = storage_provider.save(
+        url, metadata = storage_provider.save(
             content=content,
             filename=f"sample_{purpose}.txt",
             content_type=mime_type,
-            what=purpose
+            who="app_system",
+            what=purpose,
         )
-        print(f"   📁 {purpose}: {object_id}")
+        print(f"   📁 {purpose}: {url}")
+        print(f"       Object ID: {metadata['object_id']}")
 
     print()
 
@@ -207,7 +221,7 @@ def demonstrate_bulk_operations():
             "sales_february.csv",
             "sales_march.csv",
             "sales_april.csv",
-            "sales_may.csv"
+            "sales_may.csv",
         ]
 
         saved_objects = []
@@ -221,15 +235,13 @@ def demonstrate_bulk_operations():
             metadata = metadata_template.copy()
             metadata["what"] = f"monthly_sales_{csv_file.split('_')[1].split('.')[0]}"
 
-            object_id = storage.save(
-                content=content,
-                filename=csv_file,
-                content_type=mime_type,
-                **metadata
+            url, save_metadata = storage.save(
+                content=content, filename=csv_file, content_type=mime_type, **metadata
             )
 
-            saved_objects.append((csv_file, object_id))
-            print(f"     ✅ {csv_file}: {object_id}")
+            saved_objects.append((csv_file, url))
+            print(f"     ✅ {csv_file}: {url}")
+            print(f"         Object ID: {save_metadata['object_id']}")
 
         print(f"   📊 Batch complete: {len(saved_objects)} files saved")
         print()
@@ -239,9 +251,9 @@ def demonstrate_bulk_operations():
         print("-" * 31)
 
         total_size = 0
-        for filename, object_id in saved_objects:
+        for filename, url in saved_objects:
             try:
-                content, metadata = storage.load(object_id)
+                content, metadata = storage.load(url)
                 file_size = len(content)
                 total_size += file_size
 
@@ -275,7 +287,7 @@ def demonstrate_production_patterns():
         "incoming": f"{base_storage}/incoming/{year}/{month}",
         "processed": f"{base_storage}/processed/{year}/{month}",
         "archived": f"{base_storage}/archived/{year}",
-        "failed": f"{base_storage}/failed/{year}/{month}"
+        "failed": f"{base_storage}/failed/{year}/{month}",
     }
 
     storages = {}
@@ -293,68 +305,66 @@ def demonstrate_production_patterns():
     content, filename, mime_type = create_sample_file("json")
 
     # Step 1: Save to incoming
-    incoming_id = storages["incoming"].save(
+    incoming_url, incoming_metadata = storages["incoming"].save(
         content=content,
         filename=filename,
         content_type=mime_type,
         who="data_pipeline",
-        what="incoming_data"
+        what="incoming_data",
     )
-    print(f"   1️⃣  Incoming: {incoming_id}")
+    print(f"   1️⃣  Incoming: {incoming_url}")
+    print(f"       Object ID: {incoming_metadata['object_id']}")
 
     # Step 2: Process and save to processed
     try:
         # Load from incoming
-        content_loaded, metadata_loaded = storages["incoming"].load(incoming_id)
+        content_loaded, metadata_loaded = storages["incoming"].load(incoming_url)
 
         # Simulate processing (add metadata)
         processed_metadata = get_metadata_preset("data_export")
         custom_metadata = {
-            "original_id": incoming_id,
-            "processing_status": "completed"
+            "original_url": incoming_url,
+            "processing_status": "completed",
         }
 
-        processed_id = storages["processed"].save(
+        processed_url, processed_save_metadata = storages["processed"].save(
             content=content_loaded,
             filename=f"processed_{filename}",
             content_type=mime_type,
             **processed_metadata,
-            custom_metadata=custom_metadata
+            custom_metadata=custom_metadata,
         )
-        print(f"   2️⃣  Processed: {processed_id}")
+        print(f"   2️⃣  Processed: {processed_url}")
+        print(f"       Object ID: {processed_save_metadata['object_id']}")
 
         # Step 3: Archive the original
         archive_metadata = get_metadata_preset("minimal")
-        custom_metadata = {
-            "original_id": incoming_id,
-            "processed_id": processed_id
-        }
+        custom_metadata = {"original_url": incoming_url, "processed_url": processed_url}
 
-        archive_id = storages["archived"].save(
+        archive_url, archive_save_metadata = storages["archived"].save(
             content=content_loaded,
             filename=f"archive_{filename}",
             content_type=mime_type,
             **archive_metadata,
-            custom_metadata=custom_metadata
+            custom_metadata=custom_metadata,
         )
-        print(f"   3️⃣  Archived: {archive_id}")
+        print(f"   3️⃣  Archived: {archive_url}")
+        print(f"       Object ID: {archive_save_metadata['object_id']}")
 
     except Exception as e:
         # Save to failed for manual review
         failed_metadata = get_metadata_preset("minimal")
-        custom_metadata = {
-            "error": str(e),
-            "original_filename": filename
-        }
+        custom_metadata = {"error": str(e), "original_filename": filename}
 
-        failed_id = storages["failed"].save(
+        failed_url, failed_save_metadata = storages["failed"].save(
             content=content,
             filename=f"failed_{filename}",
             content_type=mime_type,
             **failed_metadata,
-            custom_metadata=custom_metadata
+            custom_metadata=custom_metadata,
         )
-        print(f"   ❌ Failed: {failed_id}")
+        print(f"   ❌ Failed: {failed_url}")
+        print(f"       Object ID: {failed_save_metadata['object_id']}")
 
     print()
 

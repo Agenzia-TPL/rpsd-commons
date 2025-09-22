@@ -3,6 +3,8 @@ import logging
 import os
 import uuid
 from datetime import UTC, datetime
+from typing import Any
+from urllib.parse import urlparse
 
 from rpsd_storage.provider import StorageProvider
 
@@ -16,6 +18,18 @@ class FSStorageProvider(StorageProvider):
         self.base_path = base_path
         os.makedirs(self.base_path, exist_ok=True)
 
+    def _build_url(self, who: str, what: str, object_id: str) -> str:
+        """
+        Builds the complete file system URL for the given parameters.
+        Format: file:///base_path/who/what/object_id
+        Note: object_id now includes the extension
+        """
+        if who and what:
+            path = os.path.join(self.base_path, who, what, object_id)
+        else:
+            path = os.path.join(self.base_path, object_id)
+        return f"file://{path}"
+
     def save(
         self,
         content,
@@ -25,23 +39,28 @@ class FSStorageProvider(StorageProvider):
         who=None,
         what=None,
         custom_metadata=None,
-    ):
+    ) -> tuple[str, dict[str, Any]]:
         """
         Saves content to the file system.
         """
-        object_id = str(uuid.uuid4())
-        if who:
-            object_id = f"{who}-{object_id}"
-        if what:
-            object_id = f"{what}-{object_id}"
-
+        uuid_part = str(uuid.uuid4())
         timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
 
         file_extension = os.path.splitext(filename)[1] if filename else ".xml"
         if not file_extension:
             file_extension = ".xml"
 
-        file_path = os.path.join(self.base_path, f"{object_id}{file_extension}")
+        # Include extension in object_id to make it complete
+        object_id = f"{uuid_part}{file_extension}"
+
+        # Create directory structure: who/what/
+        if who and what:
+            dir_path = os.path.join(self.base_path, who, what)
+        else:
+            dir_path = self.base_path
+        os.makedirs(dir_path, exist_ok=True)
+
+        file_path = os.path.join(dir_path, object_id)
 
         metadata = {
             "object_id": object_id,
@@ -64,32 +83,25 @@ class FSStorageProvider(StorageProvider):
         with open(f"{file_path}.meta", "w") as f:
             json.dump(metadata, f)
 
+        # Build the complete URL using the actual file path
+        url = f"file://{file_path}"
+
         logger.info(f"Saved to file system: {file_path}")
-        return object_id
+        return url, metadata
 
-    def load(self, object_id: str) -> tuple[bytes, dict]:
+    def load(self, url: str) -> tuple[bytes, dict[str, Any]]:
         """
-        Loads content and metadata from the file system using the object_id.
+        Loads content and metadata from the file system using the URL.
         """
-        # Find the file by searching for files that start with the object_id
-        # Since object_id might have prefixes from who/what, we need to be flexible
-        matching_files = []
-        for file_path in os.listdir(self.base_path):
-            if file_path.endswith(".meta"):
-                continue  # Skip metadata files in the search
-            # Check if this file belongs to our object_id
-            base_name = os.path.splitext(file_path)[0]
-            if base_name == object_id or base_name.endswith(f"-{object_id}"):
-                matching_files.append(file_path)
+        # Parse the URL to get the file path
+        parsed = urlparse(url)
+        if parsed.scheme != "file":
+            raise ValueError(f"Invalid URL scheme for FS provider: {parsed.scheme}")
 
-        if not matching_files:
-            raise FileNotFoundError(f"No file found for object_id: {object_id}")
+        file_path = parsed.path
+        if not os.path.isabs(file_path):
+            raise ValueError(f"FS URL must contain absolute path: {url}")
 
-        if len(matching_files) > 1:
-            raise Exception(f"Multiple files found for {object_id}: {matching_files}")
-
-        file_name = matching_files[0]
-        file_path = os.path.join(self.base_path, file_name)
         meta_path = f"{file_path}.meta"
 
         # Load the file content

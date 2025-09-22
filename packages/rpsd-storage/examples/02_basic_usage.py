@@ -23,19 +23,31 @@ from rpsd_storage import FSStorageProvider
 def create_sample_file(file_type: str) -> tuple[bytes, str, str]:
     """Create sample file content for demonstration."""
     samples = {
-        "text": (b"This is a sample article about cloud storage technology.",
-                 "article.txt", "text/plain"),
-        "json": (b'{"users": [{"id": 1, "name": "Alice"}, {"id": 2, "name": "Bob"}]}',
-                 "users.json", "application/json"),
+        "text": (
+            b"This is a sample article about cloud storage technology.",
+            "article.txt",
+            "text/plain",
+        ),
+        "json": (
+            b'{"users": [{"id": 1, "name": "Alice"}, {"id": 2, "name": "Bob"}]}',
+            "users.json",
+            "application/json",
+        ),
         "csv": (
             b"date,product,amount\n2024-01-01,Widget A,1500\n2024-01-02,Widget B,2300",
             "sales.csv",
-            "text/csv"
+            "text/csv",
         ),
-        "pdf": (b"%PDF-1.4\nSample PDF content for demonstration",
-                "document.pdf", "application/pdf"),
-        "xml": (b'<?xml version="1.0"?><config><host>localhost</host></config>',
-                "config.xml", "application/xml"),
+        "pdf": (
+            b"%PDF-1.4\nSample PDF content for demonstration",
+            "document.pdf",
+            "application/pdf",
+        ),
+        "xml": (
+            b'<?xml version="1.0"?><config><host>localhost</host></config>',
+            "config.xml",
+            "application/xml",
+        ),
     }
     return samples[file_type]
 
@@ -49,11 +61,12 @@ def print_file_info(content: bytes, filename: str, mime_type: str) -> None:
     print(f"  📄 {filename}")
     print(f"     Type: {mime_type}")
     print(f"     Size: {size_kb:.1f} KB")
-    print(f"     Preview: \"{preview}\"")
+    print(f'     Preview: "{preview}"')
 
 
 class SampleContent:
     """Sample content for examples."""
+
     LOG_ENTRY = (
         b"2024-01-15 10:30:00 INFO Application started successfully\n"
         b"2024-01-15 10:30:01 INFO Database connection established"
@@ -80,13 +93,16 @@ def demonstrate_file_types():
         content, filename, mime_type = create_sample_file("text")
         print_file_info(content, filename, mime_type)
 
-        object_id = storage.save(
+        url, metadata = storage.save(
             content=content,
             filename=filename,
-            content_type=mime_type
+            content_type=mime_type,
+            who="document_user",
+            what="article",
         )
-        saved_files.append(("Text Article", object_id))
-        print(f"   ✅ Saved with ID: {object_id}")
+        saved_files.append(("Text Article", url))
+        print(f"   ✅ Saved with URL: {url}")
+        print(f"       Object ID: {metadata['object_id']}")
         print()
 
         # 2. JSON Data
@@ -96,13 +112,16 @@ def demonstrate_file_types():
         content, filename, mime_type = create_sample_file("json")
         print_file_info(content, filename, mime_type)
 
-        object_id = storage.save(
+        url, metadata = storage.save(
             content=content,
             filename=filename,
-            content_type=mime_type
+            content_type=mime_type,
+            who="api_user",
+            what="user_data",
         )
-        saved_files.append(("User Data JSON", object_id))
-        print(f"   ✅ Saved with ID: {object_id}")
+        saved_files.append(("User Data JSON", url))
+        print(f"   ✅ Saved with URL: {url}")
+        print(f"       Object ID: {metadata['object_id']}")
         print()
 
         # 3. CSV Data
@@ -112,13 +131,16 @@ def demonstrate_file_types():
         content, filename, mime_type = create_sample_file("csv")
         print_file_info(content, filename, mime_type)
 
-        object_id = storage.save(
+        url, metadata = storage.save(
             content=content,
             filename=filename,
-            content_type=mime_type
+            content_type=mime_type,
+            who="sales_team",
+            what="sales_data",
         )
-        saved_files.append(("Sales Data CSV", object_id))
-        print(f"   ✅ Saved with ID: {object_id}")
+        saved_files.append(("Sales Data CSV", url))
+        print(f"   ✅ Saved with URL: {url}")
+        print(f"       Object ID: {metadata['object_id']}")
         print()
 
         # 4. Binary Files
@@ -128,13 +150,16 @@ def demonstrate_file_types():
         content, filename, mime_type = create_sample_file("pdf")
         print_file_info(content, filename, mime_type)
 
-        object_id = storage.save(
+        url, metadata = storage.save(
             content=content,
             filename=filename,
-            content_type=mime_type
+            content_type=mime_type,
+            who="document_user",
+            what="pdf_document",
         )
-        saved_files.append(("PDF Document", object_id))
-        print(f"   ✅ Saved with ID: {object_id}")
+        saved_files.append(("PDF Document", url))
+        print(f"   ✅ Saved with URL: {url}")
+        print(f"       Object ID: {metadata['object_id']}")
         print()
 
         # Now let's load them all back to demonstrate retrieval
@@ -142,8 +167,8 @@ def demonstrate_file_types():
         print("=" * 20)
         print()
 
-        for description, object_id in saved_files:
-            content, metadata = storage.load(object_id)
+        for description, url in saved_files:
+            content, metadata = storage.load(url)
 
             print(f"📄 {description}")
             print(f"   Original name: {metadata['original_filename']}")
@@ -169,13 +194,16 @@ def demonstrate_real_world_scenarios():
         print("📝 You want to archive application logs for compliance")
 
         log_content = SampleContent.LOG_ENTRY
-        object_id = storage.save(
+        url, metadata = storage.save(
             content=log_content,
             filename="app_20240115.log",
-            content_type="text/plain"
+            content_type="text/plain",
+            who="log_system",
+            what="application_logs",
         )
 
-        print(f"   ✅ Log file archived with ID: {object_id}")
+        print(f"   ✅ Log file archived with URL: {url}")
+        print(f"       Object ID: {metadata['object_id']}")
         print("   💡 Use case: Compliance, debugging, audit trails")
         print()
 
@@ -185,13 +213,16 @@ def demonstrate_real_world_scenarios():
         print("📊 You're processing sales data in a pipeline")
 
         csv_content, _, _ = create_sample_file("csv")
-        object_id = storage.save(
+        url, metadata = storage.save(
             content=csv_content,
             filename="daily_sales_20240115.csv",
-            content_type="text/csv"
+            content_type="text/csv",
+            who="data_pipeline",
+            what="daily_sales",
         )
 
-        print(f"   ✅ Sales data stored with ID: {object_id}")
+        print(f"   ✅ Sales data stored with URL: {url}")
+        print(f"       Object ID: {metadata['object_id']}")
         print("   💡 Use case: ETL processes, data analysis, reporting")
         print()
 
@@ -201,13 +232,16 @@ def demonstrate_real_world_scenarios():
         print("⚙️  You want to backup application configuration")
 
         xml_content, _, _ = create_sample_file("xml")
-        object_id = storage.save(
+        url, metadata = storage.save(
             content=xml_content,
             filename="prod_config_backup.xml",
-            content_type="application/xml"
+            content_type="application/xml",
+            who="devops_team",
+            what="config_backup",
         )
 
-        print(f"   ✅ Config backup saved with ID: {object_id}")
+        print(f"   ✅ Config backup saved with URL: {url}")
+        print(f"       Object ID: {metadata['object_id']}")
         print("   💡 Use case: Disaster recovery, version control, rollbacks")
         print()
 
@@ -228,7 +262,9 @@ def main():
     print("-" * 16)
     print("• rpsd-storage works with ANY file type (text, binary, etc.)")
     print("• Content types help identify what kind of file you saved")
-    print("• Object IDs are unique - you can save many files safely")
+    print("• save() returns URL and metadata - unpack with tuple syntax")
+    print("• URLs include provider info and organized who/what structure")
+    print("• Object IDs include file extensions for fast retrieval")
     print("• Each file gets metadata automatically tracked")
     print()
     print("📖 Next Steps:")

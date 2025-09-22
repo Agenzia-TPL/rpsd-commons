@@ -27,33 +27,33 @@ def create_sample_file(file_type: str) -> tuple[bytes, str, str]:
         "text": (
             b"This is a sample document for metadata demonstration.",
             "document.txt",
-            "text/plain"
+            "text/plain",
         ),
         "json": (
             b'{"export_type": "user_data", "count": 150}',
             "export.json",
-            "application/json"
+            "application/json",
         ),
         "pdf": (b"%PDF-1.4\nSample PDF document", "report.pdf", "application/pdf"),
         "csv": (
             b"name,role,active\nAlice,developer,true\nBob,designer,true",
             "users.csv",
-            "text/csv"
+            "text/csv",
         ),
         "xml": (
             b'<?xml version="1.0"?><config><setting>value</setting></config>',
             "config.xml",
-            "application/xml"
+            "application/xml",
         ),
         "png": (
             b"\x89PNG\r\n\x1a\n" + b"Sample PNG image data",
             "image.png",
-            "image/png"
+            "image/png",
         ),
         "log": (
             b"2024-01-15 10:30:00 INFO Application started",
             "app.log",
-            "text/plain"
+            "text/plain",
         ),
     }
     return samples[file_type]
@@ -80,7 +80,7 @@ def print_file_info(content: bytes, filename: str, mime_type: str) -> None:
     print(f"  📄 {filename}")
     print(f"     Type: {mime_type}")
     print(f"     Size: {size_kb:.1f} KB")
-    print(f"     Preview: \"{preview}\"")
+    print(f'     Preview: "{preview}"')
 
 
 def print_metadata_info(metadata: dict[str, Any]) -> None:
@@ -115,23 +115,24 @@ def demonstrate_basic_metadata():
         content, filename, mime_type = create_sample_file("text")
         print_file_info(content, filename, mime_type)
 
-        object_id = storage.save(
+        url, metadata = storage.save(
             content=content,
             filename=filename,
             content_type=mime_type,
-            who="alice_johnson",              # Who uploaded this
-            what="quarterly_report",          # What kind of document
-            source_url="https://intranet.company.com/upload"  # Where from
+            who="alice_johnson",  # Who uploaded this
+            what="quarterly_report",  # What kind of document
+            source_url="https://intranet.company.com/upload",  # Where from
         )
 
-        print(f"   ✅ Saved with metadata: {object_id}")
+        print(f"   ✅ Saved with URL: {url}")
+        print(f"       Object ID: {metadata['object_id']}")
         print()
 
         # Load it back to see the metadata
-        content, metadata = storage.load(object_id)
+        content_loaded, metadata_loaded = storage.load(url)
 
         print("   📋 Complete Metadata:")
-        print_metadata_info(metadata)
+        print_metadata_info(metadata_loaded)
         print()
 
         # Example 2: API Data Export
@@ -141,20 +142,21 @@ def demonstrate_basic_metadata():
         content, filename, mime_type = create_sample_file("json")
         print_file_info(content, filename, mime_type)
 
-        object_id = storage.save(
+        url, metadata = storage.save(
             content=content,
             filename=filename,
             content_type=mime_type,
-            who="data_pipeline",              # Automated system
-            what="user_export",               # Type of export
-            source_url="https://api.company.com/users"  # Source API
+            who="data_pipeline",  # Automated system
+            what="user_export",  # Type of export
+            source_url="https://api.company.com/users",  # Source API
         )
 
-        print(f"   ✅ Saved with metadata: {object_id}")
+        print(f"   ✅ Saved with URL: {url}")
+        print(f"       Object ID: {metadata['object_id']}")
 
-        content, metadata = storage.load(object_id)
+        content_loaded, metadata_loaded = storage.load(url)
         print("   📋 Complete Metadata:")
-        print_metadata_info(metadata)
+        print_metadata_info(metadata_loaded)
         print()
 
 
@@ -188,14 +190,15 @@ def demonstrate_metadata_presets():
             # Create and save the file
             content, filename, mime_type = create_sample_file(file_type)
 
-            object_id = storage.save(
+            url, save_metadata = storage.save(
                 content=content,
                 filename=filename,
                 content_type=mime_type,
-                **metadata  # Unpack the preset metadata
+                **metadata,  # Unpack the preset metadata
             )
 
-            print(f"   ✅ Saved: {object_id}")
+            print(f"   ✅ Saved: {url}")
+            print(f"       Object ID: {save_metadata['object_id']}")
             print()
 
 
@@ -214,7 +217,12 @@ def demonstrate_metadata_benefits():
         files_data = [
             ("User upload from web app", "alice", "profile_photo", None),
             ("Automated backup", "backup_system", "database_dump", None),
-            ("API data export", "data_team", "customer_export", "https://api.com/customers"),
+            (
+                "API data export",
+                "data_team",
+                "customer_export",
+                "https://api.com/customers",
+            ),
             ("Manual document scan", "bob", "invoice_scan", "scanner_station_3"),
         ]
 
@@ -233,16 +241,14 @@ def demonstrate_metadata_benefits():
             if source:
                 metadata["source_url"] = source
 
-            object_id = storage.save(
-                content=content,
-                filename=filename,
-                content_type=mime_type,
-                **metadata
+            url, save_metadata = storage.save(
+                content=content, filename=filename, content_type=mime_type, **metadata
             )
 
-            saved_files.append((description, object_id))
+            saved_files.append((description, url))
             print(f"   📄 {description}")
-            print(f"      ID: {object_id}")
+            print(f"      URL: {url}")
+            print(f"      Object ID: {save_metadata['object_id']}")
             print()
 
         # Now demonstrate how metadata helps with organization
@@ -251,8 +257,8 @@ def demonstrate_metadata_benefits():
         print("With metadata, you can easily categorize and find files:")
         print()
 
-        for description, object_id in saved_files:
-            content, metadata = storage.load(object_id)
+        for description, url in saved_files:
+            content, metadata = storage.load(url)
 
             print(f"   📁 {description}")
             print(f"      Who: {metadata.get('who', 'Unknown')}")
@@ -279,16 +285,17 @@ def demonstrate_advanced_patterns():
         for version in ["v1", "v2", "v3"]:
             content, filename, mime_type = create_sample_file("text")
 
-            object_id = storage.save(
+            url, metadata = storage.save(
                 content=content,
                 filename=f"policy_document_{version}.txt",
                 content_type=mime_type,
                 who="legal_team",
                 what=f"policy_document_{version}",
-                source_url=f"https://docs.company.com/policy/{version}"
+                source_url=f"https://docs.company.com/policy/{version}",
             )
 
-            print(f"   📄 Saved {version}: {object_id}")
+            print(f"   📄 Saved {version}: {url}")
+            print(f"       Object ID: {metadata['object_id']}")
 
         print()
 
@@ -300,16 +307,17 @@ def demonstrate_advanced_patterns():
         for user in users:
             content, filename, mime_type = create_sample_file("csv")
 
-            object_id = storage.save(
+            url, metadata = storage.save(
                 content=content,
                 filename=f"survey_data_{user}.csv",
                 content_type=mime_type,
                 who=user,
                 what="survey_response",
-                source_url="https://survey.company.com/submit"
+                source_url="https://survey.company.com/submit",
             )
 
-            print(f"   📊 Data from {user}: {object_id}")
+            print(f"   📊 Data from {user}: {url}")
+            print(f"       Object ID: {metadata['object_id']}")
 
         print()
 
