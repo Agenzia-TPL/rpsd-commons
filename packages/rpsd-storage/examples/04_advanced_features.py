@@ -17,7 +17,6 @@ This is the advanced guide - make sure you've completed the earlier examples fir
 
 import os
 import tempfile
-
 from typing import Any
 
 from rpsd_storage import FSStorageProvider, get_storage_provider
@@ -27,9 +26,21 @@ from rpsd_storage import FSStorageProvider, get_storage_provider
 def create_sample_file(file_type: str) -> tuple[bytes, str, str]:
     """Create sample file content for demonstration."""
     samples = {
-        "text": (b"Sample document for advanced features demonstration.", "document.txt", "text/plain"),
-        "json": (b'{"status": "processing", "items": 42}', "data.json", "application/json"),
-        "csv": (b"month,sales,region\nJan,1500,North\nFeb,2300,South", "report.csv", "text/csv"),
+        "text": (
+            b"Sample document for advanced features demonstration.",
+            "document.txt",
+            "text/plain"
+        ),
+        "json": (
+            b'{"status": "processing", "items": 42}',
+            "data.json",
+            "application/json"
+        ),
+        "csv": (
+            b"month,sales,region\nJan,1500,North\nFeb,2300,South",
+            "report.csv",
+            "text/csv"
+        ),
     }
     return samples[file_type]
 

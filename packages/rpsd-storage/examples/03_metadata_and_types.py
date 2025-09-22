@@ -24,13 +24,37 @@ from rpsd_storage import FSStorageProvider
 def create_sample_file(file_type: str) -> tuple[bytes, str, str]:
     """Create sample file content for demonstration."""
     samples = {
-        "text": (b"This is a sample document for metadata demonstration.", "document.txt", "text/plain"),
-        "json": (b'{"export_type": "user_data", "count": 150}', "export.json", "application/json"),
+        "text": (
+            b"This is a sample document for metadata demonstration.",
+            "document.txt",
+            "text/plain"
+        ),
+        "json": (
+            b'{"export_type": "user_data", "count": 150}',
+            "export.json",
+            "application/json"
+        ),
         "pdf": (b"%PDF-1.4\nSample PDF document", "report.pdf", "application/pdf"),
-        "csv": (b"name,role,active\nAlice,developer,true\nBob,designer,true", "users.csv", "text/csv"),
-        "xml": (b'<?xml version="1.0"?><config><setting>value</setting></config>', "config.xml", "application/xml"),
-        "png": (b"\x89PNG\r\n\x1a\n" + b"Sample PNG image data", "image.png", "image/png"),
-        "log": (b"2024-01-15 10:30:00 INFO Application started", "app.log", "text/plain"),
+        "csv": (
+            b"name,role,active\nAlice,developer,true\nBob,designer,true",
+            "users.csv",
+            "text/csv"
+        ),
+        "xml": (
+            b'<?xml version="1.0"?><config><setting>value</setting></config>',
+            "config.xml",
+            "application/xml"
+        ),
+        "png": (
+            b"\x89PNG\r\n\x1a\n" + b"Sample PNG image data",
+            "image.png",
+            "image/png"
+        ),
+        "log": (
+            b"2024-01-15 10:30:00 INFO Application started",
+            "app.log",
+            "text/plain"
+        ),
     }
     return samples[file_type]
 

@@ -47,7 +47,11 @@ def create_sample_file(file_type: str) -> tuple[bytes, str, str]:
         "xml": (SampleContent.CONFIG_XML, "test.xml", "application/xml"),
         "png": (SampleContent.FAKE_PNG, "test.png", "image/png"),
         "csv": (b"name,value\ntest,123\nsample,456", "test.csv", "text/csv"),
-        "pdf": (b"%PDF-1.4\nTest PDF content for testing", "test.pdf", "application/pdf"),
+        "pdf": (
+            b"%PDF-1.4\nTest PDF content for testing",
+            "test.pdf",
+            "application/pdf"
+        ),
         "log": (b"2024-01-15 10:30:00 INFO Test log entry", "test.log", "text/plain"),
     }
 
