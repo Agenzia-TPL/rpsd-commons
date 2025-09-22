@@ -13,6 +13,8 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
+from rpsd_storage.provider import LoadResult
+
 # Test-specific utilities - self-contained
 
 class SampleContent:
@@ -334,3 +336,122 @@ TEST_SCENARIOS = [
         "description": "Binary PNG image",
     },
 ]
+
+
+# TypedDict demonstration functions
+def demonstrate_typed_load_result(storage_provider, object_id: str) -> None:
+    """
+    Demonstrate how TypedDict provides type safety for load results.
+
+    This function shows that the LoadResult TypedDict enables:
+    - Type checking for the returned dictionary structure
+    - IDE autocompletion for dictionary keys
+    - Static type analysis for content and metadata
+    """
+    # Load with typed result
+    result: LoadResult = storage_provider.load(object_id)
+
+    # Type-safe access to content and metadata
+    content: bytes = result["content"]
+    metadata: dict[str, Any] = result["metadata"]
+
+    # These should be properly typed by the IDE/type checker
+    assert isinstance(content, bytes), "Content should be bytes"
+    assert isinstance(metadata, dict), "Metadata should be dict"
+
+    # Access specific metadata fields with type safety
+    original_filename: str = metadata["original_filename"]
+    content_type: str = metadata["content_type"]
+    object_id_from_meta: str = metadata["object_id"]
+
+    print(f"✅ TypedDict validation passed for {original_filename}")
+    print(f"   Content size: {len(content)} bytes")
+    print(f"   Content type: {content_type}")
+    print(f"   Object ID: {object_id_from_meta}")
+
+
+def extract_content_with_types(load_result: LoadResult) -> tuple[bytes, str, str]:
+    """
+    Extract key information from a LoadResult with full type safety.
+
+    Args:
+        load_result: The typed dictionary returned by storage.load()
+
+    Returns:
+        tuple: (content, original_filename, content_type)
+    """
+    content: bytes = load_result["content"]
+    metadata: dict[str, Any] = load_result["metadata"]
+
+    original_filename: str = metadata["original_filename"]
+    content_type: str = metadata["content_type"]
+
+    return content, original_filename, content_type
+
+
+def validate_load_result_structure(result: LoadResult) -> bool:
+    """
+    Validate that a LoadResult has the correct TypedDict structure.
+
+    Args:
+        result: The LoadResult to validate
+
+    Returns:
+        bool: True if structure is valid
+    """
+    # Check required keys exist
+    if "content" not in result or "metadata" not in result:
+        return False
+
+    # Check content is bytes
+    if not isinstance(result["content"], bytes):
+        return False
+
+    # Check metadata is dict
+    if not isinstance(result["metadata"], dict):
+        return False
+
+    # Check required metadata fields
+    metadata = result["metadata"]
+    required_fields = ["object_id", "original_filename", "content_type"]
+    for field in required_fields:
+        if field not in metadata:
+            return False
+
+    return True
+
+
+def process_multiple_load_results(results: list[LoadResult]) -> dict[str, Any]:
+    """
+    Process multiple LoadResult objects with type safety.
+
+    Args:
+        results: List of LoadResult objects
+
+    Returns:
+        dict: Summary statistics about the loaded files
+    """
+    total_size = 0
+    content_types = {}
+    filenames = []
+
+    for result in results:
+        # Type-safe access to each result
+        content: bytes = result["content"]
+        metadata: dict[str, Any] = result["metadata"]
+
+        total_size += len(content)
+
+        content_type: str = metadata["content_type"]
+        content_types[content_type] = content_types.get(content_type, 0) + 1
+
+        filename: str = metadata["original_filename"]
+        filenames.append(filename)
+
+    return {
+        "total_files": len(results),
+        "total_size_bytes": total_size,
+        "content_type_distribution": content_types,
+        "filenames": filenames,
+        "average_size_bytes": total_size / len(results) if results else 0
+    }

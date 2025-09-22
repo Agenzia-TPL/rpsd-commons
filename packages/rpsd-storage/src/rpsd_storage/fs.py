@@ -4,7 +4,7 @@ import os
 import uuid
 from datetime import UTC, datetime
 
-from rpsd_storage.provider import StorageProvider
+from rpsd_storage.provider import LoadResult, StorageProvider
 
 logger = logging.getLogger()
 
@@ -67,7 +67,7 @@ class FSStorageProvider(StorageProvider):
         logger.info(f"Saved to file system: {file_path}")
         return object_id
 
-    def load(self, object_id):
+    def load(self, object_id: str) -> LoadResult:
         """
         Loads content and metadata from the file system using the object_id.
         """

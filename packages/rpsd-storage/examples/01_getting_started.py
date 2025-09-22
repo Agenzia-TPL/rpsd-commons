@@ -14,8 +14,44 @@ This is a 5-minute introduction to get you up and running.
 """
 
 import tempfile
+from typing import Any
 
 from rpsd_storage import FSStorageProvider
+from rpsd_storage.provider import LoadResult
+
+
+def demonstrate_type_safety(result: LoadResult) -> None:
+    """
+    Demonstrate the type safety benefits of LoadResult TypedDict.
+
+    With TypedDict, your IDE knows exactly what types you're working with!
+    """
+    print("🔍 Type Safety Demonstration")
+    print("-" * 28)
+
+    # TypedDict gives us full type safety
+    content: bytes = result["content"]              # IDE knows this is bytes
+    metadata: dict[str, Any] = result["metadata"]  # IDE knows this is dict
+
+    # Access metadata with type safety
+    filename: str = metadata["original_filename"]   # IDE knows this is str
+    file_type: str = metadata["content_type"]      # IDE knows this is str
+    object_id: str = metadata["object_id"]         # IDE knows this is str
+
+    print("✅ Type-safe access to all fields:")
+    print(f"   • Content: {type(content).__name__} ({len(content)} bytes)")
+    print(f"   • Filename: {type(filename).__name__} ('{filename}')")
+    print(f"   • File type: {type(file_type).__name__} ('{file_type}')")
+    print(f"   • Object ID: {type(object_id).__name__} ('{object_id}')")
+    print()
+
+    # With TypedDict, you get IDE autocompletion and type checking!
+    print("💡 Benefits of TypedDict:")
+    print("   • IDE autocompletion for dictionary keys")
+    print("   • Static type checking catches errors early")
+    print("   • Clear documentation of return structure")
+    print("   • Better code maintainability")
+    print()
 
 
 def main():
@@ -59,8 +95,8 @@ def main():
         print("Step 3: Loading the file back")
         print("-" * 28)
 
-        # Use the object_id to get your file back
-        loaded_file = storage.load(object_id)
+        # Use the object_id to get your file back - now with TypedDict!
+        loaded_file: LoadResult = storage.load(object_id)
 
         # loaded_file contains both the content and metadata
         content = loaded_file["content"]           # The original file data
@@ -84,6 +120,10 @@ def main():
         print("   • content = your actual file data (as bytes)")
         print("   • metadata = information about the file (name, type, etc.)")
         print()
+
+        # Demonstrate TypedDict benefits
+        demonstrate_type_safety(loaded_file)
+
         print("📚 Ready for more? Try the other examples:")
         print("   • 02_basic_usage.py - Save different types of files")
         print("   • 03_metadata_and_types.py - Add custom metadata")
