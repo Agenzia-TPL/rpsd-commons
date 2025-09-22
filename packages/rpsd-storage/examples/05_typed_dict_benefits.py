@@ -1,39 +1,39 @@
 #!/usr/bin/env python3
 """
-TypedDict Benefits - Type Safety in Action
+Tuple Unpacking Benefits - Ergonomic Data Access
 
-This example demonstrates the type safety benefits of using TypedDict
+This example demonstrates the ergonomic benefits of using tuple unpacking
 for the load method return values in rpsd-storage.
 
 What you'll learn:
-- How TypedDict provides compile-time type checking
-- IDE autocompletion and error detection
-- Type-safe functions that work with LoadResult
-- Best practices for typed code
+- How tuple unpacking provides direct access to content and metadata
+- Clean, Pythonic syntax for handling load results
+- Functions that work efficiently with unpacked data
+- Best practices for tuple-based APIs
 
-This is an advanced example showing modern Python typing features.
+This example shows how tuples align with the save/load conceptual model.
 """
 
 import tempfile
 from typing import Any
 
 from rpsd_storage import FSStorageProvider
-from rpsd_storage.provider import LoadResult
+
+# LoadResult removed - now using tuples directly
 
 
-def analyze_file_content(result: LoadResult) -> dict[str, Any]:
+def analyze_file_content(content: bytes, metadata: dict[str, Any]) -> dict[str, Any]:
     """
-    Analyze file content with full type safety.
+    Analyze file content with direct tuple access.
 
     Args:
-        result: TypedDict LoadResult from storage.load()
+        content: File content as bytes
+        metadata: File metadata dictionary
 
     Returns:
-        dict: Analysis results with type-safe access
+        dict: Analysis results with direct access
     """
-    # TypedDict ensures we know exactly what we're getting
-    content: bytes = result["content"]              # IDE knows this is bytes
-    metadata: dict[str, Any] = result["metadata"]  # IDE knows this is dict
+    # Direct access to unpacked values
 
     # Type-safe metadata access
     filename: str = metadata["original_filename"]
@@ -70,7 +70,7 @@ def batch_process_files(
     storage: FSStorageProvider, object_ids: list[str]
 ) -> list[dict[str, Any]]:
     """
-    Process multiple files with type safety throughout.
+    Process multiple files with tuple unpacking throughout.
 
     Args:
         storage: Storage provider instance
@@ -83,11 +83,11 @@ def batch_process_files(
 
     for object_id in object_ids:
         try:
-            # Load with TypedDict - IDE knows the structure
-            load_result: LoadResult = storage.load(object_id)
+            # Load with tuple unpacking - direct access to values
+            content, metadata = storage.load(object_id)
 
-            # Type-safe analysis
-            analysis = analyze_file_content(load_result)
+            # Direct analysis with unpacked values
+            analysis = analyze_file_content(content, metadata)
             analysis["status"] = "success"
 
             results.append(analysis)
@@ -105,36 +105,36 @@ def batch_process_files(
     return results
 
 
-def extract_metadata_safely(result: LoadResult, field: str, default: Any = None) -> Any:
+def extract_metadata_safely(
+    metadata: dict[str, Any], field: str, default: Any = None
+) -> Any:
     """
     Safely extract metadata field with type checking.
 
     Args:
-        result: TypedDict LoadResult
+        metadata: Metadata dictionary from unpacked tuple
         field: Metadata field name
         default: Default value if field missing
 
     Returns:
         The field value or default
     """
-    # TypedDict ensures metadata is properly typed
-    metadata: dict[str, Any] = result["metadata"]
+    # Direct access to metadata from unpacked tuple
     return metadata.get(field, default)
 
 
-def validate_file_integrity(result: LoadResult) -> bool:
+def validate_file_integrity(content: bytes, metadata: dict[str, Any]) -> bool:
     """
-    Validate file integrity using TypedDict structure.
+    Validate file integrity using unpacked tuple values.
 
     Args:
-        result: LoadResult to validate
+        content: File content from unpacked tuple
+        metadata: Metadata from unpacked tuple
 
     Returns:
         bool: True if file appears valid
     """
-    # Type-safe structure validation
-    content: bytes = result["content"]
-    metadata: dict[str, Any] = result["metadata"]
+    # Direct validation with unpacked values
 
     # Check required fields exist
     required_fields = ["object_id", "original_filename", "content_type"]
@@ -157,13 +157,13 @@ def validate_file_integrity(result: LoadResult) -> bool:
     return True
 
 
-def demonstrate_type_safety_benefits():
-    """Demonstrate the benefits of TypedDict in practice."""
+def demonstrate_tuple_unpacking_benefits():
+    """Demonstrate the benefits of tuple unpacking in practice."""
 
-    print("🔍 TypedDict Benefits Demonstration")
-    print("=" * 38)
-    print("This example shows how TypedDict provides type safety")
-    print("for rpsd-storage load operations.")
+    print("🔍 Tuple Unpacking Benefits Demonstration")
+    print("=" * 44)
+    print("This example shows how tuple unpacking provides ergonomic")
+    print("and clean access to rpsd-storage load results.")
     print()
 
     with tempfile.TemporaryDirectory() as temp_dir:
@@ -201,17 +201,15 @@ def demonstrate_type_safety_benefits():
 
         print()
 
-        # Demonstrate type-safe loading
-        print("🔒 Type-Safe File Loading")
-        print("-" * 26)
+        # Demonstrate tuple unpacking loading
+        print("🔒 Tuple Unpacking File Loading")
+        print("-" * 32)
 
         for i, object_id in enumerate(object_ids):
-            # Load with TypedDict type annotation
-            result: LoadResult = storage.load(object_id)
+            # Load with tuple unpacking - direct access!
+            content, metadata = storage.load(object_id)
 
-            # Type-safe access - IDE knows these types!
-            content: bytes = result["content"]
-            metadata: dict[str, Any] = result["metadata"]
+            # Direct access to unpacked values
             filename: str = metadata["original_filename"]
 
             print(f"   📄 File {i+1}: {filename}")
@@ -219,14 +217,14 @@ def demonstrate_type_safety_benefits():
             print(f"      Metadata type: {type(metadata).__name__}")
             print(f"      Size: {len(content)} bytes")
 
-            # Validate with type safety
-            is_valid = validate_file_integrity(result)
+            # Validate with unpacked values
+            is_valid = validate_file_integrity(content, metadata)
             print(f"      Valid: {'✅' if is_valid else '❌'}")
             print()
 
         # Demonstrate batch processing
-        print("📊 Batch Processing with Type Safety")
-        print("-" * 36)
+        print("📊 Batch Processing with Tuple Unpacking")
+        print("-" * 42)
 
         analysis_results = batch_process_files(storage, object_ids)
 
@@ -240,16 +238,16 @@ def demonstrate_type_safety_benefits():
                     print(f"      Words: {result['word_count']}")
                 print()
 
-        # Demonstrate type-safe metadata extraction
-        print("🏷️  Type-Safe Metadata Extraction")
-        print("-" * 33)
+        # Demonstrate tuple-based metadata extraction
+        print("🏷️  Tuple-Based Metadata Extraction")
+        print("-" * 37)
 
-        first_result: LoadResult = storage.load(object_ids[0])
+        content, metadata = storage.load(object_ids[0])
 
-        # Safe extraction with type checking
-        who = extract_metadata_safely(first_result, "who", "unknown")
-        what = extract_metadata_safely(first_result, "what", "unknown")
-        timestamp = extract_metadata_safely(first_result, "ingestion_timestamp")
+        # Safe extraction with unpacked metadata
+        who = extract_metadata_safely(metadata, "who", "unknown")
+        what = extract_metadata_safely(metadata, "what", "unknown")
+        timestamp = extract_metadata_safely(metadata, "ingestion_timestamp")
 
         print(f"   Who: {who} (type: {type(who).__name__})")
         print(f"   What: {what} (type: {type(what).__name__})")
@@ -259,34 +257,34 @@ def demonstrate_type_safety_benefits():
         # Show the benefits
         print("🎯 Benefits Summary")
         print("-" * 17)
-        print("✅ IDE autocompletion for dictionary keys")
-        print("✅ Static type checking catches errors early")
-        print("✅ Clear documentation of function contracts")
-        print("✅ Better refactoring support")
-        print("✅ Improved code maintainability")
-        print("✅ Runtime type validation possible")
+        print("✅ Direct access to content and metadata")
+        print("✅ Ergonomic - no dictionary access needed")
+        print("✅ Aligns with save() creating two things")
+        print("✅ Clean, Pythonic unpacking syntax")
+        print("✅ Reduced cognitive overhead")
+        print("✅ More intuitive API design")
         print()
 
-        print("💡 TypedDict Best Practices:")
-        print("• Always annotate LoadResult variables")
-        print("• Use type hints in function signatures")
-        print("• Validate structure when needed")
-        print("• Extract metadata safely with defaults")
-        print("• Leverage IDE features for better development")
+        print("💡 Tuple Unpacking Best Practices:")
+        print("• Always unpack immediately after load()")
+        print("• Use descriptive variable names")
+        print("• Pass unpacked values to functions directly")
+        print("• Leverage tuple unpacking in function arguments")
+        print("• Keep the conceptual model of save/load simple")
 
 
 def main():
-    """Run the TypedDict benefits demonstration."""
-    demonstrate_type_safety_benefits()
+    """Run the tuple unpacking benefits demonstration."""
+    demonstrate_tuple_unpacking_benefits()
 
-    print("🎉 TypedDict demonstration complete!")
-    print("   Your IDE and type checker now have full knowledge")
-    print("   of the rpsd-storage load method return structure.")
+    print("🎉 Tuple unpacking demonstration complete!")
+    print("   You now have direct, ergonomic access to")
+    print("   rpsd-storage content and metadata.")
     print()
     print("📚 Continue learning:")
-    print("   • Use mypy or similar tools for static type checking")
-    print("   • Enable type hints in your IDE for better development")
-    print("   • Write type-safe functions that work with LoadResult")
+    print("   • Use tuple unpacking consistently in your code")
+    print("   • Pass unpacked values directly to functions")
+    print("   • Embrace the conceptual alignment of save/load")
 
 
 if __name__ == "__main__":

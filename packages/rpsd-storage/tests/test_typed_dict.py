@@ -1,8 +1,8 @@
 """
-Tests specifically for TypedDict functionality in storage providers.
+Tests specifically for tuple functionality in storage providers.
 
-These tests validate that the LoadResult TypedDict provides proper type safety
-and structure validation for the load method return values.
+These tests validate that the load method returns proper tuples with
+content and metadata for better ergonomics and type safety.
 """
 
 from typing import get_type_hints
@@ -10,7 +10,7 @@ from typing import get_type_hints
 import pytest
 
 from rpsd_storage import FSStorageProvider
-from rpsd_storage.provider import LoadResult, StorageProvider
+from rpsd_storage.provider import StorageProvider
 
 from .test_utils import (
     create_sample_file,
@@ -22,36 +22,29 @@ from .test_utils import (
 )
 
 
-class TestTypedDictInterface:
-    """Test that the TypedDict interface is properly defined."""
-
-    def test_load_result_type_definition(self):
-        """Test that LoadResult TypedDict has the correct structure."""
-        # Check that LoadResult is properly defined with required keys
-        type_hints = get_type_hints(LoadResult)
-
-        assert "content" in type_hints
-        assert "metadata" in type_hints
-        assert type_hints["content"] is bytes
-        assert str(type_hints["metadata"]).startswith("dict")
+class TestTupleInterface:
+    """Test that the tuple interface is properly defined."""
 
     def test_storage_provider_load_signature(self):
-        """Test that the abstract load method has proper type hints."""
+        """Test that the abstract load method returns proper tuple type hints."""
         # Check the type hints of the abstract load method
         type_hints = get_type_hints(StorageProvider.load)
 
         assert "object_id" in type_hints
         assert "return" in type_hints
         assert type_hints["object_id"] is str
-        # The return type should be LoadResult (TypedDict)
-        assert type_hints["return"] == LoadResult
+        # The return type should be tuple[bytes, dict[str, Any]]
+        return_type = str(type_hints["return"])
+        assert "tuple" in return_type.lower()
+        assert "bytes" in return_type
+        assert "dict" in return_type
 
 
-class TestTypedDictFunctionality:
-    """Test TypedDict functionality with both storage providers."""
+class TestTupleFunctionality:
+    """Test tuple functionality with both storage providers."""
 
-    def test_load_returns_proper_typed_dict_fs(self, fs_storage_provider):
-        """Test that FS load method returns a properly structured LoadResult."""
+    def test_load_returns_proper_tuple_fs(self, fs_storage_provider):
+        """Test that FS load method returns a properly structured tuple."""
         content, filename, mime_type = create_sample_file("json")
 
         # Save a file
@@ -61,22 +54,20 @@ class TestTypedDictFunctionality:
             content_type=mime_type
         )
 
-        # Load with TypedDict result
-        result: LoadResult = fs_storage_provider.load(object_id)
-
-        # Validate the TypedDict structure
-        assert validate_load_result_structure(result)
+        # Load with tuple result
+        content_loaded, metadata_loaded = fs_storage_provider.load(object_id)
 
         # Test type-safe access
-        content_from_result: bytes = result["content"]
-        metadata_from_result: dict = result["metadata"]
+        assert isinstance(content_loaded, bytes)
+        assert isinstance(metadata_loaded, dict)
+        assert content_loaded == content
 
-        assert isinstance(content_from_result, bytes)
-        assert isinstance(metadata_from_result, dict)
-        assert content_from_result == content
+        # Validate tuple structure has the correct components
+        result_dict = {"content": content_loaded, "metadata": metadata_loaded}
+        assert validate_load_result_structure(result_dict)
 
-    def test_load_returns_proper_typed_dict_s3(self, s3_storage_provider):
-        """Test that S3 load method returns a properly structured LoadResult."""
+    def test_load_returns_proper_tuple_s3(self, s3_storage_provider):
+        """Test that S3 load method returns a properly structured tuple."""
         content, filename, mime_type = create_sample_file("json")
 
         # Save a file
@@ -86,22 +77,20 @@ class TestTypedDictFunctionality:
             content_type=mime_type
         )
 
-        # Load with TypedDict result
-        result: LoadResult = s3_storage_provider.load(object_id)
-
-        # Validate the TypedDict structure
-        assert validate_load_result_structure(result)
+        # Load with tuple result
+        content_loaded, metadata_loaded = s3_storage_provider.load(object_id)
 
         # Test type-safe access
-        content_from_result: bytes = result["content"]
-        metadata_from_result: dict = result["metadata"]
+        assert isinstance(content_loaded, bytes)
+        assert isinstance(metadata_loaded, dict)
+        assert content_loaded == content
 
-        assert isinstance(content_from_result, bytes)
-        assert isinstance(metadata_from_result, dict)
-        assert content_from_result == content
+        # Validate tuple structure has the correct components
+        result_dict = {"content": content_loaded, "metadata": metadata_loaded}
+        assert validate_load_result_structure(result_dict)
 
     def test_extract_content_with_types_function_fs(self, fs_storage_provider):
-        """Test the utility function that extracts content with type safety."""
+        """Test utility function that extracts content with type safety."""
         content, filename, mime_type = create_sample_file("text")
 
         object_id = fs_storage_provider.save(
@@ -110,7 +99,10 @@ class TestTypedDictFunctionality:
             content_type=mime_type
         )
 
-        result: LoadResult = fs_storage_provider.load(object_id)
+        content_loaded, metadata_loaded = fs_storage_provider.load(object_id)
+
+        # Create a LoadResult-like dict for the utility function
+        result = {"content": content_loaded, "metadata": metadata_loaded}
 
         # Use the type-safe extraction function
         (
@@ -127,10 +119,10 @@ class TestTypedDictFunctionality:
         assert extracted_filename == filename
         assert extracted_type == mime_type
 
-    def test_demonstrate_typed_load_result_function_fs(
+    def test_demonstrate_tuple_load_result_function_fs(
         self, fs_storage_provider, capsys
     ):
-        """Test the demonstration function that shows TypedDict benefits."""
+        """Test the demonstration function that shows tuple benefits."""
         content, filename, mime_type = create_sample_file("pdf")
 
         object_id = fs_storage_provider.save(
@@ -144,19 +136,19 @@ class TestTypedDictFunctionality:
 
         # Check that it printed the expected output
         captured = capsys.readouterr()
-        assert "✅ TypedDict validation passed" in captured.out
+        assert "✅" in captured.out
         assert filename in captured.out
         assert "Content size:" in captured.out
         assert "Content type:" in captured.out
         assert "Object ID:" in captured.out
 
 
-class TestTypedDictValidation:
-    """Test validation functions for TypedDict structures."""
+class TestTupleValidation:
+    """Test validation functions for tuple-based structures."""
 
     def test_validate_load_result_structure_valid(self):
-        """Test validation with a valid LoadResult structure."""
-        valid_result: LoadResult = {
+        """Test validation with a valid tuple-based structure."""
+        valid_result = {
             "content": b"test content",
             "metadata": {
                 "object_id": "test-123",
@@ -169,7 +161,7 @@ class TestTypedDictValidation:
         assert validate_load_result_structure(valid_result) is True
 
     def test_validate_load_result_structure_invalid(self):
-        """Test validation with invalid LoadResult structures."""
+        """Test validation with invalid tuple-based structures."""
         # Missing content key
         invalid_result1 = {
             "metadata": {"object_id": "test-123"}
@@ -200,11 +192,11 @@ class TestTypedDictValidation:
 
 
 @pytest.mark.integration
-class TestTypedDictIntegration:
-    """Integration tests for TypedDict functionality."""
+class TestTupleIntegration:
+    """Integration tests for tuple functionality."""
 
-    def test_end_to_end_typed_workflow(self):
-        """Test a complete workflow using TypedDict throughout."""
+    def test_end_to_end_tuple_workflow(self):
+        """Test a complete workflow using tuples throughout."""
         with create_temp_storage_dir() as temp_dir:
             storage = FSStorageProvider(base_path=temp_dir)
 
@@ -221,10 +213,11 @@ class TestTypedDictIntegration:
                 )
                 saved_ids.append(object_id)
 
-            # Load all files with TypedDict
-            all_results: list[LoadResult] = []
+            # Load all files with tuples
+            all_results = []
             for object_id in saved_ids:
-                result: LoadResult = storage.load(object_id)
+                content_loaded, metadata_loaded = storage.load(object_id)
+                result = {"content": content_loaded, "metadata": metadata_loaded}
                 assert validate_load_result_structure(result)
                 all_results.append(result)
 

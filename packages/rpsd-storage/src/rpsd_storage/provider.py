@@ -1,11 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Any, TypedDict
-
-
-class LoadResult(TypedDict):
-    """Type definition for load method return value."""
-    content: bytes
-    metadata: dict[str, Any]
+from typing import Any
 
 
 class StorageProvider(ABC):
@@ -30,7 +24,7 @@ class StorageProvider(ABC):
         pass
 
     @abstractmethod
-    def load(self, object_id: str) -> LoadResult:
+    def load(self, object_id: str) -> tuple[bytes, dict[str, Any]]:
         """
         Loads content and metadata from the storage provider using the object_id.
 
@@ -38,9 +32,9 @@ class StorageProvider(ABC):
             object_id: The object ID returned by the save() method
 
         Returns:
-            LoadResult: A typed dictionary containing:
-                - "content" (bytes): The file content
-                - "metadata" (dict): The metadata associated with the file
+            tuple: A tuple containing:
+                - content (bytes): The file content
+                - metadata (dict): The metadata associated with the file
 
         Raises:
             FileNotFoundError: If the object with the given ID does not exist

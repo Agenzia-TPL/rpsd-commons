@@ -241,8 +241,8 @@ def demonstrate_bulk_operations():
         total_size = 0
         for filename, object_id in saved_objects:
             try:
-                loaded_file = storage.load(object_id)
-                file_size = len(loaded_file["content"])
+                content, metadata = storage.load(object_id)
+                file_size = len(content)
                 total_size += file_size
 
                 print(f"     📄 {filename}: {file_size:,} bytes")
@@ -305,7 +305,7 @@ def demonstrate_production_patterns():
     # Step 2: Process and save to processed
     try:
         # Load from incoming
-        loaded_file = storages["incoming"].load(incoming_id)
+        content_loaded, metadata_loaded = storages["incoming"].load(incoming_id)
 
         # Simulate processing (add metadata)
         processed_metadata = get_metadata_preset("data_export")
@@ -315,7 +315,7 @@ def demonstrate_production_patterns():
         }
 
         processed_id = storages["processed"].save(
-            content=loaded_file["content"],
+            content=content_loaded,
             filename=f"processed_{filename}",
             content_type=mime_type,
             **processed_metadata,
@@ -331,7 +331,7 @@ def demonstrate_production_patterns():
         }
 
         archive_id = storages["archived"].save(
-            content=loaded_file["content"],
+            content=content_loaded,
             filename=f"archive_{filename}",
             content_type=mime_type,
             **archive_metadata,

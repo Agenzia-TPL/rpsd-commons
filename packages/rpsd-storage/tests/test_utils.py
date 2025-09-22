@@ -13,7 +13,7 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-from rpsd_storage.provider import LoadResult
+# LoadResult removed - now using tuples directly
 
 # Test-specific utilities - self-contained
 
@@ -341,19 +341,17 @@ TEST_SCENARIOS = [
 # TypedDict demonstration functions
 def demonstrate_typed_load_result(storage_provider, object_id: str) -> None:
     """
-    Demonstrate how TypedDict provides type safety for load results.
+    Demonstrate how tuple unpacking provides ergonomic access to load results.
 
-    This function shows that the LoadResult TypedDict enables:
-    - Type checking for the returned dictionary structure
-    - IDE autocompletion for dictionary keys
-    - Static type analysis for content and metadata
+    This function shows that tuple unpacking enables:
+    - Direct access to content and metadata
+    - Clear separation of return values
+    - Better alignment with save() method creating two things
     """
-    # Load with typed result
-    result: LoadResult = storage_provider.load(object_id)
+    # Load with tuple unpacking
+    content, metadata = storage_provider.load(object_id)
 
-    # Type-safe access to content and metadata
-    content: bytes = result["content"]
-    metadata: dict[str, Any] = result["metadata"]
+    # Direct access to content and metadata
 
     # These should be properly typed by the IDE/type checker
     assert isinstance(content, bytes), "Content should be bytes"
@@ -364,18 +362,18 @@ def demonstrate_typed_load_result(storage_provider, object_id: str) -> None:
     content_type: str = metadata["content_type"]
     object_id_from_meta: str = metadata["object_id"]
 
-    print(f"✅ TypedDict validation passed for {original_filename}")
+    print(f"✅ Tuple validation passed for {original_filename}")
     print(f"   Content size: {len(content)} bytes")
     print(f"   Content type: {content_type}")
     print(f"   Object ID: {object_id_from_meta}")
 
 
-def extract_content_with_types(load_result: LoadResult) -> tuple[bytes, str, str]:
+def extract_content_with_types(load_result: dict[str, Any]) -> tuple[bytes, str, str]:
     """
-    Extract key information from a LoadResult with full type safety.
+    Extract key information from a load result with full type safety.
 
     Args:
-        load_result: The typed dictionary returned by storage.load()
+        load_result: Dictionary with content and metadata keys (for compatibility)
 
     Returns:
         tuple: (content, original_filename, content_type)
@@ -389,12 +387,12 @@ def extract_content_with_types(load_result: LoadResult) -> tuple[bytes, str, str
     return content, original_filename, content_type
 
 
-def validate_load_result_structure(result: LoadResult) -> bool:
+def validate_load_result_structure(result: dict[str, Any]) -> bool:
     """
-    Validate that a LoadResult has the correct TypedDict structure.
+    Validate that a result has the correct structure.
 
     Args:
-        result: The LoadResult to validate
+        result: The result dictionary to validate
 
     Returns:
         bool: True if structure is valid
@@ -421,12 +419,12 @@ def validate_load_result_structure(result: LoadResult) -> bool:
     return True
 
 
-def process_multiple_load_results(results: list[LoadResult]) -> dict[str, Any]:
+def process_multiple_load_results(results: list[dict[str, Any]]) -> dict[str, Any]:
     """
-    Process multiple LoadResult objects with type safety.
+    Process multiple load result objects with type safety.
 
     Args:
-        results: List of LoadResult objects
+        results: List of result dictionaries with content and metadata
 
     Returns:
         dict: Summary statistics about the loaded files

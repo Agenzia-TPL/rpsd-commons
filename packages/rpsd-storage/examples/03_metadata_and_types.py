@@ -128,8 +128,7 @@ def demonstrate_basic_metadata():
         print()
 
         # Load it back to see the metadata
-        loaded_file = storage.load(object_id)
-        metadata = loaded_file["metadata"]
+        content, metadata = storage.load(object_id)
 
         print("   📋 Complete Metadata:")
         print_metadata_info(metadata)
@@ -153,9 +152,9 @@ def demonstrate_basic_metadata():
 
         print(f"   ✅ Saved with metadata: {object_id}")
 
-        loaded_file = storage.load(object_id)
+        content, metadata = storage.load(object_id)
         print("   📋 Complete Metadata:")
-        print_metadata_info(loaded_file["metadata"])
+        print_metadata_info(metadata)
         print()
 
 
@@ -253,14 +252,13 @@ def demonstrate_metadata_benefits():
         print()
 
         for description, object_id in saved_files:
-            loaded_file = storage.load(object_id)
-            metadata = loaded_file["metadata"]
+            content, metadata = storage.load(object_id)
 
             print(f"   📁 {description}")
             print(f"      Who: {metadata.get('who', 'Unknown')}")
             print(f"      What: {metadata.get('what', 'Unknown')}")
             print(f"      When: {metadata['ingestion_timestamp']}")
-            print(f"      Size: {len(loaded_file['content'])} bytes")
+            print(f"      Size: {len(content)} bytes")
             print()
 
 

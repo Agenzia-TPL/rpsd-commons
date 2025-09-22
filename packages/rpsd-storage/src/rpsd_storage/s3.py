@@ -6,7 +6,7 @@ from datetime import UTC, datetime
 
 import boto3
 
-from rpsd_storage.provider import LoadResult, StorageProvider
+from rpsd_storage.provider import StorageProvider
 
 logger = logging.getLogger()
 
@@ -71,7 +71,7 @@ class S3StorageProvider(StorageProvider):
         logger.info(f"Uploaded to S3: {s3_key}")
         return object_id
 
-    def load(self, object_id: str) -> LoadResult:
+    def load(self, object_id: str) -> tuple[bytes, dict]:
         """
         Loads content and metadata from S3 using the object_id.
         """
@@ -139,7 +139,4 @@ class S3StorageProvider(StorageProvider):
             raise Exception(f"Failed to load S3 object {s3_key}: {e}")
 
         logger.info(f"Loaded from S3: {s3_key}")
-        return {
-            "content": content,
-            "metadata": metadata
-        }
+        return content, metadata

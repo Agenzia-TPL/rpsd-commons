@@ -101,9 +101,9 @@ class TestFSStorageProviderSave:
         assert object_id is not None
 
         # Verify content is correctly saved
-        loaded_data = fs_storage_provider.load(object_id)
-        assert loaded_data["content"] == content
-        assert loaded_data["metadata"]["content_type"] == mime_type
+        content_loaded, metadata_loaded = fs_storage_provider.load(object_id)
+        assert content_loaded == content
+        assert metadata_loaded["content_type"] == mime_type
 
     def test_save_binary_content(self, fs_storage_provider):
         """Test saving binary content."""
@@ -114,9 +114,9 @@ class TestFSStorageProviderSave:
             content=content, filename=filename, content_type="image/png"
         )
 
-        loaded_data = fs_storage_provider.load(object_id)
-        assert loaded_data["content"] == content
-        assert verify_file_content(loaded_data["content"], "png")
+        content_loaded, metadata_loaded = fs_storage_provider.load(object_id)
+        assert content_loaded == content
+        assert verify_file_content(content_loaded, "png")
 
     def test_save_metadata_structure(self, fs_storage_provider, temp_dir):
         """Test that saved metadata has correct structure."""
@@ -155,8 +155,8 @@ class TestFSStorageProviderSave:
             content=content, filename=None, content_type="text/plain"
         )
 
-        loaded_data = fs_storage_provider.load(object_id)
-        assert loaded_data["metadata"]["original_filename"] == "unknown"
+        content_loaded, metadata_loaded = fs_storage_provider.load(object_id)
+        assert metadata_loaded["original_filename"] == "unknown"
 
     def test_save_filename_without_extension(self, fs_storage_provider):
         """Test saving with filename that has no extension."""
@@ -166,8 +166,8 @@ class TestFSStorageProviderSave:
             content=content, filename="testfile", content_type="text/plain"
         )
 
-        loaded_data = fs_storage_provider.load(object_id)
-        assert loaded_data["metadata"]["original_filename"] == "testfile"
+        content_loaded, metadata_loaded = fs_storage_provider.load(object_id)
+        assert metadata_loaded["original_filename"] == "testfile"
 
         # Should default to .xml extension
         files = [
@@ -195,10 +195,10 @@ class TestFSStorageProviderLoad:
         )
 
         # Load the file
-        loaded_data = fs_storage_provider.load(object_id)
+        content_loaded, metadata_loaded = fs_storage_provider.load(object_id)
 
-        assert loaded_data["content"] == sample_content["content"]
-        assert verify_metadata_structure(loaded_data["metadata"])
+        assert content_loaded == sample_content["content"]
+        assert verify_metadata_structure(metadata_loaded)
 
     def test_load_different_content_types(self, fs_storage_provider, test_scenario):
         """Test loading files with different content types."""
@@ -211,11 +211,11 @@ class TestFSStorageProviderLoad:
         )
 
         # Load and verify
-        loaded_data = fs_storage_provider.load(object_id)
-        assert loaded_data["content"] == test_scenario["content"]
-        assert loaded_data["metadata"]["content_type"] == test_scenario["mime_type"]
+        content_loaded, metadata_loaded = fs_storage_provider.load(object_id)
+        assert content_loaded == test_scenario["content"]
+        assert metadata_loaded["content_type"] == test_scenario["mime_type"]
         assert verify_file_content(
-            loaded_data["content"], test_scenario["content_type"]
+            content_loaded, test_scenario["content_type"]
         )
 
     def test_load_with_who_what_prefixes(self, fs_storage_provider):
@@ -232,10 +232,10 @@ class TestFSStorageProviderLoad:
         )
 
         # Load using the object_id
-        loaded_data = fs_storage_provider.load(object_id)
-        assert loaded_data["content"] == content
-        assert loaded_data["metadata"]["who"] == "alice"
-        assert loaded_data["metadata"]["what"] == "documentation"
+        content_loaded, metadata_loaded = fs_storage_provider.load(object_id)
+        assert content_loaded == content
+        assert metadata_loaded["who"] == "alice"
+        assert metadata_loaded["what"] == "documentation"
 
     def test_load_preserves_metadata(self, fs_storage_provider):
         """Test that load preserves all metadata fields."""
@@ -249,12 +249,11 @@ class TestFSStorageProviderLoad:
             **metadata,
         )
 
-        loaded_data = fs_storage_provider.load(object_id)
-        loaded_metadata = loaded_data["metadata"]
+        content_loaded, metadata_loaded = fs_storage_provider.load(object_id)
 
         # Check all original metadata is preserved
         for key, value in metadata.items():
-            assert loaded_metadata[key] == value
+            assert metadata_loaded[key] == value
 
     @pytest.mark.error_handling
     def test_load_nonexistent_object_id(self, fs_storage_provider):
@@ -323,17 +322,16 @@ class TestFSStorageProviderIntegration:
         )
 
         # Load
-        loaded_data = fs_storage_provider.load(object_id)
+        content_loaded, metadata_loaded = fs_storage_provider.load(object_id)
 
         # Verify everything matches
-        assert loaded_data["content"] == content
-        metadata = loaded_data["metadata"]
-        assert metadata["original_filename"] == filename
-        assert metadata["content_type"] == "application/json"
-        assert metadata["source_url"] == "https://api.example.com/data"
-        assert metadata["who"] == "integration_test"
-        assert metadata["what"] == "roundtrip_data"
-        assert metadata["object_id"] == object_id
+        assert content_loaded == content
+        assert metadata_loaded["original_filename"] == filename
+        assert metadata_loaded["content_type"] == "application/json"
+        assert metadata_loaded["source_url"] == "https://api.example.com/data"
+        assert metadata_loaded["who"] == "integration_test"
+        assert metadata_loaded["what"] == "roundtrip_data"
+        assert metadata_loaded["object_id"] == object_id
 
     def test_multiple_files_different_scenarios(self, fs_storage_provider):
         """Test handling multiple files with different scenarios."""
@@ -366,8 +364,8 @@ class TestFSStorageProviderIntegration:
             object_id = file_data["object_id"]
             original_content = file_data["content"]
 
-            loaded_data = fs_storage_provider.load(object_id)
-            assert loaded_data["content"] == original_content
+            content_loaded, metadata_loaded = fs_storage_provider.load(object_id)
+            assert content_loaded == original_content
 
     def test_concurrent_saves(self, fs_storage_provider):
         """Test that concurrent saves don't interfere with each other."""
@@ -390,10 +388,10 @@ class TestFSStorageProviderIntegration:
 
         # All should be loadable independently
         for i, object_id in enumerate(object_ids):
-            loaded_data = fs_storage_provider.load(object_id)
-            assert loaded_data["content"] == contents[i][0]
-            assert loaded_data["metadata"]["who"] == f"user_{i}"
-            assert loaded_data["metadata"]["what"] == f"test_data_{i}"
+            content_loaded, metadata_loaded = fs_storage_provider.load(object_id)
+            assert content_loaded == contents[i][0]
+            assert metadata_loaded["who"] == f"user_{i}"
+            assert metadata_loaded["what"] == f"test_data_{i}"
 
     def test_directory_structure_creation(self, temp_dir):
         """Test that directory structure is properly created."""
@@ -412,5 +410,5 @@ class TestFSStorageProviderIntegration:
         )
 
         # Should be able to load files
-        loaded_data = provider.load(object_id)
-        assert loaded_data["content"] == TestContent.SIMPLE_TEXT
+        content_loaded, metadata_loaded = provider.load(object_id)
+        assert content_loaded == TestContent.SIMPLE_TEXT

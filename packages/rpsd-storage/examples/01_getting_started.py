@@ -17,21 +17,20 @@ import tempfile
 from typing import Any
 
 from rpsd_storage import FSStorageProvider
-from rpsd_storage.provider import LoadResult
+
+# LoadResult removed - now using tuples directly
 
 
-def demonstrate_type_safety(result: LoadResult) -> None:
+def demonstrate_type_safety(content: bytes, metadata: dict[str, Any]) -> None:
     """
-    Demonstrate the type safety benefits of LoadResult TypedDict.
+    Demonstrate the ergonomic benefits of tuple unpacking.
 
-    With TypedDict, your IDE knows exactly what types you're working with!
+    With tuple unpacking, you get direct access to content and metadata!
     """
-    print("🔍 Type Safety Demonstration")
-    print("-" * 28)
+    print("🔍 Tuple Unpacking Demonstration")
+    print("-" * 33)
 
-    # TypedDict gives us full type safety
-    content: bytes = result["content"]              # IDE knows this is bytes
-    metadata: dict[str, Any] = result["metadata"]  # IDE knows this is dict
+    # Tuple unpacking gives us direct access to both values
 
     # Access metadata with type safety
     filename: str = metadata["original_filename"]   # IDE knows this is str
@@ -46,11 +45,11 @@ def demonstrate_type_safety(result: LoadResult) -> None:
     print()
 
     # With TypedDict, you get IDE autocompletion and type checking!
-    print("💡 Benefits of TypedDict:")
-    print("   • IDE autocompletion for dictionary keys")
-    print("   • Static type checking catches errors early")
-    print("   • Clear documentation of return structure")
-    print("   • Better code maintainability")
+    print("💡 Benefits of Tuple Unpacking:")
+    print("   • Direct access to content and metadata")
+    print("   • Ergonomic - no dictionary key access needed")
+    print("   • Aligns with save() creating two things")
+    print("   • Clean, Pythonic unpacking syntax")
     print()
 
 
@@ -95,12 +94,10 @@ def main():
         print("Step 3: Loading the file back")
         print("-" * 28)
 
-        # Use the object_id to get your file back - now with TypedDict!
-        loaded_file: LoadResult = storage.load(object_id)
+        # Use the object_id to get your file back - now with tuple unpacking!
+        content, metadata = storage.load(object_id)
 
-        # loaded_file contains both the content and metadata
-        content = loaded_file["content"]           # The original file data
-        metadata = loaded_file["metadata"]        # Information about the file
+        # Direct access to both content and metadata
 
         print("✅ File loaded successfully!")
         print(f"   Content: {content.decode('utf-8')}")
@@ -121,8 +118,8 @@ def main():
         print("   • metadata = information about the file (name, type, etc.)")
         print()
 
-        # Demonstrate TypedDict benefits
-        demonstrate_type_safety(loaded_file)
+        # Demonstrate tuple unpacking benefits
+        demonstrate_type_safety(content, metadata)
 
         print("📚 Ready for more? Try the other examples:")
         print("   • 02_basic_usage.py - Save different types of files")

@@ -143,13 +143,12 @@ def demonstrate_file_types():
         print()
 
         for description, object_id in saved_files:
-            loaded_file = storage.load(object_id)
-            metadata = loaded_file["metadata"]
+            content, metadata = storage.load(object_id)
 
             print(f"📄 {description}")
             print(f"   Original name: {metadata['original_filename']}")
             print(f"   Content type: {metadata['content_type']}")
-            print(f"   Size: {len(loaded_file['content'])} bytes")
+            print(f"   Size: {len(content)} bytes")
             print(f"   Object ID: {metadata['object_id']}")
             print()
 
