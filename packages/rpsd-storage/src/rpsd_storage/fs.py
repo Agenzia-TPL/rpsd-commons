@@ -1,3 +1,4 @@
+import hashlib
 import json
 import logging
 import os
@@ -68,6 +69,10 @@ class FSStorageProvider(StorageProvider):
             metadata["source_url"] = source_url
         if custom_metadata:
             metadata["custom_metadata"] = custom_metadata
+
+        # Add content length and hash to metadata
+        metadata["content_length"] = len(content)
+        metadata["hash"] = hashlib.md5(content).hexdigest()
 
         with open(file_path, "wb") as f:
             f.write(content)

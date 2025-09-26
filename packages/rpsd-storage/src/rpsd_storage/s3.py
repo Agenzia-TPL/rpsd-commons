@@ -1,3 +1,4 @@
+import hashlib
 import json
 import logging
 import os
@@ -55,12 +56,19 @@ class S3StorageProvider(StorageProvider):
         # Create S3 key with structure: who/what/object_id
         s3_key = f"{who}/{what}/{object_id}"
 
+        # Calculate hash and content length
+        content_length = len(content)
+        md5_hash = hashlib.md5(content).hexdigest()
+
         metadata = {
             "object_id": object_id,
             "original_filename": filename or "unknown",
             "ingestion_timestamp": timestamp,
             "who": who,
             "what": what,
+            "content_type": content_type,
+            "content_length": str(content_length),
+            "hash": md5_hash,
         }
         if source_url:
             metadata["source_url"] = source_url
@@ -68,7 +76,7 @@ class S3StorageProvider(StorageProvider):
             # S3 metadata values must be strings
             metadata["custom_metadata"] = json.dumps(custom_metadata)
 
-        self.s3_client.put_object(
+        response = self.s3_client.put_object(
             Bucket=self.bucket_name,
             Key=s3_key,
             Body=content,
@@ -79,8 +87,11 @@ class S3StorageProvider(StorageProvider):
         # Build the complete URL
         url = f"s3://{self.bucket_name}/{s3_key}"
 
-        # Add content_type to metadata for consistency with return value
-        metadata["content_type"] = content_type
+        # Prepare the metadata for the return value, ensuring correct types
+        metadata["content_length"] = content_length  # Return as int
+        metadata["etag"] = response["ETag"].strip('"')
+        if custom_metadata:
+            metadata["custom_metadata"] = custom_metadata  # Return original dict
 
         logger.info(f"Uploaded to S3: {s3_key}")
         return url, metadata
@@ -148,7 +159,10 @@ class S3StorageProvider(StorageProvider):
             "object_id": s3_metadata.get("object_id"),
             "original_filename": s3_metadata.get("original_filename"),
             "ingestion_timestamp": s3_metadata.get("ingestion_timestamp"),
-            "content_type": response.get("ContentType", "application/octet-stream"),
+            "content_type": s3_metadata.get("content_type", "application/octet-stream"),
+            "content_length": int(s3_metadata.get("content_length", 0)),
+            "hash": s3_metadata.get("hash"),
+            "etag": response.get("ETag", "").strip('"'),
         }
 
         # Add optional metadata if present

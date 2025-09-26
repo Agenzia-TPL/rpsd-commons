@@ -56,3 +56,8 @@ python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
 addopts = "-v --tb=short"
+markers = [
+    "fs: marks tests as related to the file system storage provider",
+    "s3: marks tests as related to the S3 storage provider",
+    "integration: marks tests as integration tests",
+]
