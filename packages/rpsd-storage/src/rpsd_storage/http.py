@@ -51,10 +51,10 @@ class HTTPStorageProvider(StorageProvider):
         self,
         content,
         filename,
+        who: str,
+        what: str,
         content_type="application/xml",
         source_url=None,
-        who=None,
-        what=None,
         custom_metadata=None,
     ) -> tuple[str, dict[str, Any]]:
         """

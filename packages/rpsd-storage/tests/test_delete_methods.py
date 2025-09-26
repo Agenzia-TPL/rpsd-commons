@@ -58,7 +58,7 @@ class TestDeleteMethods:
 
             # Save a test file
             test_content = b"Test content"
-            url, _ = provider.save(test_content, "test.txt")
+            url, _ = provider.save(test_content, "test.txt", "testuser", "testdata")
 
             # Remove metadata file manually to simulate corruption
             file_path = url.replace("file://", "")
@@ -289,7 +289,9 @@ class TestDeleteIntegration:
 
         # Save a file
         test_content = b"Test content for deletion"
-        url, metadata = provider.save(test_content, "test_delete.txt")
+        url, metadata = provider.save(
+            test_content, "test_delete.txt", "testuser", "testdata"
+        )
 
         # Verify save was called
         assert mock_s3.put_object.called
@@ -298,7 +300,7 @@ class TestDeleteIntegration:
         provider.delete(url)
 
         # Verify delete was called with correct parameters
-        expected_key = f"ingested/{metadata['object_id']}"
+        expected_key = f"testuser/testdata/{metadata['object_id']}"
         mock_s3.delete_object.assert_called_once_with(
             Bucket="test-bucket", Key=expected_key
         )
@@ -310,7 +312,9 @@ class TestDeleteIntegration:
 
             # Save a test file
             test_content = b"Content for load operations test"
-            url, metadata = provider.save(test_content, "load_test.txt")
+            url, metadata = provider.save(
+                test_content, "load_test.txt", "testuser", "testdata"
+            )
 
             # Perform various load operations
             loaded_content, loaded_metadata = provider.load(url)

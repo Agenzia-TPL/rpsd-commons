@@ -49,7 +49,7 @@ class TestTupleFunctionality:
 
         # Save a file
         url, metadata = fs_storage_provider.save(
-            content=content, filename=filename, content_type=mime_type
+            content, filename, "testuser", "testdata", content_type=mime_type
         )
 
         # Load with tuple result
@@ -70,7 +70,7 @@ class TestTupleFunctionality:
 
         # Save a file
         url, metadata = s3_storage_provider.save(
-            content=content, filename=filename, content_type=mime_type
+            content, filename, "testuser", "testdata", content_type=mime_type
         )
 
         # Load with tuple result
@@ -90,7 +90,7 @@ class TestTupleFunctionality:
         content, filename, mime_type = create_sample_file("text")
 
         url, metadata = fs_storage_provider.save(
-            content=content, filename=filename, content_type=mime_type
+            content, filename, "testuser", "testdata", content_type=mime_type
         )
 
         content_loaded, metadata_loaded = fs_storage_provider.load(url)
@@ -120,7 +120,7 @@ class TestTupleFunctionality:
         content, filename, mime_type = create_sample_file("pdf")
 
         url, metadata = fs_storage_provider.save(
-            content=content, filename=filename, content_type=mime_type
+            content, filename, "testuser", "testdata", content_type=mime_type
         )
 
         # Run the demonstration function
@@ -193,11 +193,11 @@ class TestTupleIntegration:
             for file_type in ["text", "json", "csv"]:
                 content, filename, mime_type = create_sample_file(file_type)
                 url, metadata = storage.save(
-                    content=content,
-                    filename=f"test_{file_type}.{file_type}",
+                    content,
+                    f"test_{file_type}.{file_type}",
+                    "integration_test",
+                    f"{file_type}_data",
                     content_type=mime_type,
-                    who="integration_test",
-                    what=f"{file_type}_data",
                 )
                 saved_urls.append(url)
 

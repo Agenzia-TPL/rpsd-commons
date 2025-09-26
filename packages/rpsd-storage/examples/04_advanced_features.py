@@ -68,7 +68,7 @@ def demonstrate_error_handling():
         # Save a file first
         content, filename, mime_type = create_sample_file("json")
         url, metadata = storage.save(
-            content, filename, mime_type, who="test_user", what="test_data"
+            content, filename, "test_user", "test_data", content_type=mime_type
         )
         print(f"✅ Saved test file: {url}")
         print(f"   Object ID: {metadata['object_id']}")
@@ -109,7 +109,7 @@ def demonstrate_error_handling():
         try:
             # This will work but save empty content
             url, metadata = storage.save(
-                b"", "empty.txt", "text/plain", who="test_user", what="empty_test"
+                b"", "empty.txt", "test_user", "empty_test", content_type="text/plain"
             )
             print(f"   ✅ Empty file saved: {url}")
             print(f"       Object ID: {metadata['object_id']}")
@@ -147,7 +147,7 @@ def demonstrate_configuration_patterns():
     # Test it
     content, filename, mime_type = create_sample_file("text")
     url, metadata = storage.save(
-        content, filename, mime_type, who="env_test", what="config_test"
+        content, filename, "env_test", "config_test", content_type=mime_type
     )
     print(f"   ✅ Test file saved: {url}")
     print(f"       Object ID: {metadata['object_id']}")
@@ -163,7 +163,7 @@ def demonstrate_configuration_patterns():
 
     content, filename, mime_type = create_sample_file("json")
     url, metadata = direct_storage.save(
-        content, filename, mime_type, who="direct_test", what="direct_config"
+        content, filename, "direct_test", "direct_config", content_type=mime_type
     )
     print(f"   ✅ Test file saved: {url}")
     print(f"       Object ID: {metadata['object_id']}")
@@ -184,11 +184,11 @@ def demonstrate_configuration_patterns():
     for purpose, storage_provider in app_directories.items():
         content, filename, mime_type = create_sample_file("text")
         url, metadata = storage_provider.save(
-            content=content,
-            filename=f"sample_{purpose}.txt",
+            content,
+            f"sample_{purpose}.txt",
+            "app_system",
+            purpose,
             content_type=mime_type,
-            who="app_system",
-            what=purpose,
         )
         print(f"   📁 {purpose}: {url}")
         print(f"       Object ID: {metadata['object_id']}")
@@ -236,7 +236,7 @@ def demonstrate_bulk_operations():
             metadata["what"] = f"monthly_sales_{csv_file.split('_')[1].split('.')[0]}"
 
             url, save_metadata = storage.save(
-                content=content, filename=csv_file, content_type=mime_type, **metadata
+                content, csv_file, metadata["who"], metadata["what"], content_type=mime_type
             )
 
             saved_objects.append((csv_file, url))
@@ -306,11 +306,11 @@ def demonstrate_production_patterns():
 
     # Step 1: Save to incoming
     incoming_url, incoming_metadata = storages["incoming"].save(
-        content=content,
-        filename=filename,
+        content,
+        filename,
+        "data_pipeline",
+        "incoming_data",
         content_type=mime_type,
-        who="data_pipeline",
-        what="incoming_data",
     )
     print(f"   1️⃣  Incoming: {incoming_url}")
     print(f"       Object ID: {incoming_metadata['object_id']}")
@@ -328,10 +328,11 @@ def demonstrate_production_patterns():
         }
 
         processed_url, processed_save_metadata = storages["processed"].save(
-            content=content_loaded,
-            filename=f"processed_{filename}",
+            content_loaded,
+            f"processed_{filename}",
+            processed_metadata["who"],
+            processed_metadata["what"],
             content_type=mime_type,
-            **processed_metadata,
             custom_metadata=custom_metadata,
         )
         print(f"   2️⃣  Processed: {processed_url}")
@@ -342,10 +343,11 @@ def demonstrate_production_patterns():
         custom_metadata = {"original_url": incoming_url, "processed_url": processed_url}
 
         archive_url, archive_save_metadata = storages["archived"].save(
-            content=content_loaded,
-            filename=f"archive_{filename}",
+            content_loaded,
+            f"archive_{filename}",
+            "archive_system",
+            "archived_data",
             content_type=mime_type,
-            **archive_metadata,
             custom_metadata=custom_metadata,
         )
         print(f"   3️⃣  Archived: {archive_url}")
@@ -357,10 +359,11 @@ def demonstrate_production_patterns():
         custom_metadata = {"error": str(e), "original_filename": filename}
 
         failed_url, failed_save_metadata = storages["failed"].save(
-            content=content,
-            filename=f"failed_{filename}",
+            content,
+            f"failed_{filename}",
+            "error_handler",
+            "failed_processing",
             content_type=mime_type,
-            **failed_metadata,
             custom_metadata=custom_metadata,
         )
         print(f"   ❌ Failed: {failed_url}")

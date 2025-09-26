@@ -238,7 +238,9 @@ class TestSeparateLoadMethods:
             # Create a test file and metadata
             provider = FSStorageProvider(temp_dir)
             test_content = b"Static metadata test"
-            url, original_metadata = provider.save(test_content, "test.txt")
+            url, original_metadata = provider.save(
+                test_content, "test.txt", "testuser", "testdata"
+            )
 
             # Use static method
             loaded_metadata = StorageProvider.load_metadata_from_url(url)
@@ -285,7 +287,9 @@ class TestSeparateLoadMethods:
 
             # Save a test file
             large_content = b"x" * 10000  # 10KB of data
-            url, metadata = provider.save(large_content, "large.txt")
+            url, metadata = provider.save(
+                large_content, "large.txt", "testuser", "testdata"
+            )
 
             # When you only need content, load_content is more efficient
             # (doesn't read .meta file)
@@ -320,7 +324,13 @@ class TestNewMethodsIntegration:
 
             urls = []
             for content, filename, content_type in files:
-                url, _ = provider.save(content, filename, content_type=content_type)
+                url, _ = provider.save(
+                    content,
+                    filename,
+                    "testuser",
+                    "testdata",
+                    content_type=content_type,
+                )
                 urls.append(url)
 
             # Workflow: Check metadata first, then load content based on criteria
@@ -346,8 +356,8 @@ class TestNewMethodsIntegration:
                 url, _ = provider.save(
                     content,
                     f"file_{i}.txt",
-                    who="user",
-                    what=f"dataset_{i % 2}",  # Alternate datasets
+                    "user",
+                    f"dataset_{i % 2}",  # Alternate datasets
                 )
                 file_urls.append(url)
 

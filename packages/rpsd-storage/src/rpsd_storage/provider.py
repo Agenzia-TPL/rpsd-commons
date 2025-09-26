@@ -13,14 +13,23 @@ class StorageProvider(ABC):
         self,
         content,
         filename,
+        who: str,
+        what: str,
         content_type="application/xml",
         source_url=None,
-        who=None,
-        what=None,
         custom_metadata=None,
     ) -> tuple[str, dict[str, Any]]:
         """
         Saves content to the storage provider.
+
+        Args:
+            content: The content to save
+            filename: The original filename
+            content_type: The MIME type of the content (default: "application/xml")
+            source_url: Optional source URL where content was originally located
+            who: Required identifier for the entity saving the content
+            what: Required identifier for the content type/category
+            custom_metadata: Optional additional metadata
 
         Returns:
             tuple: A tuple containing:

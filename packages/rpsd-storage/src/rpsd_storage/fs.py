@@ -24,20 +24,17 @@ class FSStorageProvider(StorageProvider):
         Format: file:///base_path/who/what/object_id
         Note: object_id now includes the extension
         """
-        if who and what:
-            path = os.path.join(self.base_path, who, what, object_id)
-        else:
-            path = os.path.join(self.base_path, object_id)
+        path = os.path.join(self.base_path, who, what, object_id)
         return f"file://{path}"
 
     def save(
         self,
         content,
         filename,
+        who: str,
+        what: str,
         content_type="application/xml",
         source_url=None,
-        who=None,
-        what=None,
         custom_metadata=None,
     ) -> tuple[str, dict[str, Any]]:
         """
@@ -54,10 +51,7 @@ class FSStorageProvider(StorageProvider):
         object_id = f"{uuid_part}{file_extension}"
 
         # Create directory structure: who/what/
-        if who and what:
-            dir_path = os.path.join(self.base_path, who, what)
-        else:
-            dir_path = self.base_path
+        dir_path = os.path.join(self.base_path, who, what)
         os.makedirs(dir_path, exist_ok=True)
 
         file_path = os.path.join(dir_path, object_id)
@@ -67,13 +61,11 @@ class FSStorageProvider(StorageProvider):
             "original_filename": filename or "unknown",
             "ingestion_timestamp": timestamp,
             "content_type": content_type,
+            "who": who,
+            "what": what,
         }
         if source_url:
             metadata["source_url"] = source_url
-        if who:
-            metadata["who"] = who
-        if what:
-            metadata["what"] = what
         if custom_metadata:
             metadata["custom_metadata"] = custom_metadata
 

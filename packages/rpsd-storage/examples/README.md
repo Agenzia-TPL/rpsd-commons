@@ -92,7 +92,9 @@ content = b"Hello, World!"
 object_id = storage.save(
     content=content,
     filename="hello.txt",
-    content_type="text/plain"
+    content_type="text/plain",
+    who="example_user",
+    what="demo_data"
 )
 
 # Load it back with TypedDict type safety

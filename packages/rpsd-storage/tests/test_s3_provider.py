@@ -55,7 +55,7 @@ class TestS3StorageProviderSave:
         filename = "test.txt"
 
         url, metadata = s3_storage_provider.save(
-            content=content, filename=filename, content_type="text/plain"
+            content, filename, "testuser", "testdata", content_type="text/plain"
         )
 
         assert url is not None
@@ -81,11 +81,11 @@ class TestS3StorageProviderSave:
         filename = "data.json"
 
         url, metadata = s3_storage_provider.save(
-            content=content,
-            filename=filename,
+            content,
+            filename,
+            "alice",
+            "test_data",
             content_type="application/json",
-            who="alice",
-            what="test_data",
         )
 
         # URL should contain organized key structure
@@ -104,7 +104,7 @@ class TestS3StorageProviderSave:
         content, filename, mime_type = create_test_file_data(content_type)
 
         url, metadata = s3_storage_provider.save(
-            content=content, filename=filename, content_type=mime_type
+            content, filename, "testuser", "testdata", content_type=mime_type
         )
 
         assert url is not None
@@ -121,7 +121,7 @@ class TestS3StorageProviderSave:
         filename = "image.png"
 
         url, metadata = s3_storage_provider.save(
-            content=content, filename=filename, content_type="image/png"
+            content, filename, "testuser", "testdata", content_type="image/png"
         )
 
         content_loaded, metadata_loaded = s3_storage_provider.load(url)
@@ -135,12 +135,12 @@ class TestS3StorageProviderSave:
         filename = "test.txt"
 
         url, metadata = s3_storage_provider.save(
-            content=content,
-            filename=filename,
+            content,
+            filename,
+            "bob",
+            "documentation",
             content_type="text/plain",
             source_url="https://example.com/test.txt",
-            who="bob",
-            what="documentation",
         )
 
         # Get the S3 object and check metadata
@@ -162,7 +162,7 @@ class TestS3StorageProviderSave:
         content = TestContent.SIMPLE_TEXT
 
         url, metadata = s3_storage_provider.save(
-            content=content, filename=None, content_type="text/plain"
+            content, None, "testuser", "testdata", content_type="text/plain"
         )
 
         content_loaded, metadata_loaded = s3_storage_provider.load(url)
@@ -174,7 +174,7 @@ class TestS3StorageProviderSave:
         content = TestContent.SIMPLE_TEXT
 
         url, metadata = s3_storage_provider.save(
-            content=content, filename="testfile", content_type="text/plain"
+            content, "testfile", "testuser", "testdata", content_type="text/plain"
         )
 
         content_loaded, metadata_loaded = s3_storage_provider.load(url)
@@ -194,8 +194,10 @@ class TestS3StorageProviderSave:
 
             with pytest.raises(Exception):
                 provider.save(
-                    content=TestContent.SIMPLE_TEXT,
-                    filename="test.txt",
+                    TestContent.SIMPLE_TEXT,
+                    "test.txt",
+                    "testuser",
+                    "testdata",
                     content_type="text/plain",
                 )
 
@@ -210,8 +212,10 @@ class TestS3StorageProviderLoad:
         """Test loading a previously saved file."""
         # Save a file first
         url, metadata = s3_storage_provider.save(
-            content=sample_content["content"],
-            filename=sample_content["filename"],
+            sample_content["content"],
+            sample_content["filename"],
+            "testuser",
+            "testdata",
             content_type=sample_content["mime_type"],
             **sample_metadata,
         )
@@ -226,8 +230,10 @@ class TestS3StorageProviderLoad:
         """Test loading files with different content types."""
         # Save the file
         url, metadata = s3_storage_provider.save(
-            content=test_scenario["content"],
-            filename=test_scenario["filename"],
+            test_scenario["content"],
+            test_scenario["filename"],
+            "testuser",
+            "testdata",
             content_type=test_scenario["mime_type"],
             **test_scenario["metadata"],
         )
@@ -244,11 +250,11 @@ class TestS3StorageProviderLoad:
 
         # Save with who and what
         url, metadata = s3_storage_provider.save(
-            content=content,
-            filename="test.txt",
+            content,
+            "test.txt",
+            "alice",
+            "documentation",
             content_type="text/plain",
-            who="alice",
-            what="documentation",
         )
 
         # Load using the URL
@@ -263,8 +269,10 @@ class TestS3StorageProviderLoad:
 
         metadata = SampleMetadata.FULL.copy()
         url, save_metadata = s3_storage_provider.save(
-            content=content,
-            filename="data.json",
+            content,
+            "data.json",
+            "testuser",
+            "testdata",
             content_type="application/json",
             **metadata,
         )
@@ -316,11 +324,11 @@ class TestS3StorageProviderLoad:
 
         # Save with who and what
         url, metadata = s3_storage_provider.save(
-            content=content,
-            filename="test.txt",
+            content,
+            "test.txt",
+            "user",
+            "data",
             content_type="text/plain",
-            who="user",
-            what="data",
         )
 
         # Load using the convenience method
@@ -342,12 +350,12 @@ class TestS3StorageProviderIntegration:
 
         # Save
         url, metadata = s3_storage_provider.save(
-            content=content,
-            filename=filename,
+            content,
+            filename,
+            "integration_test",
+            "roundtrip_data",
             content_type="application/json",
             source_url="https://api.example.com/data",
-            who="integration_test",
-            what="roundtrip_data",
         )
 
         # Load
@@ -373,11 +381,11 @@ class TestS3StorageProviderIntegration:
         urls = []
         for i, (content, filename, content_type) in enumerate(contents):
             url, metadata = s3_storage_provider.save(
-                content=content,
-                filename=filename,
+                content,
+                filename,
+                f"user_{i}",
+                f"test_data_{i}",
                 content_type=content_type,
-                who=f"user_{i}",
-                what=f"test_data_{i}",
             )
             urls.append(url)
 
@@ -395,8 +403,10 @@ class TestS3StorageProviderIntegration:
         filename = "large_file.bin"
 
         url, metadata = s3_storage_provider.save(
-            content=large_content,
-            filename=filename,
+            large_content,
+            filename,
+            "testuser",
+            "testdata",
             content_type="application/octet-stream",
         )
 
@@ -410,11 +420,11 @@ class TestS3StorageProviderIntegration:
         content = TestContent.SIMPLE_TEXT
 
         url, metadata = s3_storage_provider.save(
-            content=content,
-            filename="test.txt",
+            content,
+            "test.txt",
+            "user",
+            "data",
             content_type="text/plain",
-            who="user",
-            what="data",
         )
 
         # Check S3 key structure
@@ -430,11 +440,11 @@ class TestS3StorageProviderIntegration:
         content = TestContent.SIMPLE_TEXT
 
         url, metadata = s3_storage_provider.save(
-            content=content,
-            filename="test.txt",
+            content,
+            "test.txt",
+            "TestUser",
+            "TestData",
             content_type="text/plain",
-            who="TestUser",
-            what="TestData",
         )
 
         content_loaded, metadata_loaded = s3_storage_provider.load(url)
@@ -454,11 +464,11 @@ class TestS3StorageProviderIntegration:
 
         # Save file using S3 provider
         s3_url, s3_metadata = s3_storage_provider.save(
-            content=content,
-            filename=filename,
+            content,
+            filename,
+            "test_user",
+            "presigned_data",
             content_type="application/json",
-            who="test_user",
-            what="presigned_data",
         )
 
         # Extract S3 key from the URL
@@ -519,8 +529,10 @@ class TestS3StorageProviderIntegration:
 
         # Save binary file using S3 provider
         s3_url, s3_metadata = s3_storage_provider.save(
-            content=content,
-            filename=filename,
+            content,
+            filename,
+            "testuser",
+            "testdata",
             content_type="image/png",
         )
 

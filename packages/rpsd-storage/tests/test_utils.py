@@ -71,7 +71,7 @@ def get_metadata_preset(preset: str) -> dict[str, Any]:
     """Get predefined metadata for testing."""
     presets = {
         "minimal": CommonMetadata.MINIMAL,
-        "basic": {"who": "test_user", "what": "test_data"},
+        "basic": {},
     }
 
     if preset not in presets:
@@ -109,16 +109,12 @@ class TestContent:
 class SampleMetadata:
     """Legacy class - use CommonMetadata and get_metadata_preset() instead."""
 
-    BASIC = {"who": "test_user", "what": "test_data"}
+    BASIC = {}
     FULL = {
-        "who": "admin",
-        "what": "configuration",
         "source_url": "https://api.example.com/config.json",
     }
     MINIMAL = {}
     USER_EXPORT = {
-        "who": "data_team",
-        "what": "user_export",
         "source_url": "https://api.example.com/users.csv",
     }
 
@@ -264,6 +260,8 @@ def verify_metadata_structure(metadata: dict[str, Any]) -> bool:
         "original_filename",
         "ingestion_timestamp",
         "content_type",
+        "who",
+        "what",
     ]
 
     for field in required_fields:
@@ -271,7 +269,7 @@ def verify_metadata_structure(metadata: dict[str, Any]) -> bool:
             return False
 
     # Check optional fields exist if they should
-    optional_fields = ["who", "what", "source_url"]
+    optional_fields = ["source_url"]
     for field in optional_fields:
         if field in metadata and not isinstance(metadata[field], str):
             return False
@@ -294,9 +292,9 @@ def count_files_in_directory(directory: Path, extension: str | None = None) -> i
         return 0
 
     if extension:
-        return len([f for f in directory.iterdir() if f.suffix == extension])
+        return len([f for f in directory.rglob(f"*{extension}") if f.is_file()])
     else:
-        return len([f for f in directory.iterdir() if f.is_file()])
+        return len([f for f in directory.rglob("*") if f.is_file()])
 
 
 # Test scenarios for comprehensive testing

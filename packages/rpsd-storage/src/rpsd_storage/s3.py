@@ -33,10 +33,10 @@ class S3StorageProvider(StorageProvider):
         self,
         content,
         filename,
+        who: str,
+        what: str,
         content_type="application/xml",
         source_url=None,
-        who=None,
-        what=None,
         custom_metadata=None,
     ) -> tuple[str, dict[str, Any]]:
         """
@@ -52,23 +52,18 @@ class S3StorageProvider(StorageProvider):
         # Include extension in object_id to make it complete
         object_id = f"{uuid_part}{file_extension}"
 
-        # Create S3 key with new structure: who/what/object_id
-        if who and what:
-            s3_key = f"{who}/{what}/{object_id}"
-        else:
-            s3_key = f"ingested/{object_id}"
+        # Create S3 key with structure: who/what/object_id
+        s3_key = f"{who}/{what}/{object_id}"
 
         metadata = {
             "object_id": object_id,
             "original_filename": filename or "unknown",
             "ingestion_timestamp": timestamp,
+            "who": who,
+            "what": what,
         }
         if source_url:
             metadata["source_url"] = source_url
-        if who:
-            metadata["who"] = who
-        if what:
-            metadata["what"] = what
         if custom_metadata:
             # S3 metadata values must be strings
             metadata["custom_metadata"] = json.dumps(custom_metadata)

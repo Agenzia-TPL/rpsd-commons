@@ -226,7 +226,9 @@ def example_5_performance_comparison():
 
         # Create a file with large content
         large_content = b"X" * 1_000_000  # 1MB of data
-        url, _ = provider.save(large_content, "large_file.dat")
+        url, _ = provider.save(
+            large_content, "large_file.dat", who="performance_test", what="test_data"
+        )
 
         print("Created 1MB test file")
 
@@ -299,7 +301,7 @@ def example_6_delete_workflows():
                 except FileNotFoundError:
                     print("  ✓ Confirmed: File no longer exists")
             else:
-                what_val = metadata.get('what')
+                what_val = metadata.get("what")
                 print(f"Keeping: {metadata['original_filename']} (what={what_val})")
 
         # Workflow 2: Bulk cleanup of old versions
@@ -315,12 +317,11 @@ def example_6_delete_workflows():
 
         # Find and delete old document versions
         doc_files = [
-            (url, meta) for url, meta in remaining_files
-            if meta.get("what") == "docs"
+            (url, meta) for url, meta in remaining_files if meta.get("what") == "docs"
         ]
 
         for url, metadata in doc_files:
-            filename = metadata['original_filename']
+            filename = metadata["original_filename"]
             if "v1" in filename:  # Delete old versions
                 print(f"Removing old version: {filename}")
                 provider.delete(url)
@@ -329,12 +330,11 @@ def example_6_delete_workflows():
         # Workflow 3: Using static delete method
         print("\n--- Workflow 3: Using static delete method ---")
         log_files = [
-            (url, meta) for url, meta in remaining_files
-            if meta.get("what") == "logs"
+            (url, meta) for url, meta in remaining_files if meta.get("what") == "logs"
         ]
 
         for url, metadata in log_files:
-            filename = metadata['original_filename']
+            filename = metadata["original_filename"]
             print(f"Deleting log file using static method: {filename}")
             # Use static method - auto-detects provider
             StorageProvider.delete_from_url(url)
@@ -346,9 +346,9 @@ def example_6_delete_workflows():
         for url, original_metadata in created_files:
             try:
                 metadata = provider.load_metadata(url)
-                who_val = metadata.get('who')
-                what_val = metadata.get('what')
-                filename = metadata['original_filename']
+                who_val = metadata.get("who")
+                what_val = metadata.get("what")
+                filename = metadata["original_filename"]
                 print(f"Remaining: {filename} ({who_val}/{what_val})")
                 final_count += 1
             except FileNotFoundError:
@@ -370,7 +370,9 @@ def example_7_deletion_error_handling():
         provider = FSStorageProvider(temp_dir)
 
         # Create a test file
-        url, metadata = provider.save(b"Test content", "test_file.txt")
+        url, metadata = provider.save(
+            b"Test content", "test_file.txt", who="test_user", what="test_data"
+        )
         print(f"Created test file: {metadata['original_filename']}")
 
         # Scenario 1: Normal deletion

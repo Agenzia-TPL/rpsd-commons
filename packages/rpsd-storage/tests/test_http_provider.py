@@ -36,7 +36,7 @@ class TestHTTPStorageProviderSave:
         with pytest.raises(
             NotImplementedError, match="save\\(\\) method is not yet implemented"
         ):
-            provider.save(content=b"test data", filename="test.txt")
+            provider.save(b"test data", "test.txt", "testuser", "testdata")
 
 
 class TestHTTPStorageProviderLoad:

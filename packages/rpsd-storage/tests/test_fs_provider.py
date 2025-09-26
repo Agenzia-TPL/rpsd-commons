@@ -56,7 +56,7 @@ class TestFSStorageProviderSave:
         filename = "test.txt"
 
         url, metadata = fs_storage_provider.save(
-            content=content, filename=filename, content_type="text/plain"
+            content, filename, "testuser", "testdata", content_type="text/plain"
         )
 
         assert url is not None
@@ -76,11 +76,11 @@ class TestFSStorageProviderSave:
         filename = "data.json"
 
         url, metadata = fs_storage_provider.save(
-            content=json.dumps(content).encode(),
-            filename=filename,
+            json.dumps(content).encode(),
+            filename,
+            "alice",
+            "test_data",
             content_type="application/json",
-            who="alice",
-            what="test_data",
         )
 
         # URL should contain organized path structure
@@ -103,7 +103,7 @@ class TestFSStorageProviderSave:
         content, filename, mime_type = create_test_file_data(content_type)
 
         url, metadata = fs_storage_provider.save(
-            content=content, filename=filename, content_type=mime_type
+            content, filename, "testuser", "testdata", content_type=mime_type
         )
 
         assert url is not None
@@ -120,7 +120,7 @@ class TestFSStorageProviderSave:
         filename = "image.png"
 
         url, metadata = fs_storage_provider.save(
-            content=content, filename=filename, content_type="image/png"
+            content, filename, "testuser", "testdata", content_type="image/png"
         )
 
         content_loaded, metadata_loaded = fs_storage_provider.load(url)
@@ -133,12 +133,12 @@ class TestFSStorageProviderSave:
         filename = "test.txt"
 
         url, metadata = fs_storage_provider.save(
-            content=content,
-            filename=filename,
+            content,
+            filename,
+            "bob",
+            "documentation",
             content_type="text/plain",
             source_url="https://example.com/test.txt",
-            who="bob",
-            what="documentation",
         )
 
         # Read metadata file directly from organized directory
@@ -162,7 +162,7 @@ class TestFSStorageProviderSave:
         content = TestContent.SIMPLE_TEXT
 
         url, metadata = fs_storage_provider.save(
-            content=content, filename=None, content_type="text/plain"
+            content, None, "testuser", "testdata", content_type="text/plain"
         )
 
         content_loaded, metadata_loaded = fs_storage_provider.load(url)
@@ -173,7 +173,7 @@ class TestFSStorageProviderSave:
         content = TestContent.SIMPLE_TEXT
 
         url, metadata = fs_storage_provider.save(
-            content=content, filename="testfile", content_type="text/plain"
+            content, "testfile", "testuser", "testdata", content_type="text/plain"
         )
 
         content_loaded, metadata_loaded = fs_storage_provider.load(url)
@@ -194,8 +194,10 @@ class TestFSStorageProviderLoad:
         """Test loading a previously saved file."""
         # Save a file first
         url, metadata = fs_storage_provider.save(
-            content=sample_content["content"],
-            filename=sample_content["filename"],
+            sample_content["content"],
+            sample_content["filename"],
+            "testuser",
+            "testdata",
             content_type=sample_content["mime_type"],
             **sample_metadata,
         )
@@ -210,8 +212,10 @@ class TestFSStorageProviderLoad:
         """Test loading files with different content types."""
         # Save the file
         url, metadata = fs_storage_provider.save(
-            content=test_scenario["content"],
-            filename=test_scenario["filename"],
+            test_scenario["content"],
+            test_scenario["filename"],
+            "testuser",
+            "testdata",
             content_type=test_scenario["mime_type"],
             **test_scenario["metadata"],
         )
@@ -228,11 +232,11 @@ class TestFSStorageProviderLoad:
 
         # Save with who and what
         url, metadata = fs_storage_provider.save(
-            content=content,
-            filename="test.txt",
+            content,
+            "test.txt",
+            "alice",
+            "documentation",
             content_type="text/plain",
-            who="alice",
-            what="documentation",
         )
 
         # Load using the URL
@@ -247,8 +251,10 @@ class TestFSStorageProviderLoad:
 
         metadata = SampleMetadata.FULL.copy()
         url, save_metadata = fs_storage_provider.save(
-            content=json.dumps(content).encode(),
-            filename="data.json",
+            json.dumps(content).encode(),
+            "data.json",
+            "testuser",
+            "testdata",
             content_type="application/json",
             **metadata,
         )
@@ -272,7 +278,7 @@ class TestFSStorageProviderLoad:
 
         # Save file normally
         url, metadata = fs_storage_provider.save(
-            content=content, filename="test.txt", content_type="text/plain"
+            content, "test.txt", "testuser", "testdata", content_type="text/plain"
         )
 
         # Remove metadata file
@@ -291,7 +297,7 @@ class TestFSStorageProviderLoad:
 
         # Save file normally
         url, metadata = fs_storage_provider.save(
-            content=content, filename="test.txt", content_type="text/plain"
+            content, "test.txt", "testuser", "testdata", content_type="text/plain"
         )
 
         # Corrupt metadata file
@@ -317,12 +323,12 @@ class TestFSStorageProviderIntegration:
 
         # Save
         url, metadata = fs_storage_provider.save(
-            content=content,
-            filename=filename,
+            content,
+            filename,
+            "integration_test",
+            "roundtrip_data",
             content_type="application/json",
             source_url="https://api.example.com/data",
-            who="integration_test",
-            what="roundtrip_data",
         )
 
         # Load
@@ -354,7 +360,12 @@ class TestFSStorageProviderIntegration:
             metadata = create_test_metadata(scenario["metadata_preset"])
 
             url, save_metadata = fs_storage_provider.save(
-                content=content, filename=filename, content_type=mime_type, **metadata
+                content,
+                filename,
+                "testuser",
+                "testdata",
+                content_type=mime_type,
+                **metadata,
             )
 
             saved_files.append({"url": url, "content": content, "scenario": scenario})
@@ -380,11 +391,11 @@ class TestFSStorageProviderIntegration:
         urls = []
         for i, (content, filename, content_type) in enumerate(contents):
             url, metadata = fs_storage_provider.save(
-                content=content,
-                filename=filename,
+                content,
+                filename,
+                f"user_{i}",
+                f"test_data_{i}",
                 content_type=content_type,
-                who=f"user_{i}",
-                what=f"test_data_{i}",
             )
             urls.append(url)
 
@@ -406,8 +417,10 @@ class TestFSStorageProviderIntegration:
 
         # Should be able to save files
         url, metadata = provider.save(
-            content=TestContent.SIMPLE_TEXT,
-            filename="test.txt",
+            TestContent.SIMPLE_TEXT,
+            "test.txt",
+            "testuser",
+            "testdata",
             content_type="text/plain",
         )
 
