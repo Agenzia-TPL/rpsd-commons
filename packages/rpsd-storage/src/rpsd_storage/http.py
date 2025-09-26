@@ -268,6 +268,24 @@ class HTTPStorageProvider(StorageProvider):
             self._handle_http_exceptions(e, url, "loading metadata")
             raise  # This line should never be reached, but satisfies type checker
 
+    def delete(self, url: str) -> None:
+        """
+        Delete method is not implemented for HTTP provider.
+
+        Args:
+            url: Complete HTTP or HTTPS URL
+
+        Raises:
+            NotImplementedError: HTTP DELETE operations are not yet implemented
+        """
+        # Validate URL for consistency with other methods
+        self._validate_url_scheme(url)
+
+        raise NotImplementedError(
+            "HTTP provider delete() method is not yet implemented. "
+            "Only load() operations are currently supported."
+        )
+
     def load_by_parts(
         self, who: str, what: str, object_id: str
     ) -> tuple[bytes, dict[str, Any]]:

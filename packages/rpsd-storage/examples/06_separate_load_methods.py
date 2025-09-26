@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """
-Examples demonstrating the new load_content and load_metadata methods.
+Examples demonstrating the new load_content, load_metadata, and delete methods.
 
 These examples show practical use cases where loading content and metadata
-separately provides better performance and cleaner code.
+separately provides better performance and cleaner code, plus safe deletion
+workflows.
 """
 
 import tempfile
@@ -250,9 +251,188 @@ def example_5_performance_comparison():
         print(f"  Metadata: {full_metadata['original_filename']}")
 
 
+def example_6_delete_workflows():
+    """
+    Example 6: Safe deletion workflows with metadata inspection.
+
+    This demonstrates how to use metadata inspection before deletion
+    and shows different deletion patterns.
+    """
+    print("\n=== Example 6: Delete Workflows ===")
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        provider = FSStorageProvider(temp_dir)
+
+        # Create various files for deletion examples
+        files_to_create = [
+            (b"Important system config", "system_config.txt", "system", "config"),
+            (b"Temporary processing data", "temp_data.json", "user", "temp"),
+            (b"User document v1", "document_v1.pdf", "user", "docs"),
+            (b"User document v2", "document_v2.pdf", "user", "docs"),
+            (b"Log data from yesterday", "old_log.txt", "system", "logs"),
+        ]
+
+        created_files = []
+        for content, filename, who, what in files_to_create:
+            url, metadata = provider.save(content, filename, who=who, what=what)
+            created_files.append((url, metadata))
+            print(f"Created: {filename}")
+
+        print(f"\nTotal files created: {len(created_files)}")
+
+        # Workflow 1: Safe deletion with metadata inspection
+        print("\n--- Workflow 1: Safe deletion with metadata check ---")
+        for url, original_metadata in created_files:
+            # Check metadata before deletion
+            metadata = provider.load_metadata(url)
+
+            # Only delete temporary files
+            if metadata.get("what") == "temp":
+                print(f"Deleting temporary file: {metadata['original_filename']}")
+                provider.delete(url)
+                print("  ✓ Deleted successfully")
+
+                # Verify deletion
+                try:
+                    provider.load_metadata(url)
+                    print("  ❌ ERROR: File still exists!")
+                except FileNotFoundError:
+                    print("  ✓ Confirmed: File no longer exists")
+            else:
+                what_val = metadata.get('what')
+                print(f"Keeping: {metadata['original_filename']} (what={what_val})")
+
+        # Workflow 2: Bulk cleanup of old versions
+        print("\n--- Workflow 2: Cleanup old document versions ---")
+        remaining_files = []
+        for url, original_metadata in created_files:
+            try:
+                metadata = provider.load_metadata(url)
+                remaining_files.append((url, metadata))
+            except FileNotFoundError:
+                # File was already deleted in previous workflow
+                continue
+
+        # Find and delete old document versions
+        doc_files = [
+            (url, meta) for url, meta in remaining_files
+            if meta.get("what") == "docs"
+        ]
+
+        for url, metadata in doc_files:
+            filename = metadata['original_filename']
+            if "v1" in filename:  # Delete old versions
+                print(f"Removing old version: {filename}")
+                provider.delete(url)
+                print("  ✓ Old version deleted")
+
+        # Workflow 3: Using static delete method
+        print("\n--- Workflow 3: Using static delete method ---")
+        log_files = [
+            (url, meta) for url, meta in remaining_files
+            if meta.get("what") == "logs"
+        ]
+
+        for url, metadata in log_files:
+            filename = metadata['original_filename']
+            print(f"Deleting log file using static method: {filename}")
+            # Use static method - auto-detects provider
+            StorageProvider.delete_from_url(url)
+            print("  ✓ Deleted via static method")
+
+        # Show final state
+        print("\n--- Final file inventory ---")
+        final_count = 0
+        for url, original_metadata in created_files:
+            try:
+                metadata = provider.load_metadata(url)
+                who_val = metadata.get('who')
+                what_val = metadata.get('what')
+                filename = metadata['original_filename']
+                print(f"Remaining: {filename} ({who_val}/{what_val})")
+                final_count += 1
+            except FileNotFoundError:
+                pass
+
+        start_count = len(created_files)
+        print(f"\nFinal count: {final_count} files remaining (started: {start_count})")
+
+
+def example_7_deletion_error_handling():
+    """
+    Example 7: Proper error handling for deletion operations.
+
+    This shows how to handle various deletion scenarios and errors gracefully.
+    """
+    print("\n=== Example 7: Deletion Error Handling ===")
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        provider = FSStorageProvider(temp_dir)
+
+        # Create a test file
+        url, metadata = provider.save(b"Test content", "test_file.txt")
+        print(f"Created test file: {metadata['original_filename']}")
+
+        # Scenario 1: Normal deletion
+        print("\n--- Scenario 1: Normal deletion ---")
+        try:
+            provider.delete(url)
+            print("✓ File deleted successfully")
+        except Exception as e:
+            print(f"❌ Unexpected error: {e}")
+
+        # Scenario 2: Delete non-existent file
+        print("\n--- Scenario 2: Delete non-existent file ---")
+        try:
+            provider.delete(url)  # Try to delete again
+            print("❌ This shouldn't happen")
+        except FileNotFoundError as e:
+            print(f"✓ Expected error caught: {e}")
+        except Exception as e:
+            print(f"❌ Unexpected error: {e}")
+
+        # Scenario 3: Invalid URL schemes
+        print("\n--- Scenario 3: Invalid URL schemes ---")
+        invalid_urls = [
+            "ftp://example.com/file.txt",
+            "invalid://scheme/file.txt",
+            "s3://wrong-bucket/file.txt",  # Wrong bucket for FS provider
+        ]
+
+        for invalid_url in invalid_urls:
+            try:
+                provider.delete(invalid_url)
+                print(f"❌ Should have failed for: {invalid_url}")
+            except ValueError as e:
+                print(f"✓ Expected ValueError for {invalid_url}: {e}")
+            except Exception as e:
+                print(f"? Other error for {invalid_url}: {e}")
+
+        # Scenario 4: HTTP provider deletion (not implemented)
+        print("\n--- Scenario 4: HTTP provider deletion ---")
+        http_provider = HTTPStorageProvider()
+        try:
+            http_provider.delete("https://example.com/file.txt")
+            print("❌ Should have raised NotImplementedError")
+        except NotImplementedError as e:
+            print(f"✓ Expected NotImplementedError: {e}")
+        except Exception as e:
+            print(f"❌ Unexpected error: {e}")
+
+        # Scenario 5: Static method with unsupported scheme
+        print("\n--- Scenario 5: Static method with unsupported scheme ---")
+        try:
+            StorageProvider.delete_from_url("unknown://scheme/file.txt")
+            print("❌ Should have failed")
+        except ValueError as e:
+            print(f"✓ Expected ValueError: {e}")
+        except Exception as e:
+            print(f"❌ Unexpected error: {e}")
+
+
 def main():
     """Run all examples."""
-    print("🚀 RPSD Storage - Separate Load Methods Examples")
+    print("🚀 RPSD Storage - Load/Delete Methods Examples")
     print("=" * 60)
 
     example_1_metadata_inspection()
@@ -260,6 +440,8 @@ def main():
     example_3_http_efficiency()
     example_4_static_methods()
     example_5_performance_comparison()
+    example_6_delete_workflows()
+    example_7_deletion_error_handling()
 
     print("\n" + "=" * 60)
     print("✅ All examples completed!")
@@ -268,9 +450,11 @@ def main():
         "• load_content(): Only loads file content (efficient for content-only tasks)"
     )
     print("• load_metadata(): Only loads metadata (efficient for file inspection)")
+    print("• delete(): Safely removes objects with proper error handling")
     print("• Static methods: Auto-detect provider type from URL")
     print("• Consistent error handling across all methods")
     print("• Better performance for targeted operations")
+    print("• Safe deletion workflows with metadata validation")
 
 
 if __name__ == "__main__":

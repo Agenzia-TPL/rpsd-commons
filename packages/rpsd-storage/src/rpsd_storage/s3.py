@@ -214,3 +214,16 @@ class S3StorageProvider(StorageProvider):
 
         logger.info(f"Loaded metadata from S3: {s3_key}")
         return metadata
+
+    def delete(self, url: str) -> None:
+        """
+        Deletes the object from S3 using the URL.
+        """
+        bucket_name, s3_key = self._parse_and_validate_url(url)
+
+        try:
+            self.s3_client.delete_object(Bucket=bucket_name, Key=s3_key)
+        except Exception as e:
+            self._handle_s3_exception(e, url, "delete S3 object")
+
+        logger.info(f"Deleted from S3: {s3_key}")

@@ -82,6 +82,20 @@ class StorageProvider(ABC):
         """
         pass
 
+    @abstractmethod
+    def delete(self, url: str) -> None:
+        """
+        Deletes the object from the storage provider using the URL.
+
+        Args:
+            url: The complete URL returned by the save() method
+
+        Raises:
+            FileNotFoundError: If the object at the given URL does not exist
+            Exception: For other storage-related errors
+        """
+        pass
+
     def load_by_parts(
         self, who: str, what: str, object_id: str
     ) -> tuple[bytes, dict[str, Any]]:
@@ -314,3 +328,40 @@ class StorageProvider(ABC):
         from rpsd_storage import storage_provider
 
         return storage_provider.load_metadata_by_parts(who, what, object_id)
+
+    @staticmethod
+    def delete_from_url(url: str) -> None:
+        """
+        Static method to delete object using URL, automatically selecting the provider.
+
+        Args:
+            url: The complete URL (e.g., s3://bucket/path or file:///path)
+
+        Raises:
+            FileNotFoundError: If the object at the given URL does not exist
+            Exception: For other storage-related errors
+        """
+        parsed = urlparse(url)
+        scheme = parsed.scheme.lower()
+
+        if scheme == "s3":
+            from rpsd_storage.s3 import S3StorageProvider
+
+            bucket_name = parsed.netloc
+            provider = S3StorageProvider(bucket_name)
+            provider.delete(url)
+        elif scheme == "file":
+            import tempfile
+
+            from rpsd_storage.fs import FSStorageProvider
+
+            with tempfile.TemporaryDirectory() as temp_dir:
+                provider = FSStorageProvider(temp_dir)
+                provider.delete(url)
+        elif scheme in ("http", "https"):
+            from rpsd_storage.http import HTTPStorageProvider
+
+            provider = HTTPStorageProvider()
+            provider.delete(url)
+        else:
+            raise ValueError(f"Unsupported URL scheme: {scheme}")

@@ -184,3 +184,30 @@ class FSStorageProvider(StorageProvider):
 
         logger.info(f"Loaded metadata from file system: {file_path}")
         return metadata
+
+    def delete(self, url: str) -> None:
+        """
+        Deletes the object from the file system using the URL.
+        """
+        file_path = self._parse_and_validate_url(url)
+        meta_path = f"{file_path}.meta"
+
+        # Check if content file exists
+        if not os.path.exists(file_path):
+            raise FileNotFoundError(f"Content file not found: {file_path}")
+
+        # Delete content file
+        try:
+            os.remove(file_path)
+        except OSError as e:
+            raise Exception(f"Failed to delete content file {file_path}: {e}")
+
+        # Delete metadata file if it exists
+        if os.path.exists(meta_path):
+            try:
+                os.remove(meta_path)
+            except OSError as e:
+                # Log warning but don't fail deletion if metadata file can't be removed
+                logger.warning(f"Failed to delete metadata file {meta_path}: {e}")
+
+        logger.info(f"Deleted from file system: {file_path}")
