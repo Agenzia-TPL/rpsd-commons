@@ -90,11 +90,19 @@ class S3StorageProvider(StorageProvider):
         logger.info(f"Uploaded to S3: {s3_key}")
         return url, metadata
 
-    def load(self, url: str) -> tuple[bytes, dict[str, Any]]:
+    def _parse_and_validate_url(self, url: str) -> tuple[str, str]:
         """
-        Loads content and metadata from S3 using the URL.
+        Parse and validate S3 URL, returning bucket name and S3 key.
+
+        Args:
+            url: S3 URL to parse
+
+        Returns:
+            tuple: (bucket_name, s3_key)
+
+        Raises:
+            ValueError: If URL is invalid or bucket doesn't match
         """
-        # Parse the URL to get bucket and key
         parsed = urlparse(url)
         if parsed.scheme != "s3":
             raise ValueError(f"Invalid URL scheme for S3 provider: {parsed.scheme}")
@@ -108,37 +116,101 @@ class S3StorageProvider(StorageProvider):
                 f"{self.bucket_name}"
             )
 
-        # Load the object content and metadata
+        return bucket_name, s3_key
+
+    def _handle_s3_exception(self, e: Exception, url: str, operation: str) -> None:
+        """
+        Handle S3 exceptions and raise appropriate errors.
+
+        Args:
+            e: The exception that occurred
+            url: The URL being accessed
+            operation: Description of the operation (for error messages)
+
+        Raises:
+            FileNotFoundError: If object not found
+            Exception: For other S3 errors
+        """
+        if "NoSuchKey" in str(e) or "NotFound" in str(e):
+            raise FileNotFoundError(f"Object not found: {url}")
+        else:
+            raise Exception(f"Failed to {operation}: {e}")
+
+    def _extract_metadata_from_response(self, response: dict) -> dict[str, Any]:
+        """
+        Extract and reconstruct metadata from S3 response.
+
+        Args:
+            response: S3 response dict
+
+        Returns:
+            dict: Reconstructed metadata
+        """
+        s3_metadata = response.get("Metadata", {})
+
+        # Reconstruct the metadata dict (S3 metadata keys are lowercase)
+        metadata = {
+            "object_id": s3_metadata.get("object_id"),
+            "original_filename": s3_metadata.get("original_filename"),
+            "ingestion_timestamp": s3_metadata.get("ingestion_timestamp"),
+            "content_type": response.get("ContentType", "application/octet-stream"),
+        }
+
+        # Add optional metadata if present
+        if "source_url" in s3_metadata:
+            metadata["source_url"] = s3_metadata["source_url"]
+        if "who" in s3_metadata:
+            metadata["who"] = s3_metadata["who"]
+        if "what" in s3_metadata:
+            metadata["what"] = s3_metadata["what"]
+        if "custom_metadata" in s3_metadata:
+            metadata["custom_metadata"] = json.loads(s3_metadata["custom_metadata"])
+
+        return metadata
+
+    def load(self, url: str) -> tuple[bytes, dict[str, Any]]:
+        """
+        Loads content and metadata from S3 using the URL.
+        """
+        bucket_name, s3_key = self._parse_and_validate_url(url)
+
         try:
             response = self.s3_client.get_object(Bucket=bucket_name, Key=s3_key)
             content = response["Body"].read()
-
-            # Extract metadata from S3 object metadata
-            s3_metadata = response.get("Metadata", {})
-
-            # Reconstruct the metadata dict (S3 metadata keys are lowercase)
-            metadata = {
-                "object_id": s3_metadata.get("object_id"),
-                "original_filename": s3_metadata.get("original_filename"),
-                "ingestion_timestamp": s3_metadata.get("ingestion_timestamp"),
-                "content_type": response.get("ContentType", "application/octet-stream"),
-            }
-
-            # Add optional metadata if present
-            if "source_url" in s3_metadata:
-                metadata["source_url"] = s3_metadata["source_url"]
-            if "who" in s3_metadata:
-                metadata["who"] = s3_metadata["who"]
-            if "what" in s3_metadata:
-                metadata["what"] = s3_metadata["what"]
-            if "custom_metadata" in s3_metadata:
-                metadata["custom_metadata"] = json.loads(s3_metadata["custom_metadata"])
-
+            metadata = self._extract_metadata_from_response(response)
         except Exception as e:
-            if "NoSuchKey" in str(e):
-                raise FileNotFoundError(f"Object not found: {url}")
-            else:
-                raise Exception(f"Failed to get S3 object: {e}")
+            self._handle_s3_exception(e, url, "get S3 object")
 
         logger.info(f"Loaded from S3: {s3_key}")
         return content, metadata
+
+    def load_content(self, url: str) -> bytes:
+        """
+        Loads only the content from S3 using the URL.
+        """
+        bucket_name, s3_key = self._parse_and_validate_url(url)
+
+        try:
+            response = self.s3_client.get_object(Bucket=bucket_name, Key=s3_key)
+            content = response["Body"].read()
+        except Exception as e:
+            self._handle_s3_exception(e, url, "get S3 object")
+
+        logger.info(f"Loaded content from S3: {s3_key}")
+        return content
+
+    def load_metadata(self, url: str) -> dict[str, Any]:
+        """
+        Loads only the metadata from S3 using the URL.
+        Uses head_object for efficiency (doesn't download content).
+        """
+        bucket_name, s3_key = self._parse_and_validate_url(url)
+
+        try:
+            response = self.s3_client.head_object(Bucket=bucket_name, Key=s3_key)
+            metadata = self._extract_metadata_from_response(response)
+        except Exception as e:
+            self._handle_s3_exception(e, url, "get S3 object metadata")
+
+        logger.info(f"Loaded metadata from S3: {s3_key}")
+        return metadata

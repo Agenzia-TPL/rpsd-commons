@@ -89,11 +89,19 @@ class FSStorageProvider(StorageProvider):
         logger.info(f"Saved to file system: {file_path}")
         return url, metadata
 
-    def load(self, url: str) -> tuple[bytes, dict[str, Any]]:
+    def _parse_and_validate_url(self, url: str) -> str:
         """
-        Loads content and metadata from the file system using the URL.
+        Parse and validate FS URL, returning file path.
+
+        Args:
+            url: File system URL to parse
+
+        Returns:
+            str: file_path
+
+        Raises:
+            ValueError: If URL is invalid
         """
-        # Parse the URL to get the file path
         parsed = urlparse(url)
         if parsed.scheme != "file":
             raise ValueError(f"Invalid URL scheme for FS provider: {parsed.scheme}")
@@ -102,23 +110,77 @@ class FSStorageProvider(StorageProvider):
         if not os.path.isabs(file_path):
             raise ValueError(f"FS URL must contain absolute path: {url}")
 
-        meta_path = f"{file_path}.meta"
+        return file_path
 
-        # Load the file content
+    def _load_file_content(self, file_path: str) -> bytes:
+        """
+        Load content from file.
+
+        Args:
+            file_path: Path to the content file
+
+        Returns:
+            bytes: File content
+
+        Raises:
+            FileNotFoundError: If file not found
+        """
         try:
             with open(file_path, "rb") as f:
-                content = f.read()
+                return f.read()
         except FileNotFoundError:
             raise FileNotFoundError(f"Content file not found: {file_path}")
 
-        # Load the metadata
+    def _load_file_metadata(self, file_path: str) -> dict[str, Any]:
+        """
+        Load metadata from .meta file.
+
+        Args:
+            file_path: Path to the content file (metadata file is file_path + ".meta")
+
+        Returns:
+            dict: Metadata
+
+        Raises:
+            FileNotFoundError: If metadata file not found
+            Exception: If metadata file is invalid JSON
+        """
+        meta_path = f"{file_path}.meta"
         try:
             with open(meta_path) as f:
-                metadata = json.load(f)
+                return json.load(f)
         except FileNotFoundError:
             raise FileNotFoundError(f"Metadata file not found: {meta_path}")
         except json.JSONDecodeError as e:
             raise Exception(f"Invalid metadata file {meta_path}: {e}")
 
+    def load(self, url: str) -> tuple[bytes, dict[str, Any]]:
+        """
+        Loads content and metadata from the file system using the URL.
+        """
+        file_path = self._parse_and_validate_url(url)
+        content = self._load_file_content(file_path)
+        metadata = self._load_file_metadata(file_path)
+
         logger.info(f"Loaded from file system: {file_path}")
         return content, metadata
+
+    def load_content(self, url: str) -> bytes:
+        """
+        Loads only the content from the file system using the URL.
+        """
+        file_path = self._parse_and_validate_url(url)
+        content = self._load_file_content(file_path)
+
+        logger.info(f"Loaded content from file system: {file_path}")
+        return content
+
+    def load_metadata(self, url: str) -> dict[str, Any]:
+        """
+        Loads only the metadata from the file system using the URL.
+        """
+        file_path = self._parse_and_validate_url(url)
+        metadata = self._load_file_metadata(file_path)
+
+        logger.info(f"Loaded metadata from file system: {file_path}")
+        return metadata

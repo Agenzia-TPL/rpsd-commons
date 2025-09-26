@@ -70,6 +70,99 @@ class HTTPStorageProvider(StorageProvider):
             "Only load() operations are currently supported."
         )
 
+    def _validate_url_scheme(self, url: str) -> None:
+        """
+        Validate that URL has HTTP or HTTPS scheme.
+
+        Args:
+            url: URL to validate
+
+        Raises:
+            ValueError: If URL scheme is not http or https
+        """
+        parsed = urlparse(url)
+        if parsed.scheme.lower() not in ("http", "https"):
+            raise ValueError(f"Unsupported URL scheme: {parsed.scheme}")
+
+    def _handle_http_response(self, response: httpx.Response, url: str) -> None:
+        """
+        Handle HTTP response status and raise appropriate errors.
+
+        Args:
+            response: HTTP response object
+            url: URL being accessed
+
+        Raises:
+            FileNotFoundError: If response status is 404
+            Exception: For other HTTP error status codes (via raise_for_status)
+        """
+        # Handle 404 as FileNotFoundError to match other providers
+        if response.status_code == 404:
+            raise FileNotFoundError(f"Resource not found at URL: {url}")
+
+        # Raise exception for other HTTP error status codes
+        response.raise_for_status()
+
+    def _handle_http_exceptions(self, e: Exception, url: str, operation: str) -> None:
+        """
+        Handle HTTP client exceptions and raise appropriate errors.
+
+        Args:
+            e: The exception that occurred
+            url: URL being accessed
+            operation: Description of the operation
+
+        Raises:
+            Exception: Converted exception with appropriate message
+        """
+        if isinstance(e, httpx.RequestError):
+            logger.error(f"Network error while {operation} from {url}: {e}")
+            raise Exception(f"Network error: {e}") from e
+        elif isinstance(e, httpx.HTTPStatusError):
+            logger.error(f"HTTP error {e.response.status_code} for {url}: {e}")
+            raise Exception(
+                f"HTTP {e.response.status_code}: {e.response.reason_phrase}"
+            ) from e
+        else:
+            logger.error(f"Unexpected error {operation} from {url}: {e}")
+            raise
+
+    def _build_metadata_from_response(
+        self, response: httpx.Response, url: str, include_content_length: bool = True
+    ) -> dict[str, Any]:
+        """
+        Build metadata dict from HTTP response.
+
+        Args:
+            response: HTTP response object
+            url: URL being accessed
+            include_content_length: Whether to include content_length field
+
+        Returns:
+            dict: Metadata including HTTP headers and status
+        """
+        metadata = {
+            "url": url,
+            "status_code": response.status_code,
+            "content_type": response.headers.get("content-type", ""),
+            "headers": dict(response.headers),
+            "provider": "http",
+        }
+
+        if include_content_length:
+            if hasattr(response, "content"):
+                # For GET responses, use actual content length
+                metadata["content_length"] = len(response.content)
+            elif "content-length" in response.headers:
+                # For HEAD responses, use header value
+                metadata["content_length"] = int(response.headers["content-length"])
+
+        # Add content encoding if present
+        if "content-encoding" in response.headers:
+            metadata["content_encoding"] = response.headers["content-encoding"]
+
+        return metadata
+
     def load(self, url: str) -> tuple[bytes, dict[str, Any]]:
         """
         Load content from an HTTP/HTTPS URL.
@@ -87,34 +180,14 @@ class HTTPStorageProvider(StorageProvider):
             FileNotFoundError: If HTTP response status is 404
             Exception: For other HTTP errors or network issues
         """
-        parsed = urlparse(url)
-        if parsed.scheme.lower() not in ("http", "https"):
-            raise ValueError(f"Unsupported URL scheme: {parsed.scheme}")
+        self._validate_url_scheme(url)
 
         try:
             with httpx.Client(timeout=self.timeout) as client:
                 response = client.get(url)
+                self._handle_http_response(response, url)
 
-                # Handle 404 as FileNotFoundError to match other providers
-                if response.status_code == 404:
-                    raise FileNotFoundError(f"Resource not found at URL: {url}")
-
-                # Raise exception for other HTTP error status codes
-                response.raise_for_status()
-
-                # Build metadata from HTTP response
-                metadata = {
-                    "url": url,
-                    "status_code": response.status_code,
-                    "content_type": response.headers.get("content-type", ""),
-                    "content_length": len(response.content),
-                    "headers": dict(response.headers),
-                    "provider": "http",
-                }
-
-                # Add content encoding if present
-                if "content-encoding" in response.headers:
-                    metadata["content_encoding"] = response.headers["content-encoding"]
+                metadata = self._build_metadata_from_response(response, url)
 
                 logger.info(
                     f"Successfully loaded {len(response.content)} bytes from {url}"
@@ -122,17 +195,75 @@ class HTTPStorageProvider(StorageProvider):
 
                 return response.content, metadata
 
-        except httpx.RequestError as e:
-            logger.error(f"Network error while loading from {url}: {e}")
-            raise Exception(f"Network error: {e}") from e
-        except httpx.HTTPStatusError as e:
-            logger.error(f"HTTP error {e.response.status_code} for {url}: {e}")
-            raise Exception(
-                f"HTTP {e.response.status_code}: {e.response.reason_phrase}"
-            ) from e
         except Exception as e:
-            logger.error(f"Unexpected error loading from {url}: {e}")
-            raise
+            self._handle_http_exceptions(e, url, "loading")
+            raise  # This line should never be reached, but satisfies type checker
+
+    def load_content(self, url: str) -> bytes:
+        """
+        Load only content from an HTTP/HTTPS URL.
+
+        Args:
+            url: Complete HTTP or HTTPS URL to retrieve
+
+        Returns:
+            bytes: The HTTP response body
+
+        Raises:
+            ValueError: If URL scheme is not http or https
+            FileNotFoundError: If HTTP response status is 404
+            Exception: For other HTTP errors or network issues
+        """
+        self._validate_url_scheme(url)
+
+        try:
+            with httpx.Client(timeout=self.timeout) as client:
+                response = client.get(url)
+                self._handle_http_response(response, url)
+
+                logger.info(
+                    f"Successfully loaded {len(response.content)} bytes from {url}"
+                )
+
+                return response.content
+
+        except Exception as e:
+            self._handle_http_exceptions(e, url, "loading content")
+            raise  # This line should never be reached, but satisfies type checker
+
+    def load_metadata(self, url: str) -> dict[str, Any]:
+        """
+        Load only metadata from an HTTP/HTTPS URL using HEAD request.
+
+        Args:
+            url: Complete HTTP or HTTPS URL to retrieve metadata from
+
+        Returns:
+            dict: Metadata including HTTP headers and status
+
+        Raises:
+            ValueError: If URL scheme is not http or https
+            FileNotFoundError: If HTTP response status is 404
+            Exception: For other HTTP errors or network issues
+        """
+        self._validate_url_scheme(url)
+
+        try:
+            with httpx.Client(timeout=self.timeout) as client:
+                response = client.head(url)
+                self._handle_http_response(response, url)
+
+                metadata = self._build_metadata_from_response(
+                    response, url, include_content_length=True
+                )
+
+                logger.info(f"Successfully loaded metadata from {url}")
+
+                return metadata
+
+        except Exception as e:
+            self._handle_http_exceptions(e, url, "loading metadata")
+            raise  # This line should never be reached, but satisfies type checker
 
     def load_by_parts(
         self, who: str, what: str, object_id: str
