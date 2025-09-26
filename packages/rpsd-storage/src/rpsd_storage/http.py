@@ -150,12 +150,15 @@ class HTTPStorageProvider(StorageProvider):
         }
 
         if include_content_length:
-            if hasattr(response, "content"):
+            if hasattr(response, "content") and response.content:
                 # For GET responses, use actual content length
                 metadata["content_length"] = len(response.content)
             elif "content-length" in response.headers:
                 # For HEAD responses, use header value
                 metadata["content_length"] = int(response.headers["content-length"])
+            else:
+                # Default to 0 if no content or header
+                metadata["content_length"] = 0
 
         # Add content encoding if present
         if "content-encoding" in response.headers:
