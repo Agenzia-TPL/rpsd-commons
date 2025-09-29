@@ -4,9 +4,9 @@ import logging
 import os
 import uuid
 from datetime import UTC, datetime
-from typing import Any
 from urllib.parse import urlparse
 
+from rpsd_storage.metadata import StorageMetadata
 from rpsd_storage.provider import StorageProvider
 
 logger = logging.getLogger()
@@ -37,7 +37,7 @@ class FSStorageProvider(StorageProvider):
         content_type="application/xml",
         source_url=None,
         custom_metadata=None,
-    ) -> tuple[str, dict[str, Any]]:
+    ) -> tuple[str, StorageMetadata]:
         """
         Saves content to the file system.
         """
@@ -57,31 +57,30 @@ class FSStorageProvider(StorageProvider):
 
         file_path = os.path.join(dir_path, object_id)
 
-        metadata = {
-            "object_id": object_id,
-            "original_filename": filename or "unknown",
-            "ingestion_timestamp": timestamp,
-            "content_type": content_type,
-            "who": who,
-            "what": what,
-        }
-        if source_url:
-            metadata["source_url"] = source_url
-        if custom_metadata:
-            metadata["custom_metadata"] = custom_metadata
+        # Build the complete URL using the actual file path
+        url = f"file://{file_path}"
 
-        # Add content length and hash to metadata
-        metadata["content_length"] = len(content)
-        metadata["hash"] = hashlib.md5(content).hexdigest()
+        metadata = StorageMetadata(
+            provider="fs",
+            url=url,
+            content_type=content_type,
+            content_length=len(content),
+            hash=hashlib.md5(content).hexdigest(),
+            who=who,
+            what=what,
+            original_filename=filename or "unknown",
+            object_id=object_id,
+            ingestion_timestamp=timestamp,
+            schema_version=1,
+            source_url=source_url or "",
+            custom_metadata=custom_metadata or {},
+        )
 
         with open(file_path, "wb") as f:
             f.write(content)
 
         with open(f"{file_path}.meta", "w") as f:
-            json.dump(metadata, f)
-
-        # Build the complete URL using the actual file path
-        url = f"file://{file_path}"
+            f.write(metadata.model_dump_json(indent=4))
 
         logger.info(f"Saved to file system: {file_path}")
         return url, metadata
@@ -128,7 +127,7 @@ class FSStorageProvider(StorageProvider):
         except FileNotFoundError:
             raise FileNotFoundError(f"Content file not found: {file_path}")
 
-    def _load_file_metadata(self, file_path: str) -> dict[str, Any]:
+    def _load_file_metadata(self, file_path: str) -> StorageMetadata:
         """
         Load metadata from .meta file.
 
@@ -136,7 +135,7 @@ class FSStorageProvider(StorageProvider):
             file_path: Path to the content file (metadata file is file_path + ".meta")
 
         Returns:
-            dict: Metadata
+            StorageMetadata: Metadata
 
         Raises:
             FileNotFoundError: If metadata file not found
@@ -145,13 +144,14 @@ class FSStorageProvider(StorageProvider):
         meta_path = f"{file_path}.meta"
         try:
             with open(meta_path) as f:
-                return json.load(f)
+                data = json.load(f)
+                return StorageMetadata.model_validate(data)
         except FileNotFoundError:
             raise FileNotFoundError(f"Metadata file not found: {meta_path}")
         except json.JSONDecodeError as e:
             raise Exception(f"Invalid metadata file {meta_path}: {e}")
 
-    def load(self, url: str) -> tuple[bytes, dict[str, Any]]:
+    def load(self, url: str) -> tuple[bytes, StorageMetadata]:
         """
         Loads content and metadata from the file system using the URL.
         """
@@ -172,7 +172,7 @@ class FSStorageProvider(StorageProvider):
         logger.info(f"Loaded content from file system: {file_path}")
         return content
 
-    def load_metadata(self, url: str) -> dict[str, Any]:
+    def load_metadata(self, url: str) -> StorageMetadata:
         """
         Loads only the metadata from the file system using the URL.
         """

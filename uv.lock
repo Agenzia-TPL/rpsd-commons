@@ -1090,12 +1090,14 @@ source = { editable = "packages/rpsd-storage" }
 dependencies = [
     { name = "boto3" },
     { name = "httpx" },
+    { name = "pydantic" },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "boto3", specifier = "==1.39.14" },
     { name = "httpx", specifier = ">=0.25.0" },
+    { name = "pydantic", specifier = ">=2.0.0" },
 ]
 
 [[package]]

@@ -1,9 +1,9 @@
 import logging
-from typing import Any
 from urllib.parse import urlparse
 
 import httpx
 
+from rpsd_storage.metadata import StorageMetadata
 from rpsd_storage.provider import StorageProvider
 
 logger = logging.getLogger(__name__)
@@ -56,7 +56,7 @@ class HTTPStorageProvider(StorageProvider):
         content_type="application/xml",
         source_url=None,
         custom_metadata=None,
-    ) -> tuple[str, dict[str, Any]]:
+    ) -> tuple[str, StorageMetadata]:
         """
         Save method is not implemented for HTTP provider.
 
@@ -128,45 +128,78 @@ class HTTPStorageProvider(StorageProvider):
             raise
 
     def _build_metadata_from_response(
-        self, response: httpx.Response, url: str, include_content_length: bool = True
-    ) -> dict[str, Any]:
+        self, response: httpx.Response, url: str
+    ) -> StorageMetadata:
         """
         Build metadata dict from HTTP response.
 
         Args:
             response: HTTP response object
             url: URL being accessed
-            include_content_length: Whether to include content_length field
 
         Returns:
-            dict: Metadata including HTTP headers and status
+            StorageMetadata: Metadata including HTTP headers and status
         """
-        metadata = {
-            "url": url,
-            "status_code": response.status_code,
-            "content_type": response.headers.get("content-type", ""),
-            "headers": dict(response.headers),
-            "provider": "http",
-        }
+        import hashlib
+        import uuid
+        from datetime import UTC, datetime
+        from urllib.parse import urlparse
 
-        if include_content_length:
-            if hasattr(response, "content") and response.content:
-                # For GET responses, use actual content length
-                metadata["content_length"] = len(response.content)
-            elif "content-length" in response.headers:
-                # For HEAD responses, use header value
-                metadata["content_length"] = int(response.headers["content-length"])
-            else:
-                # Default to 0 if no content or header
-                metadata["content_length"] = 0
+        content_length = None
+        if hasattr(response, "content") and response.content:
+            content_length = len(response.content)
+        elif "content-length" in response.headers:
+            content_length = int(response.headers["content-length"])
 
-        # Add content encoding if present
-        if "content-encoding" in response.headers:
-            metadata["content_encoding"] = response.headers["content-encoding"]
+        # Calculate hash of content
+        content_hash = hashlib.md5(response.content).hexdigest()
 
-        return metadata
+        # Extract filename from URL or Content-Disposition header
+        original_filename = "unknown"
+        if "content-disposition" in response.headers:
+            cd_header = response.headers["content-disposition"]
+            if "filename=" in cd_header:
+                original_filename = cd_header.split("filename=")[1].strip('"')
+        else:
+            # Try to extract from URL path
+            parsed_url = urlparse(url)
+            if parsed_url.path and "/" in parsed_url.path:
+                original_filename = parsed_url.path.split("/")[-1] or "unknown"
 
-    def load(self, url: str) -> tuple[bytes, dict[str, Any]]:
+        # Generate object_id from URL or create UUID
+        parsed_url = urlparse(url)
+        if parsed_url.path:
+            # Use path as basis for object_id, but ensure it's unique
+            object_id = f"http_{abs(hash(url))}_{uuid.uuid4().hex[:8]}"
+        else:
+            object_id = f"http_{uuid.uuid4().hex}"
+
+        # Generate timestamp
+        timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
+
+        return StorageMetadata(
+            provider="http",
+            url=url,
+            content_type=response.headers.get(
+                "content-type", "application/octet-stream"
+            ),
+            content_length=content_length or 0,
+            hash=content_hash,
+            who="http",
+            what="resource",
+            original_filename=original_filename,
+            object_id=object_id,
+            ingestion_timestamp=timestamp,
+            schema_version=1,
+            source_url=url,  # For HTTP, source_url is the same as url
+            custom_metadata={},
+            etag=response.headers.get("etag"),  # HTTP ETag if present
+            status_code=response.status_code,
+            headers=dict(response.headers),
+            content_encoding=response.headers.get("content-encoding"),
+        )
+
+    def load(self, url: str) -> tuple[bytes, StorageMetadata]:
         """
         Load content from an HTTP/HTTPS URL.
 
@@ -234,7 +267,7 @@ class HTTPStorageProvider(StorageProvider):
             self._handle_http_exceptions(e, url, "loading content")
             raise  # This line should never be reached, but satisfies type checker
 
-    def load_metadata(self, url: str) -> dict[str, Any]:
+    def load_metadata(self, url: str) -> StorageMetadata:
         """
         Load only metadata from an HTTP/HTTPS URL using HEAD request.
 
@@ -256,9 +289,7 @@ class HTTPStorageProvider(StorageProvider):
                 response = client.head(url)
                 self._handle_http_response(response, url)
 
-                metadata = self._build_metadata_from_response(
-                    response, url, include_content_length=True
-                )
+                metadata = self._build_metadata_from_response(response, url)
 
                 logger.info(f"Successfully loaded metadata from {url}")
 
@@ -288,7 +319,7 @@ class HTTPStorageProvider(StorageProvider):
 
     def load_by_parts(
         self, who: str, what: str, object_id: str
-    ) -> tuple[bytes, dict[str, Any]]:
+    ) -> tuple[bytes, StorageMetadata]:
         """
         HTTP provider doesn't support loading by parts.
         Use load(url) directly with complete HTTP URLs.

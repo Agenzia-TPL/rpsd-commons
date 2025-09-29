@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
-from typing import Any
 from urllib.parse import urlparse
+
+from rpsd_storage.metadata import StorageMetadata
 
 
 class StorageProvider(ABC):
@@ -18,7 +19,7 @@ class StorageProvider(ABC):
         content_type="application/xml",
         source_url=None,
         custom_metadata=None,
-    ) -> tuple[str, dict[str, Any]]:
+    ) -> tuple[str, StorageMetadata]:
         """
         Saves content to the storage provider.
 
@@ -34,12 +35,12 @@ class StorageProvider(ABC):
         Returns:
             tuple: A tuple containing:
                 - url (str): Complete URL of the saved object/file
-                - metadata (dict): The metadata associated with the file
+                - metadata (StorageMetadata): The metadata associated with the file
         """
         pass
 
     @abstractmethod
-    def load(self, url: str) -> tuple[bytes, dict[str, Any]]:
+    def load(self, url: str) -> tuple[bytes, StorageMetadata]:
         """
         Loads content and metadata from the storage provider using the URL.
 
@@ -49,7 +50,7 @@ class StorageProvider(ABC):
         Returns:
             tuple: A tuple containing:
                 - content (bytes): The file content
-                - metadata (dict): The metadata associated with the file
+                - metadata (StorageMetadata): The metadata associated with the file
 
         Raises:
             FileNotFoundError: If the object at the given URL does not exist
@@ -75,7 +76,7 @@ class StorageProvider(ABC):
         pass
 
     @abstractmethod
-    def load_metadata(self, url: str) -> dict[str, Any]:
+    def load_metadata(self, url: str) -> StorageMetadata:
         """
         Loads only the metadata from the storage provider using the URL.
 
@@ -83,7 +84,7 @@ class StorageProvider(ABC):
             url: The complete URL returned by the save() method
 
         Returns:
-            dict: The metadata associated with the file
+            StorageMetadata: The metadata associated with the file
 
         Raises:
             FileNotFoundError: If the object at the given URL does not exist
@@ -107,7 +108,7 @@ class StorageProvider(ABC):
 
     def load_by_parts(
         self, who: str, what: str, object_id: str
-    ) -> tuple[bytes, dict[str, Any]]:
+    ) -> tuple[bytes, StorageMetadata]:
         """
         Convenience method to load content using separate who, what, and object_id.
 
@@ -119,7 +120,7 @@ class StorageProvider(ABC):
         Returns:
             tuple: A tuple containing:
                 - content (bytes): The file content
-                - metadata (dict): The metadata associated with the file
+                - metadata (StorageMetadata): The metadata associated with the file
         """
         url = self._build_url(who, what, object_id)
         return self.load(url)
@@ -141,7 +142,7 @@ class StorageProvider(ABC):
 
     def load_metadata_by_parts(
         self, who: str, what: str, object_id: str
-    ) -> dict[str, Any]:
+    ) -> StorageMetadata:
         """
         Convenience method to load only metadata using separate parameters.
 
@@ -151,7 +152,7 @@ class StorageProvider(ABC):
             object_id: The object ID (UUID)
 
         Returns:
-            dict: The metadata associated with the file
+            StorageMetadata: The metadata associated with the file
         """
         url = self._build_url(who, what, object_id)
         return self.load_metadata(url)
@@ -165,7 +166,7 @@ class StorageProvider(ABC):
         pass
 
     @staticmethod
-    def load_from_url(url: str) -> tuple[bytes, dict[str, Any]]:
+    def load_from_url(url: str) -> tuple[bytes, StorageMetadata]:
         """
         Static method to load content using URL, automatically selecting the provider.
 
@@ -175,7 +176,7 @@ class StorageProvider(ABC):
         Returns:
             tuple: A tuple containing:
                 - content (bytes): The file content
-                - metadata (dict): The metadata associated with the file
+                - metadata (StorageMetadata): The metadata associated with the file
         """
         parsed = urlparse(url)
         scheme = parsed.scheme.lower()
@@ -242,7 +243,7 @@ class StorageProvider(ABC):
             raise ValueError(f"Unsupported URL scheme: {scheme}")
 
     @staticmethod
-    def load_metadata_from_url(url: str) -> dict[str, Any]:
+    def load_metadata_from_url(url: str) -> StorageMetadata:
         """
         Static method to load only metadata using URL, auto-selecting the provider.
 
@@ -250,7 +251,7 @@ class StorageProvider(ABC):
             url: The complete URL (e.g., s3://bucket/path or file:///path)
 
         Returns:
-            dict: The metadata associated with the file
+            StorageMetadata: The metadata associated with the file
         """
         parsed = urlparse(url)
         scheme = parsed.scheme.lower()
@@ -280,7 +281,7 @@ class StorageProvider(ABC):
     @staticmethod
     def load_from_parts(
         who: str, what: str, object_id: str
-    ) -> tuple[bytes, dict[str, Any]]:
+    ) -> tuple[bytes, StorageMetadata]:
         """
         Static convenience method to load content using separate parameters.
         Note: This requires a configured default provider since we can't determine
@@ -294,7 +295,7 @@ class StorageProvider(ABC):
         Returns:
             tuple: A tuple containing:
                 - content (bytes): The file content
-                - metadata (dict): The metadata associated with the file
+                - metadata (StorageMetadata): The metadata associated with the file
         """
         from rpsd_storage import storage_provider
 
@@ -320,7 +321,9 @@ class StorageProvider(ABC):
         return storage_provider.load_content_by_parts(who, what, object_id)
 
     @staticmethod
-    def load_metadata_from_parts(who: str, what: str, object_id: str) -> dict[str, Any]:
+    def load_metadata_from_parts(
+        who: str, what: str, object_id: str
+    ) -> StorageMetadata:
         """
         Static convenience method to load only metadata using separate parameters.
         Note: This requires a configured default provider since we can't determine
@@ -332,7 +335,7 @@ class StorageProvider(ABC):
             object_id: The object ID (UUID)
 
         Returns:
-            dict: The metadata associated with the file
+            StorageMetadata: The metadata associated with the file
         """
         from rpsd_storage import storage_provider
 

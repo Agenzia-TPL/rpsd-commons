@@ -4,11 +4,11 @@ import logging
 import os
 import uuid
 from datetime import UTC, datetime
-from typing import Any
 from urllib.parse import urlparse
 
 import boto3
 
+from rpsd_storage.metadata import StorageMetadata
 from rpsd_storage.provider import StorageProvider
 
 logger = logging.getLogger()
@@ -39,7 +39,7 @@ class S3StorageProvider(StorageProvider):
         content_type="application/xml",
         source_url=None,
         custom_metadata=None,
-    ) -> tuple[str, dict[str, Any]]:
+    ) -> tuple[str, StorageMetadata]:
         """
         Saves content to S3
         """
@@ -60,38 +60,45 @@ class S3StorageProvider(StorageProvider):
         content_length = len(content)
         md5_hash = hashlib.md5(content).hexdigest()
 
-        metadata = {
-            "object_id": object_id,
-            "original_filename": filename or "unknown",
-            "ingestion_timestamp": timestamp,
-            "who": who,
-            "what": what,
-            "content_type": content_type,
-            "content_length": str(content_length),
-            "hash": md5_hash,
+        # Build the complete URL
+        url = f"s3://{self.bucket_name}/{s3_key}"
+
+        metadata = StorageMetadata(
+            provider="s3",
+            url=url,
+            content_type=content_type,
+            content_length=content_length,
+            hash=md5_hash,
+            who=who,
+            what=what,
+            original_filename=filename or "unknown",
+            object_id=object_id,
+            ingestion_timestamp=timestamp,
+            schema_version=1,
+            source_url=source_url or "",
+            custom_metadata=custom_metadata or {},
+        )
+
+        # S3 metadata must be strings
+        s3_metadata = {
+            k: str(v)
+            for k, v in metadata.model_dump(exclude_none=True).items()
+            if k != "custom_metadata"
         }
-        if source_url:
-            metadata["source_url"] = source_url
         if custom_metadata:
-            # S3 metadata values must be strings
-            metadata["custom_metadata"] = json.dumps(custom_metadata)
+            s3_metadata["custom_metadata"] = json.dumps(custom_metadata)
 
         response = self.s3_client.put_object(
             Bucket=self.bucket_name,
             Key=s3_key,
             Body=content,
             ContentType=content_type,
-            Metadata=metadata,
+            Metadata=s3_metadata,
         )
 
-        # Build the complete URL
-        url = f"s3://{self.bucket_name}/{s3_key}"
-
-        # Prepare the metadata for the return value, ensuring correct types
-        metadata["content_length"] = content_length  # Return as int
-        metadata["etag"] = response["ETag"].strip('"')
-        if custom_metadata:
-            metadata["custom_metadata"] = custom_metadata  # Return original dict
+        # Add ETag to metadata
+        if "ETag" in response and response["ETag"]:
+            metadata.etag = response["ETag"].strip('"')
 
         logger.info(f"Uploaded to S3: {s3_key}")
         return url, metadata
@@ -142,7 +149,7 @@ class S3StorageProvider(StorageProvider):
         else:
             raise Exception(f"Failed to {operation}: {e}")
 
-    def _extract_metadata_from_response(self, response: dict) -> dict[str, Any]:
+    def _extract_metadata_from_response(self, response: dict) -> StorageMetadata:
         """
         Extract and reconstruct metadata from S3 response.
 
@@ -150,34 +157,35 @@ class S3StorageProvider(StorageProvider):
             response: S3 response dict
 
         Returns:
-            dict: Reconstructed metadata
+            StorageMetadata: Reconstructed metadata
         """
         s3_metadata = response.get("Metadata", {})
 
-        # Reconstruct the metadata dict (S3 metadata keys are lowercase)
-        metadata = {
-            "object_id": s3_metadata.get("object_id"),
-            "original_filename": s3_metadata.get("original_filename"),
-            "ingestion_timestamp": s3_metadata.get("ingestion_timestamp"),
-            "content_type": s3_metadata.get("content_type", "application/octet-stream"),
-            "content_length": int(s3_metadata.get("content_length", 0)),
-            "hash": s3_metadata.get("hash"),
-            "etag": response.get("ETag", "").strip('"'),
-        }
+        # Create a dictionary to build the complete metadata
+        metadata_dict = s3_metadata.copy()
 
-        # Add optional metadata if present
-        if "source_url" in s3_metadata:
-            metadata["source_url"] = s3_metadata["source_url"]
-        if "who" in s3_metadata:
-            metadata["who"] = s3_metadata["who"]
-        if "what" in s3_metadata:
-            metadata["what"] = s3_metadata["what"]
-        if "custom_metadata" in s3_metadata:
-            metadata["custom_metadata"] = json.loads(s3_metadata["custom_metadata"])
+        # Add provider field (required)
+        metadata_dict["provider"] = "s3"
 
-        return metadata
+        # Add standard headers from the response
+        if "ContentType" in response:
+            metadata_dict["content_type"] = response["ContentType"]
+        if "ContentLength" in response:
+            metadata_dict["content_length"] = response["ContentLength"]
 
-    def load(self, url: str) -> tuple[bytes, dict[str, Any]]:
+        etag = response.get("ETag", "")
+        if etag:
+            metadata_dict["etag"] = etag.strip('"')
+
+        # Handle custom_metadata if it exists
+        if "custom_metadata" in metadata_dict:
+            metadata_dict["custom_metadata"] = json.loads(
+                metadata_dict["custom_metadata"]
+            )
+
+        return StorageMetadata.model_validate(metadata_dict)
+
+    def load(self, url: str) -> tuple[bytes, StorageMetadata]:
         """
         Loads content and metadata from S3 using the URL.
         """
@@ -208,7 +216,7 @@ class S3StorageProvider(StorageProvider):
         logger.info(f"Loaded content from S3: {s3_key}")
         return content
 
-    def load_metadata(self, url: str) -> dict[str, Any]:
+    def load_metadata(self, url: str) -> StorageMetadata:
         """
         Loads only the metadata from S3 using the URL.
         Uses head_object for efficiency (doesn't download content).
