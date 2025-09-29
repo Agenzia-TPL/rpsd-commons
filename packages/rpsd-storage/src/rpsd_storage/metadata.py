@@ -51,3 +51,82 @@ class StorageMetadata(BaseModel):
     content_encoding: str | None = Field(
         default=None, description="The content encoding for HTTP provider."
     )
+
+    @staticmethod
+    def compare(current: "StorageMetadata", candidate: "StorageMetadata") -> int:
+        """
+        Compare two StorageMetadata instances to determine their relationship.
+
+        This method compares metadata from the same logical entity (same who/what)
+        to determine if the candidate represents an update, identical content,
+        or older content relative to the current metadata.
+
+        Args:
+            current: The currently stored/existing metadata
+            candidate: The candidate metadata to compare against current
+
+        Returns:
+            int: Comparison result following these semantics:
+                -1: candidate is older than current (candidate predates current)
+                 0: candidate has identical content to current (same hash/length)
+                 1: candidate is newer than current (candidate is an update)
+
+        Raises:
+            ValueError: If who or what fields differ (comparing different entities)
+
+        Example:
+            >>> result = StorageMetadata.compare(stored_metadata, new_metadata)
+            >>> if result == 1:
+            ...     print("New metadata is an update")
+            >>> elif result == 0:
+            ...     print("New metadata is identical")
+            >>> else:
+            ...     print("New metadata is older")
+        """
+        # Validate that we're comparing metadata for the same logical entity
+        if current.who != candidate.who or current.what != candidate.what:
+            raise ValueError(
+                f"Cannot compare metadata for different entities. "
+                f"Current: who='{current.who}', what='{current.what}' vs "
+                f"Candidate: who='{candidate.who}', what='{candidate.what}'"
+            )
+
+        # If content is identical (same hash and length), return 0
+        if (
+            current.content_length == candidate.content_length
+            and current.hash == candidate.hash
+        ):
+            return 0
+
+        # Compare ingestion timestamps
+        # If current was ingested after candidate, candidate is older (-1)
+        # If current was ingested before candidate, candidate is newer (1)
+        if current.ingestion_timestamp > candidate.ingestion_timestamp:
+            return -1
+        else:
+            return 1
+
+    def is_update_of(self, current: "StorageMetadata") -> bool:
+        """
+        Check if this metadata represents an update of the current metadata.
+
+        This is a convenience method that returns True if this metadata
+        is newer than the provided current metadata. It's equivalent to
+        checking if compare(current, self) == 1.
+
+        Args:
+            current: The currently stored/existing metadata to compare against
+
+        Returns:
+            bool: True if this metadata is newer than current, False otherwise
+
+        Raises:
+            ValueError: If who or what fields differ (comparing different entities)
+
+        Example:
+            >>> if new_metadata.is_update_of(stored_metadata):
+            ...     print("This is a newer version, process the update")
+            >>> else:
+            ...     print("This is not an update (same or older)")
+        """
+        return StorageMetadata.compare(current, self) == 1
