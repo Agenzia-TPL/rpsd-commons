@@ -24,18 +24,18 @@ def test_fs_metadata_consistency(fs_storage_provider):
     loaded_content, loaded_metadata = fs_storage_provider.load(url)
 
     assert loaded_content == content
-    assert "content_length" in save_metadata
-    assert "hash" in save_metadata
-    assert "content_length" in loaded_metadata
-    assert "hash" in loaded_metadata
+    assert save_metadata.content_length is not None
+    assert save_metadata.hash is not None
+    assert loaded_metadata.content_length is not None
+    assert loaded_metadata.hash is not None
 
     expected_content_length = len(content)
     expected_hash = hashlib.md5(content).hexdigest()
 
-    assert save_metadata["content_length"] == expected_content_length
-    assert loaded_metadata["content_length"] == expected_content_length
-    assert save_metadata["hash"] == expected_hash
-    assert loaded_metadata["hash"] == expected_hash
+    assert save_metadata.content_length == expected_content_length
+    assert loaded_metadata.content_length == expected_content_length
+    assert save_metadata.hash == expected_hash
+    assert loaded_metadata.hash == expected_hash
 
 
 @pytest.mark.s3
@@ -53,18 +53,18 @@ def test_s3_metadata_consistency(s3_storage_provider):
     loaded_content, loaded_metadata = s3_storage_provider.load(url)
 
     assert loaded_content == content
-    assert "content_length" in save_metadata
-    assert "hash" in save_metadata
-    assert "content_length" in loaded_metadata
-    assert "hash" in loaded_metadata
+    assert save_metadata.content_length is not None
+    assert save_metadata.hash is not None
+    assert loaded_metadata.content_length is not None
+    assert loaded_metadata.hash is not None
 
     expected_content_length = len(content)
     expected_hash = hashlib.md5(content).hexdigest()
 
-    assert save_metadata["content_length"] == expected_content_length
-    assert loaded_metadata["content_length"] == expected_content_length
-    assert save_metadata["hash"] == expected_hash
-    assert loaded_metadata["hash"] == expected_hash
+    assert save_metadata.content_length == expected_content_length
+    assert loaded_metadata.content_length == expected_content_length
+    assert save_metadata.hash == expected_hash
+    assert loaded_metadata.hash == expected_hash
 
 
 @pytest.mark.integration
@@ -92,7 +92,7 @@ def test_cross_provider_metadata_consistency(fs_storage_provider, s3_storage_pro
     assert fs_loaded_content == s3_loaded_content
 
     # Verify metadata fields are consistent
-    assert fs_save_metadata["content_length"] == s3_save_metadata["content_length"]
-    assert fs_loaded_metadata["content_length"] == s3_loaded_metadata["content_length"]
-    assert fs_save_metadata["hash"] == s3_save_metadata["hash"]
-    assert fs_loaded_metadata["hash"] == s3_loaded_metadata["hash"]
+    assert fs_save_metadata.content_length == s3_save_metadata.content_length
+    assert fs_loaded_metadata.content_length == s3_loaded_metadata.content_length
+    assert fs_save_metadata.hash == s3_save_metadata.hash
+    assert fs_loaded_metadata.hash == s3_loaded_metadata.hash

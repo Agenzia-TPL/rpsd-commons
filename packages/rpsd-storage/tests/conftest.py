@@ -32,11 +32,10 @@ def fs_storage_provider(temp_dir):
 def mock_s3_setup():
     """Set up mocked S3 environment."""
     with mock_aws():
-        # Create a mock S3 client and bucket
         s3_client = boto3.client("s3", region_name="us-east-1")
         bucket_name = "test-bucket"
         s3_client.create_bucket(Bucket=bucket_name)
-        yield s3_client, bucket_name
+        yield (s3_client, bucket_name)
 
 
 @pytest.fixture
@@ -82,7 +81,6 @@ def test_scenario(request):
     scenario = request.param
     content, filename, mime_type = create_test_file_data(scenario["content_type"])
     metadata = create_test_metadata(scenario["metadata_preset"])
-
     return {
         "name": scenario["name"],
         "description": scenario["description"],
@@ -94,10 +92,6 @@ def test_scenario(request):
     }
 
 
-# Removed unused fixtures - tests now create their own data as needed
-
-
-# Custom markers for organizing tests
 def pytest_configure(config):
     """Configure custom pytest markers."""
     config.addinivalue_line("markers", "file: tests for file system storage provider")
@@ -110,18 +104,13 @@ def pytest_configure(config):
 @pytest.fixture(autouse=True)
 def clean_environment():
     """Clean environment variables before and after each test."""
-    # Store original values
     original_env = {}
     storage_env_vars = ["STORAGE_PROVIDER", "FS_BASE_PATH", "S3_BUCKET_NAME"]
-
     for var in storage_env_vars:
         if var in os.environ:
             original_env[var] = os.environ[var]
             del os.environ[var]
-
     yield
-
-    # Restore original values
     for var in storage_env_vars:
         if var in os.environ:
             del os.environ[var]

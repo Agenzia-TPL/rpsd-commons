@@ -13,9 +13,7 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-# LoadResult removed - now using tuples directly
-
-# Test-specific utilities - self-contained
+from rpsd_storage.metadata import StorageMetadata
 
 
 class SampleContent:
@@ -24,13 +22,9 @@ class SampleContent:
     SIMPLE_TEXT = b"Hello, this is a test file!"
     FAKE_PNG = b"\x89PNG\r\n\x1a\n" + b"fake PNG image data for testing"
     CONFIG_XML = (
-        b'<?xml version="1.0" encoding="UTF-8"?>'
-        b"<configuration>"
-        b"  <database>"
-        b"    <host>localhost</host>"
-        b"    <port>5432</port>"
-        b"  </database>"
-        b"</configuration>"
+        b'<?xml version="1.0" encoding="UTF-8"?><configuration>'
+        b"  <database>    <host>localhost</host>    <port>5432</port>"
+        b"  </database></configuration>"
     )
 
     @classmethod
@@ -59,24 +53,17 @@ def create_sample_file(file_type: str) -> tuple[bytes, str, str]:
         ),
         "log": (b"2024-01-15 10:30:00 INFO Test log entry", "test.log", "text/plain"),
     }
-
     if file_type not in samples:
         available = ", ".join(samples.keys())
         raise ValueError(f"Unknown file type: {file_type}. Available: {available}")
-
     return samples[file_type]
 
 
 def get_metadata_preset(preset: str) -> dict[str, Any]:
     """Get predefined metadata for testing."""
-    presets = {
-        "minimal": CommonMetadata.MINIMAL,
-        "basic": {},
-    }
-
+    presets = {"minimal": CommonMetadata.MINIMAL, "basic": {}}
     if preset not in presets:
         raise ValueError(f"Unknown preset: {preset}")
-
     return presets[preset].copy()
 
 
@@ -85,7 +72,6 @@ def create_temp_storage_dir() -> tempfile.TemporaryDirectory:
     return tempfile.TemporaryDirectory()
 
 
-# Legacy aliases for backward compatibility with existing tests
 class TestContent:
     """Legacy class for backward compatibility."""
 
@@ -97,12 +83,10 @@ class TestContent:
     def get_json_bytes(cls) -> bytes:
         return SampleContent.get_user_data_json()
 
-    # Additional test-specific content that's not in examples
     LOG_CONTENT = (
         b"2024-01-15 10:30:00 INFO Application started\n"
         b"2024-01-15 10:30:01 INFO User login successful"
     )
-
     JSON_DATA = {"test": "data", "users": [{"name": "Test User", "id": 1}]}
 
 
@@ -110,13 +94,9 @@ class SampleMetadata:
     """Legacy class - use CommonMetadata and get_metadata_preset() instead."""
 
     BASIC = {}
-    FULL = {
-        "source_url": "https://api.example.com/config.json",
-    }
+    FULL = {"source_url": "https://api.example.com/config.json"}
     MINIMAL = {}
-    USER_EXPORT = {
-        "source_url": "https://api.example.com/users.csv",
-    }
+    USER_EXPORT = {"source_url": "https://api.example.com/users.csv"}
 
 
 def create_temp_directory() -> tempfile.TemporaryDirectory:
@@ -141,24 +121,18 @@ def create_test_file_data(content_type: str = "text") -> tuple[bytes, str, str]:
     Returns:
         tuple: (content_bytes, filename, mime_type)
     """
-    # Try to use shared module first for common content types
     try:
         return create_sample_file(content_type)
     except ValueError:
-        # Fall back to test-specific content types not in shared module
         test_specific_content = {
-            "log": (TestContent.LOG_CONTENT, "application.log", "text/plain"),
+            "log": (TestContent.LOG_CONTENT, "application.log", "text/plain")
         }
-
         if content_type in test_specific_content:
             return test_specific_content[content_type]
-
-        # Re-raise the original error with both available types
         try:
             shared_types = ["text", "json", "csv", "xml", "pdf", "png"]
         except Exception:
             shared_types = []
-
         test_types = list(test_specific_content.keys())
         all_types = shared_types + test_types
         msg = f"Unknown content type: {content_type}. Available: {all_types}"
@@ -178,33 +152,27 @@ def create_test_metadata(preset: str = "basic") -> dict[str, Any]:
     Returns:
         dict: Metadata dictionary
     """
-    # Map test presets to shared presets where possible
     preset_mapping = {
         "basic": "minimal",
         "full": "document",
         "minimal": "minimal",
         "user_export": "data_export",
     }
-
     if preset in preset_mapping:
         try:
             return get_metadata_preset(preset_mapping[preset])
         except ValueError:
             pass
-
-    # Fall back to legacy test-specific metadata
     preset_map = {
         "basic": SampleMetadata.BASIC,
         "full": SampleMetadata.FULL,
         "minimal": SampleMetadata.MINIMAL,
         "user_export": SampleMetadata.USER_EXPORT,
     }
-
     if preset not in preset_map:
         available = list(preset_map.keys())
         msg = f"Unknown preset: {preset}. Available: {available}"
         raise ValueError(msg)
-
     return preset_map[preset].copy()
 
 
@@ -225,56 +193,70 @@ def verify_file_content(content: bytes, expected_content_type: str) -> bool:
             return True
         except (json.JSONDecodeError, UnicodeDecodeError):
             return False
-
     elif expected_content_type == "xml":
         return content.startswith(b"<?xml")
-
     elif expected_content_type == "pdf":
         return content.startswith(b"%PDF-")
-
     elif expected_content_type == "png":
         return content.startswith(b"\x89PNG")
-
     elif expected_content_type in ["text", "csv", "log"]:
         try:
             content.decode("utf-8")
             return True
         except UnicodeDecodeError:
             return False
+    return True
 
-    return True  # Default: assume valid
 
-
-def verify_metadata_structure(metadata: dict[str, Any]) -> bool:
+def verify_metadata_structure(metadata: StorageMetadata | dict[str, Any]) -> bool:
     """
     Verify that metadata has the expected structure.
 
     Args:
-        metadata: Metadata dictionary to verify
+        metadata: StorageMetadata instance or dict to verify
 
     Returns:
         bool: True if metadata structure is valid
     """
-    required_fields = [
-        "object_id",
-        "original_filename",
-        "ingestion_timestamp",
-        "content_type",
-        "who",
-        "what",
-    ]
-
-    for field in required_fields:
-        if field not in metadata:
-            return False
-
-    # Check optional fields exist if they should
-    optional_fields = ["source_url"]
-    for field in optional_fields:
-        if field in metadata and not isinstance(metadata[field], str):
-            return False
-
-    return True
+    if isinstance(metadata, StorageMetadata):
+        # For StorageMetadata, check required attributes exist and have values
+        required_fields = [
+            "object_id",
+            "original_filename",
+            "ingestion_timestamp",
+            "content_type",
+            "who",
+            "what",
+        ]
+        for field in required_fields:
+            if not hasattr(metadata, field) or getattr(metadata, field) is None:
+                return False
+        # Check optional fields if they exist
+        optional_fields = ["source_url"]
+        for field in optional_fields:
+            if hasattr(metadata, field):
+                value = getattr(metadata, field)
+                if value is not None and not isinstance(value, str):
+                    return False
+        return True
+    else:
+        # Legacy dict support
+        required_fields = [
+            "object_id",
+            "original_filename",
+            "ingestion_timestamp",
+            "content_type",
+            "who",
+            "what",
+        ]
+        for field in required_fields:
+            if field not in metadata:
+                return False
+        optional_fields = ["source_url"]
+        for field in optional_fields:
+            if field in metadata and (not isinstance(metadata[field], str)):
+                return False
+        return True
 
 
 def count_files_in_directory(directory: Path, extension: str | None = None) -> int:
@@ -290,14 +272,12 @@ def count_files_in_directory(directory: Path, extension: str | None = None) -> i
     """
     if not directory.exists():
         return 0
-
     if extension:
         return len([f for f in directory.rglob(f"*{extension}") if f.is_file()])
     else:
         return len([f for f in directory.rglob("*") if f.is_file()])
 
 
-# Test scenarios for comprehensive testing
 TEST_SCENARIOS = [
     {
         "name": "simple_text",
@@ -338,7 +318,6 @@ TEST_SCENARIOS = [
 ]
 
 
-# TypedDict demonstration functions
 def demonstrate_typed_load_result(storage_provider, object_id: str) -> None:
     """
     Demonstrate how tuple unpacking provides ergonomic access to load results.
@@ -348,20 +327,12 @@ def demonstrate_typed_load_result(storage_provider, object_id: str) -> None:
     - Clear separation of return values
     - Better alignment with save() method creating two things
     """
-    # Load with tuple unpacking
     content, metadata = storage_provider.load(object_id)
-
-    # Direct access to content and metadata
-
-    # These should be properly typed by the IDE/type checker
     assert isinstance(content, bytes), "Content should be bytes"
-    assert isinstance(metadata, dict), "Metadata should be dict"
-
-    # Access specific metadata fields with type safety
-    original_filename: str = metadata["original_filename"]
-    content_type: str = metadata["content_type"]
-    object_id_from_meta: str = metadata["object_id"]
-
+    assert isinstance(metadata, StorageMetadata), "Metadata should be StorageMetadata"
+    original_filename: str = metadata.original_filename
+    content_type: str = metadata.content_type
+    object_id_from_meta: str = metadata.object_id
     print(f"✅ Tuple validation passed for {original_filename}")
     print(f"   Content size: {len(content)} bytes")
     print(f"   Content type: {content_type}")
@@ -379,12 +350,10 @@ def extract_content_with_types(load_result: dict[str, Any]) -> tuple[bytes, str,
         tuple: (content, original_filename, content_type)
     """
     content: bytes = load_result["content"]
-    metadata: dict[str, Any] = load_result["metadata"]
-
-    original_filename: str = metadata["original_filename"]
-    content_type: str = metadata["content_type"]
-
-    return content, original_filename, content_type
+    metadata: StorageMetadata = load_result["metadata"]
+    original_filename: str = metadata.original_filename
+    content_type: str = metadata.content_type
+    return (content, original_filename, content_type)
 
 
 def validate_load_result_structure(result: dict[str, Any]) -> bool:
@@ -397,25 +366,24 @@ def validate_load_result_structure(result: dict[str, Any]) -> bool:
     Returns:
         bool: True if structure is valid
     """
-    # Check required keys exist
     if "content" not in result or "metadata" not in result:
         return False
-
-    # Check content is bytes
     if not isinstance(result["content"], bytes):
         return False
-
-    # Check metadata is dict
-    if not isinstance(result["metadata"], dict):
+    if not isinstance(result["metadata"], (StorageMetadata, dict)):
         return False
-
-    # Check required metadata fields
     metadata = result["metadata"]
-    required_fields = ["object_id", "original_filename", "content_type"]
-    for field in required_fields:
-        if field not in metadata:
-            return False
-
+    if isinstance(metadata, StorageMetadata):
+        required_fields = ["object_id", "original_filename", "content_type"]
+        for field in required_fields:
+            if not hasattr(metadata, field) or getattr(metadata, field) is None:
+                return False
+    else:
+        # Legacy dict support
+        required_fields = ["object_id", "original_filename", "content_type"]
+        for field in required_fields:
+            if field not in metadata:
+                return False
     return True
 
 
@@ -432,20 +400,14 @@ def process_multiple_load_results(results: list[dict[str, Any]]) -> dict[str, An
     total_size = 0
     content_types = {}
     filenames = []
-
     for result in results:
-        # Type-safe access to each result
         content: bytes = result["content"]
-        metadata: dict[str, Any] = result["metadata"]
-
+        metadata: StorageMetadata = result["metadata"]
         total_size += len(content)
-
-        content_type: str = metadata["content_type"]
+        content_type: str = metadata.content_type
         content_types[content_type] = content_types.get(content_type, 0) + 1
-
-        filename: str = metadata["original_filename"]
+        filename: str = metadata.original_filename
         filenames.append(filename)
-
     return {
         "total_files": len(results),
         "total_size_bytes": total_size,

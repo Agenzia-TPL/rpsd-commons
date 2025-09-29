@@ -97,7 +97,7 @@ class S3StorageProvider(StorageProvider):
         )
 
         # Add ETag to metadata
-        if "ETag" in response and response["ETag"]:
+        if response and "ETag" in response and response["ETag"]:
             metadata.etag = response["ETag"].strip('"')
 
         logger.info(f"Uploaded to S3: {s3_key}")
@@ -177,11 +177,31 @@ class S3StorageProvider(StorageProvider):
         if etag:
             metadata_dict["etag"] = etag.strip('"')
 
-        # Handle custom_metadata if it exists
+        # Handle custom_metadata if it exists, otherwise set to empty dict
         if "custom_metadata" in metadata_dict:
             metadata_dict["custom_metadata"] = json.loads(
                 metadata_dict["custom_metadata"]
             )
+        else:
+            metadata_dict["custom_metadata"] = {}
+
+        # Ensure all required fields are present with defaults if missing
+        required_defaults = {
+            "url": "",
+            "content_length": 0,
+            "hash": "",
+            "schema_version": 1,
+            "source_url": "",
+            "original_filename": "unknown",
+            "object_id": "",
+            "ingestion_timestamp": "",
+            "who": "",
+            "what": "",
+        }
+
+        for field, default_value in required_defaults.items():
+            if field not in metadata_dict:
+                metadata_dict[field] = default_value
 
         return StorageMetadata.model_validate(metadata_dict)
 

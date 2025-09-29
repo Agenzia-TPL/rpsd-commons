@@ -11,6 +11,7 @@ from botocore.exceptions import ClientError
 from moto import mock_aws
 
 from rpsd_storage.http import HTTPStorageProvider
+from rpsd_storage.metadata import StorageMetadata
 from rpsd_storage.s3 import S3StorageProvider
 
 from .test_utils import (
@@ -53,48 +54,33 @@ class TestS3StorageProviderSave:
         s3_client, bucket_name = mock_s3_setup
         content = TestContent.SIMPLE_TEXT
         filename = "test.txt"
-
         url, metadata = s3_storage_provider.save(
             content, filename, "testuser", "testdata", content_type="text/plain"
         )
-
         assert url is not None
         assert isinstance(url, str)
         assert url.startswith("s3://")
         assert metadata is not None
-        assert isinstance(metadata, dict)
-        assert "object_id" in metadata
-
-        # Verify object exists in S3
+        assert isinstance(metadata, StorageMetadata)
+        assert metadata.object_id is not None
         response = s3_client.list_objects_v2(Bucket=bucket_name)
         assert "Contents" in response
         assert len(response["Contents"]) == 1
-
-        # Verify the object key contains the object_id
         s3_key = response["Contents"][0]["Key"]
-        assert metadata["object_id"] in s3_key
+        assert metadata.object_id in s3_key
 
     def test_save_with_who_and_what(self, s3_storage_provider, mock_s3_setup):
         """Test saving with who and what parameters."""
         s3_client, bucket_name = mock_s3_setup
         content = TestContent.get_json_bytes()
         filename = "data.json"
-
         url, metadata = s3_storage_provider.save(
-            content,
-            filename,
-            "alice",
-            "test_data",
-            content_type="application/json",
+            content, filename, "alice", "test_data", content_type="application/json"
         )
-
-        # URL should contain organized key structure
         assert "alice" in url
         assert "test_data" in url
-        assert metadata["who"] == "alice"
-        assert metadata["what"] == "test_data"
-
-        # Verify object exists with organized key structure
+        assert metadata.who == "alice"
+        assert metadata.what == "test_data"
         response = s3_client.list_objects_v2(Bucket=bucket_name, Prefix="alice/")
         assert "Contents" in response
         assert len(response["Contents"]) == 1
@@ -102,28 +88,22 @@ class TestS3StorageProviderSave:
     def test_save_different_content_types(self, s3_storage_provider, content_type):
         """Test saving files with different content types."""
         content, filename, mime_type = create_test_file_data(content_type)
-
         url, metadata = s3_storage_provider.save(
             content, filename, "testuser", "testdata", content_type=mime_type
         )
-
         assert url is not None
         assert metadata is not None
-
-        # Verify content is correctly saved
         content_loaded, metadata_loaded = s3_storage_provider.load(url)
         assert content_loaded == content
-        assert metadata_loaded["content_type"] == mime_type
+        assert metadata_loaded.content_type == mime_type
 
     def test_save_binary_content(self, s3_storage_provider):
         """Test saving binary content."""
         content = TestContent.FAKE_PNG
         filename = "image.png"
-
         url, metadata = s3_storage_provider.save(
             content, filename, "testuser", "testdata", content_type="image/png"
         )
-
         content_loaded, metadata_loaded = s3_storage_provider.load(url)
         assert content_loaded == content
         assert verify_file_content(content_loaded, "png")
@@ -133,7 +113,6 @@ class TestS3StorageProviderSave:
         s3_client, bucket_name = mock_s3_setup
         content = TestContent.SIMPLE_TEXT
         filename = "test.txt"
-
         url, metadata = s3_storage_provider.save(
             content,
             filename,
@@ -142,15 +121,11 @@ class TestS3StorageProviderSave:
             content_type="text/plain",
             source_url="https://example.com/test.txt",
         )
-
-        # Get the S3 object and check metadata
         response = s3_client.list_objects_v2(Bucket=bucket_name, Prefix="bob/")
         s3_key = response["Contents"][0]["Key"]
-
         obj_response = s3_client.get_object(Bucket=bucket_name, Key=s3_key)
         s3_metadata = obj_response["Metadata"]
-
-        assert s3_metadata["object_id"] == metadata["object_id"]
+        assert s3_metadata["object_id"] == metadata.object_id
         assert s3_metadata["original_filename"] == filename
         assert s3_metadata["source_url"] == "https://example.com/test.txt"
         assert s3_metadata["who"] == "bob"
@@ -160,27 +135,21 @@ class TestS3StorageProviderSave:
     def test_save_without_filename(self, s3_storage_provider):
         """Test saving without providing filename."""
         content = TestContent.SIMPLE_TEXT
-
         url, metadata = s3_storage_provider.save(
             content, None, "testuser", "testdata", content_type="text/plain"
         )
-
         content_loaded, metadata_loaded = s3_storage_provider.load(url)
-        assert metadata_loaded["original_filename"] == "unknown"
+        assert metadata_loaded.original_filename == "unknown"
 
     def test_save_filename_without_extension(self, s3_storage_provider, mock_s3_setup):
         """Test saving with filename that has no extension."""
         s3_client, bucket_name = mock_s3_setup
         content = TestContent.SIMPLE_TEXT
-
         url, metadata = s3_storage_provider.save(
             content, "testfile", "testuser", "testdata", content_type="text/plain"
         )
-
         content_loaded, metadata_loaded = s3_storage_provider.load(url)
-        assert metadata_loaded["original_filename"] == "testfile"
-
-        # Should default to .xml extension in S3 key
+        assert metadata_loaded.original_filename == "testfile"
         response = s3_client.list_objects_v2(Bucket=bucket_name)
         s3_key = response["Contents"][0]["Key"]
         assert s3_key.endswith(".xml")
@@ -189,9 +158,7 @@ class TestS3StorageProviderSave:
     def test_save_with_s3_error(self):
         """Test saving when S3 operation fails."""
         with mock_aws():
-            # Create provider with non-existent bucket
             provider = S3StorageProvider(bucket_name="non-existent-bucket")
-
             with pytest.raises(Exception):
                 provider.save(
                     TestContent.SIMPLE_TEXT,
@@ -210,7 +177,6 @@ class TestS3StorageProviderLoad:
         self, s3_storage_provider, sample_content, sample_metadata
     ):
         """Test loading a previously saved file."""
-        # Save a file first
         url, metadata = s3_storage_provider.save(
             sample_content["content"],
             sample_content["filename"],
@@ -219,16 +185,12 @@ class TestS3StorageProviderLoad:
             content_type=sample_content["mime_type"],
             **sample_metadata,
         )
-
-        # Load the file
         content_loaded, metadata_loaded = s3_storage_provider.load(url)
-
         assert content_loaded == sample_content["content"]
         assert verify_metadata_structure(metadata_loaded)
 
     def test_load_different_content_types(self, s3_storage_provider, test_scenario):
         """Test loading files with different content types."""
-        # Save the file
         url, metadata = s3_storage_provider.save(
             test_scenario["content"],
             test_scenario["filename"],
@@ -237,36 +199,25 @@ class TestS3StorageProviderLoad:
             content_type=test_scenario["mime_type"],
             **test_scenario["metadata"],
         )
-
-        # Load and verify
         content_loaded, metadata_loaded = s3_storage_provider.load(url)
         assert content_loaded == test_scenario["content"]
-        assert metadata_loaded["content_type"] == test_scenario["mime_type"]
+        assert metadata_loaded.content_type == test_scenario["mime_type"]
         assert verify_file_content(content_loaded, test_scenario["content_type"])
 
     def test_load_with_who_what_organization(self, s3_storage_provider):
         """Test loading files that are organized by who/what structure."""
         content = TestContent.SIMPLE_TEXT
-
-        # Save with who and what
         url, metadata = s3_storage_provider.save(
-            content,
-            "test.txt",
-            "alice",
-            "documentation",
-            content_type="text/plain",
+            content, "test.txt", "alice", "documentation", content_type="text/plain"
         )
-
-        # Load using the URL
         content_loaded, metadata_loaded = s3_storage_provider.load(url)
         assert content_loaded == content
-        assert metadata_loaded["who"] == "alice"
-        assert metadata_loaded["what"] == "documentation"
+        assert metadata_loaded.who == "alice"
+        assert metadata_loaded.what == "documentation"
 
     def test_load_preserves_metadata(self, s3_storage_provider):
         """Test that load preserves all metadata fields."""
         content = TestContent.get_json_bytes()
-
         metadata = SampleMetadata.FULL.copy()
         url, save_metadata = s3_storage_provider.save(
             content,
@@ -276,12 +227,9 @@ class TestS3StorageProviderLoad:
             content_type="application/json",
             **metadata,
         )
-
         content_loaded, metadata_loaded = s3_storage_provider.load(url)
-
-        # Check all original metadata is preserved
         for key, value in metadata.items():
-            assert metadata_loaded[key] == value
+            assert getattr(metadata_loaded, key) == value
 
     @pytest.mark.error_handling
     def test_load_nonexistent_url(self, s3_storage_provider):
@@ -296,7 +244,6 @@ class TestS3StorageProviderLoad:
             s3_client = boto3.client("s3", region_name="us-east-1")
             bucket_name = "empty-bucket"
             s3_client.create_bucket(Bucket=bucket_name)
-
             provider = S3StorageProvider(bucket_name=bucket_name)
             with pytest.raises(FileNotFoundError, match="Object not found"):
                 provider.load(f"s3://{bucket_name}/any/object/id.txt")
@@ -304,16 +251,12 @@ class TestS3StorageProviderLoad:
     @pytest.mark.error_handling
     def test_load_with_s3_error(self):
         """Test loading when S3 operation fails."""
-        # Test with a provider that has no actual S3 setup
         provider = S3StorageProvider(bucket_name="test-bucket")
-
-        # Mock the S3 client to raise an exception
         with patch.object(provider, "s3_client") as mock_client:
             mock_client.get_object.side_effect = ClientError(
                 {"Error": {"Code": "NoSuchBucket", "Message": "Bucket does not exist"}},
                 "GetObject",
             )
-
             with pytest.raises(Exception, match="Failed to get S3 object"):
                 provider.load("s3://test-bucket/any/object/id.txt")
 
@@ -321,19 +264,11 @@ class TestS3StorageProviderLoad:
     def test_load_by_parts_convenience_method(self, s3_storage_provider):
         """Test the load_by_parts convenience method."""
         content = TestContent.SIMPLE_TEXT
-
-        # Save with who and what
         url, metadata = s3_storage_provider.save(
-            content,
-            "test.txt",
-            "user",
-            "data",
-            content_type="text/plain",
+            content, "test.txt", "user", "data", content_type="text/plain"
         )
-
-        # Load using the convenience method
         content_loaded, metadata_loaded = s3_storage_provider.load_by_parts(
-            "user", "data", metadata["object_id"]
+            "user", "data", metadata.object_id
         )
         assert content_loaded == content
 
@@ -347,8 +282,6 @@ class TestS3StorageProviderIntegration:
         """Test complete save/load roundtrip."""
         content = TestContent.get_json_bytes()
         filename = "roundtrip.json"
-
-        # Save
         url, metadata = s3_storage_provider.save(
             content,
             filename,
@@ -357,18 +290,14 @@ class TestS3StorageProviderIntegration:
             content_type="application/json",
             source_url="https://api.example.com/data",
         )
-
-        # Load
         content_loaded, metadata_loaded = s3_storage_provider.load(url)
-
-        # Verify everything matches
         assert content_loaded == content
-        assert metadata_loaded["original_filename"] == filename
-        assert metadata_loaded["content_type"] == "application/json"
-        assert metadata_loaded["source_url"] == "https://api.example.com/data"
-        assert metadata_loaded["who"] == "integration_test"
-        assert metadata_loaded["what"] == "roundtrip_data"
-        assert metadata_loaded["object_id"] == metadata["object_id"]
+        assert metadata_loaded.original_filename == filename
+        assert metadata_loaded.content_type == "application/json"
+        assert metadata_loaded.source_url == "https://api.example.com/data"
+        assert metadata_loaded.who == "integration_test"
+        assert metadata_loaded.what == "roundtrip_data"
+        assert metadata_loaded.object_id == metadata.object_id
 
     def test_concurrent_saves(self, s3_storage_provider):
         """Test that concurrent saves don't interfere with each other."""
@@ -377,7 +306,6 @@ class TestS3StorageProviderIntegration:
             (TestContent.get_json_bytes(), "file2.json", "application/json"),
             (TestContent.XML_DATA, "file3.xml", "application/xml"),
         ]
-
         urls = []
         for i, (content, filename, content_type) in enumerate(contents):
             url, metadata = s3_storage_provider.save(
@@ -388,20 +316,16 @@ class TestS3StorageProviderIntegration:
                 content_type=content_type,
             )
             urls.append(url)
-
-        # All should be loadable independently
         for i, url in enumerate(urls):
             content_loaded, metadata_loaded = s3_storage_provider.load(url)
             assert content_loaded == contents[i][0]
-            assert metadata_loaded["who"] == f"user_{i}"
-            assert metadata_loaded["what"] == f"test_data_{i}"
+            assert metadata_loaded.who == f"user_{i}"
+            assert metadata_loaded.what == f"test_data_{i}"
 
     def test_large_file_handling(self, s3_storage_provider):
         """Test handling of larger files."""
-        # Create a larger content (1MB)
         large_content = b"x" * (1024 * 1024)
         filename = "large_file.bin"
-
         url, metadata = s3_storage_provider.save(
             large_content,
             filename,
@@ -409,7 +333,6 @@ class TestS3StorageProviderIntegration:
             "testdata",
             content_type="application/octet-stream",
         )
-
         content_loaded, metadata_loaded = s3_storage_provider.load(url)
         assert content_loaded == large_content
         assert len(content_loaded) == 1024 * 1024
@@ -418,40 +341,24 @@ class TestS3StorageProviderIntegration:
         """Test that S3 keys follow the expected structure."""
         s3_client, bucket_name = mock_s3_setup
         content = TestContent.SIMPLE_TEXT
-
         url, metadata = s3_storage_provider.save(
-            content,
-            "test.txt",
-            "user",
-            "data",
-            content_type="text/plain",
+            content, "test.txt", "user", "data", content_type="text/plain"
         )
-
-        # Check S3 key structure
         response = s3_client.list_objects_v2(Bucket=bucket_name, Prefix="user/")
         s3_key = response["Contents"][0]["Key"]
-
         assert "user/data/" in s3_key
-        assert metadata["object_id"] in s3_key
+        assert metadata.object_id in s3_key
         assert s3_key.endswith(".txt")
 
     def test_metadata_case_sensitivity(self, s3_storage_provider):
         """Test that S3 metadata handling preserves case correctly."""
         content = TestContent.SIMPLE_TEXT
-
         url, metadata = s3_storage_provider.save(
-            content,
-            "test.txt",
-            "TestUser",
-            "TestData",
-            content_type="text/plain",
+            content, "test.txt", "TestUser", "TestData", content_type="text/plain"
         )
-
         content_loaded, metadata_loaded = s3_storage_provider.load(url)
-
-        # S3 metadata keys are lowercase, but values should preserve case
-        assert metadata_loaded["who"] == "TestUser"
-        assert metadata_loaded["what"] == "TestData"
+        assert metadata_loaded.who == "TestUser"
+        assert metadata_loaded.what == "TestData"
 
     @respx.mock
     def test_s3_presigned_url_with_http_provider(
@@ -461,8 +368,6 @@ class TestS3StorageProviderIntegration:
         s3_client, bucket_name = mock_s3_setup
         content = TestContent.get_json_bytes()
         filename = "presigned_test.json"
-
-        # Save file using S3 provider
         s3_url, s3_metadata = s3_storage_provider.save(
             content,
             filename,
@@ -470,20 +375,10 @@ class TestS3StorageProviderIntegration:
             "presigned_data",
             content_type="application/json",
         )
-
-        # Extract S3 key from the URL
-        # URL format: s3://bucket-name/who/what/object_id
         s3_key = s3_url.split(f"s3://{bucket_name}/", 1)[1]
-
-        # Generate presigned URL (valid for 1 hour)
         presigned_url = s3_client.generate_presigned_url(
-            "get_object",
-            Params={"Bucket": bucket_name, "Key": s3_key},
-            ExpiresIn=3600,
+            "get_object", Params={"Bucket": bucket_name, "Key": s3_key}, ExpiresIn=3600
         )
-
-        # Mock the presigned URL request to return the S3 object content
-        # In a real scenario, this would be handled by AWS, but we need to mock it
         respx.get(presigned_url).mock(
             return_value=respx.MockResponse(
                 200,
@@ -498,53 +393,31 @@ class TestS3StorageProviderIntegration:
                 },
             )
         )
-
-        # Load using HTTP provider with the presigned URL
         http_provider = HTTPStorageProvider()
         http_content, http_metadata = http_provider.load(presigned_url)
-
-        # Verify content matches exactly
         assert http_content == content
-
-        # Verify HTTP metadata includes S3-specific headers
-        assert http_metadata["provider"] == "http"
-        assert http_metadata["status_code"] == 200
-        assert http_metadata["content_type"] == "application/json"
-        assert http_metadata["content_length"] == len(content)
-
-        # Verify S3-specific headers are captured
-        headers = http_metadata["headers"]
+        assert http_metadata.provider == "http"
+        assert http_metadata.status_code == 200
+        assert http_metadata.content_type == "application/json"
+        assert http_metadata.content_length == len(content)
+        headers = http_metadata.headers
         assert headers["etag"] == '"test-etag"'
         assert headers["server"] == "AmazonS3"
         assert "x-amz-request-id" in headers
-
-        # The URL in HTTP metadata should be the presigned URL
-        assert http_metadata["url"] == presigned_url
+        assert http_metadata.url == presigned_url
 
     def test_s3_presigned_url_binary_content(self, s3_storage_provider, mock_s3_setup):
         """Test presigned URL integration with binary content."""
         s3_client, bucket_name = mock_s3_setup
         content = TestContent.FAKE_PNG
         filename = "test_image.png"
-
-        # Save binary file using S3 provider
         s3_url, s3_metadata = s3_storage_provider.save(
-            content,
-            filename,
-            "testuser",
-            "testdata",
-            content_type="image/png",
+            content, filename, "testuser", "testdata", content_type="image/png"
         )
-
-        # Extract S3 key and generate presigned URL
         s3_key = s3_url.split(f"s3://{bucket_name}/", 1)[1]
         presigned_url = s3_client.generate_presigned_url(
-            "get_object",
-            Params={"Bucket": bucket_name, "Key": s3_key},
-            ExpiresIn=3600,
+            "get_object", Params={"Bucket": bucket_name, "Key": s3_key}, ExpiresIn=3600
         )
-
-        # Mock the presigned URL to return binary content
         with respx.mock:
             respx.get(presigned_url).mock(
                 return_value=respx.MockResponse(
@@ -557,12 +430,8 @@ class TestS3StorageProviderIntegration:
                     },
                 )
             )
-
-            # Load binary content via HTTP provider
             http_provider = HTTPStorageProvider()
             http_content, http_metadata = http_provider.load(presigned_url)
-
-            # Verify binary content is preserved exactly
             assert http_content == content
-            assert http_metadata["content_type"] == "image/png"
-            assert http_metadata["content_length"] == len(content)
+            assert http_metadata.content_type == "image/png"
+            assert http_metadata.content_length == len(content)

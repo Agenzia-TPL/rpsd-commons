@@ -32,7 +32,6 @@ class TestHTTPStorageProviderSave:
     def test_save_raises_not_implemented(self):
         """Test that save method raises NotImplementedError."""
         provider = HTTPStorageProvider()
-
         with pytest.raises(
             NotImplementedError, match="save\\(\\) method is not yet implemented"
         ):
@@ -47,7 +46,6 @@ class TestHTTPStorageProviderLoad:
         """Test successful HTTP GET request."""
         url = "https://example.com/test.txt"
         test_content = b"Hello, World!"
-
         respx.get(url).mock(
             return_value=Response(
                 200,
@@ -59,66 +57,52 @@ class TestHTTPStorageProviderLoad:
                 },
             )
         )
-
         provider = HTTPStorageProvider()
         content, metadata = provider.load(url)
-
         assert content == test_content
-        assert metadata["url"] == url
-        assert metadata["status_code"] == 200
-        assert metadata["content_type"] == "text/plain"
-        assert metadata["content_length"] == len(test_content)
-        assert metadata["provider"] == "http"
-        assert "headers" in metadata
-        assert metadata["headers"]["custom-header"] == "test-value"
+        assert metadata.url == url
+        assert metadata.status_code == 200
+        assert metadata.content_type == "text/plain"
+        assert metadata.content_length == len(test_content)
+        assert metadata.provider == "http"
+        assert metadata.headers is not None
+        assert metadata.headers["custom-header"] == "test-value"
 
     @respx.mock
     def test_load_with_http_url(self):
         """Test loading from HTTP (not HTTPS) URL."""
         url = "http://example.com/data.json"
         test_content = b'{"key": "value"}'
-
         respx.get(url).mock(
             return_value=Response(
                 200, content=test_content, headers={"content-type": "application/json"}
             )
         )
-
         provider = HTTPStorageProvider()
         content, metadata = provider.load(url)
-
         assert content == test_content
-        assert metadata["content_type"] == "application/json"
+        assert metadata.content_type == "application/json"
 
     @respx.mock
     def test_load_with_content_encoding(self):
         """Test loading with content encoding header."""
         url = "https://example.com/compressed.txt"
         test_content = b"compressed data"
-
-        # Mock the response without automatic decompression
-        # to test that our metadata captures the header
         respx.get(url).mock(
             return_value=Response(
                 200,
                 content=test_content,
-                headers={
-                    "content-type": "text/plain",
-                    "content-encoding": "identity",  # Use identity encoding
-                },
+                headers={"content-type": "text/plain", "content-encoding": "identity"},
             )
         )
-
         provider = HTTPStorageProvider()
         content, metadata = provider.load(url)
-
         assert content == test_content
-        assert metadata["content_encoding"] == "identity"
+        assert metadata.content_encoding == "identity"
 
     def test_load_invalid_url_scheme(self):
         """Test loading with invalid URL scheme."""
         provider = HTTPStorageProvider()
-
         with pytest.raises(ValueError, match="Unsupported URL scheme: ftp"):
             provider.load("ftp://example.com/file.txt")
 
@@ -126,11 +110,8 @@ class TestHTTPStorageProviderLoad:
     def test_load_404_error(self):
         """Test loading non-existent resource (404)."""
         url = "https://example.com/notfound.txt"
-
         respx.get(url).mock(return_value=Response(404))
-
         provider = HTTPStorageProvider()
-
         with pytest.raises(FileNotFoundError, match="Resource not found at URL"):
             provider.load(url)
 
@@ -138,11 +119,8 @@ class TestHTTPStorageProviderLoad:
     def test_load_500_error(self):
         """Test loading with server error (500)."""
         url = "https://example.com/error.txt"
-
         respx.get(url).mock(return_value=Response(500, text="Internal Server Error"))
-
         provider = HTTPStorageProvider()
-
         with pytest.raises(Exception, match="HTTP 500"):
             provider.load(url)
 
@@ -150,11 +128,8 @@ class TestHTTPStorageProviderLoad:
     def test_load_network_error(self):
         """Test loading with network error."""
         url = "https://example.com/unreachable.txt"
-
         respx.get(url).mock(side_effect=Exception("Connection failed"))
-
         provider = HTTPStorageProvider()
-
         with pytest.raises(Exception, match="Connection failed"):
             provider.load(url)
 
@@ -162,25 +137,21 @@ class TestHTTPStorageProviderLoad:
     def test_load_empty_content(self):
         """Test loading empty content."""
         url = "https://example.com/empty.txt"
-
         respx.get(url).mock(
             return_value=Response(
                 200, content=b"", headers={"content-type": "text/plain"}
             )
         )
-
         provider = HTTPStorageProvider()
         content, metadata = provider.load(url)
-
         assert content == b""
-        assert metadata["content_length"] == 0
+        assert metadata.content_length == 0
 
     @respx.mock
     def test_load_large_content(self):
         """Test loading larger content."""
         url = "https://example.com/large.bin"
-        test_content = b"x" * 10000  # 10KB of data
-
+        test_content = b"x" * 10000
         respx.get(url).mock(
             return_value=Response(
                 200,
@@ -188,12 +159,10 @@ class TestHTTPStorageProviderLoad:
                 headers={"content-type": "application/octet-stream"},
             )
         )
-
         provider = HTTPStorageProvider()
         content, metadata = provider.load(url)
-
         assert content == test_content
-        assert metadata["content_length"] == 10000
+        assert metadata.content_length == 10000
 
 
 class TestHTTPStorageProviderBuildUrl:
@@ -202,7 +171,6 @@ class TestHTTPStorageProviderBuildUrl:
     def test_build_url_raises_not_implemented(self):
         """Test that _build_url raises NotImplementedError."""
         provider = HTTPStorageProvider()
-
         with pytest.raises(
             NotImplementedError, match="HTTP provider requires complete URLs"
         ):
@@ -215,7 +183,6 @@ class TestHTTPStorageProviderLoadByParts:
     def test_load_by_parts_raises_not_implemented(self):
         """Test that load_by_parts raises NotImplementedError."""
         provider = HTTPStorageProvider()
-
         with pytest.raises(
             NotImplementedError, match="HTTP provider requires complete URLs"
         ):
@@ -230,36 +197,30 @@ class TestHTTPProviderIntegration:
         """Test StorageProvider.load_from_url with HTTP URL."""
         url = "https://example.com/integration.txt"
         test_content = b"Integration test content"
-
         respx.get(url).mock(
             return_value=Response(
                 200, content=test_content, headers={"content-type": "text/plain"}
             )
         )
-
         content, metadata = StorageProvider.load_from_url(url)
-
         assert content == test_content
-        assert metadata["provider"] == "http"
-        assert metadata["url"] == url
+        assert metadata.provider == "http"
+        assert metadata.url == url
 
     @respx.mock
     def test_load_from_url_with_https_scheme(self):
         """Test StorageProvider.load_from_url with HTTPS URL."""
         url = "http://example.com/integration.json"
         test_content = b'{"test": "data"}'
-
         respx.get(url).mock(
             return_value=Response(
                 200, content=test_content, headers={"content-type": "application/json"}
             )
         )
-
         content, metadata = StorageProvider.load_from_url(url)
-
         assert content == test_content
-        assert metadata["provider"] == "http"
-        assert metadata["content_type"] == "application/json"
+        assert metadata.provider == "http"
+        assert metadata.content_type == "application/json"
 
 
 class TestHTTPStorageProviderMetadata:
@@ -270,7 +231,6 @@ class TestHTTPStorageProviderMetadata:
         """Test that HTTP provider metadata follows expected structure."""
         url = "https://example.com/metadata-test.xml"
         test_content = TestContent.XML_DATA
-
         respx.get(url).mock(
             return_value=Response(
                 200,
@@ -282,18 +242,11 @@ class TestHTTPStorageProviderMetadata:
                 },
             )
         )
-
         provider = HTTPStorageProvider()
         content, metadata = provider.load(url)
-
-        # HTTP provider metadata has a different structure than file-based providers
-        # It doesn't have the same required fields like object_id, etc.
-        # Instead, verify HTTP-specific metadata structure
-
-        # Verify HTTP-specific metadata
-        assert metadata["provider"] == "http"
-        assert metadata["url"] == url
-        assert metadata["status_code"] == 200
-        assert "headers" in metadata
-        assert isinstance(metadata["headers"], dict)
-        assert metadata["headers"]["etag"] == '"abc123"'
+        assert metadata.provider == "http"
+        assert metadata.url == url
+        assert metadata.status_code == 200
+        assert metadata.headers is not None
+        assert isinstance(metadata.headers, dict)
+        assert metadata.headers["etag"] == '"abc123"'
