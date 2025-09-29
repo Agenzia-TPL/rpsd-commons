@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 Basic Usage - Working with Different File Types
 
@@ -19,7 +18,6 @@ import tempfile
 from rpsd_storage import FSStorageProvider
 
 
-# Simple utilities for this example
 def create_sample_file(file_type: str) -> tuple[bytes, str, str]:
     """Create sample file content for demonstration."""
     samples = {
@@ -67,32 +65,21 @@ def print_file_info(content: bytes, filename: str, mime_type: str) -> None:
 class SampleContent:
     """Sample content for examples."""
 
-    LOG_ENTRY = (
-        b"2024-01-15 10:30:00 INFO Application started successfully\n"
-        b"2024-01-15 10:30:01 INFO Database connection established"
-    )
+    LOG_ENTRY = b"2024-01-15 10:30:00 INFO Application started successfully\n2024-01-15 10:30:01 INFO Database connection established"
 
 
 def demonstrate_file_types():
     """Show how to save different types of files."""
-
     print("📁 Working with Different File Types")
     print("=" * 38)
     print()
-
     with tempfile.TemporaryDirectory() as temp_dir:
         storage = FSStorageProvider(base_path=temp_dir)
-
-        # We'll save several different file types to demonstrate versatility
         saved_files = []
-
-        # 1. Text Documents
         print("1️⃣  Text Documents (articles, reports, documentation)")
         print("-" * 55)
-
         content, filename, mime_type = create_sample_file("text")
         print_file_info(content, filename, mime_type)
-
         url, metadata = storage.save(
             content=content,
             filename=filename,
@@ -102,16 +89,12 @@ def demonstrate_file_types():
         )
         saved_files.append(("Text Article", url))
         print(f"   ✅ Saved with URL: {url}")
-        print(f"       Object ID: {metadata['object_id']}")
+        print(f"       Object ID: {metadata.object_id}")
         print()
-
-        # 2. JSON Data
         print("2️⃣  JSON Data (API responses, configuration, user data)")
         print("-" * 55)
-
         content, filename, mime_type = create_sample_file("json")
         print_file_info(content, filename, mime_type)
-
         url, metadata = storage.save(
             content=content,
             filename=filename,
@@ -121,16 +104,12 @@ def demonstrate_file_types():
         )
         saved_files.append(("User Data JSON", url))
         print(f"   ✅ Saved with URL: {url}")
-        print(f"       Object ID: {metadata['object_id']}")
+        print(f"       Object ID: {metadata.object_id}")
         print()
-
-        # 3. CSV Data
         print("3️⃣  CSV Data (spreadsheets, data exports, analytics)")
         print("-" * 50)
-
         content, filename, mime_type = create_sample_file("csv")
         print_file_info(content, filename, mime_type)
-
         url, metadata = storage.save(
             content=content,
             filename=filename,
@@ -140,16 +119,12 @@ def demonstrate_file_types():
         )
         saved_files.append(("Sales Data CSV", url))
         print(f"   ✅ Saved with URL: {url}")
-        print(f"       Object ID: {metadata['object_id']}")
+        print(f"       Object ID: {metadata.object_id}")
         print()
-
-        # 4. Binary Files
         print("4️⃣  Binary Files (images, documents, media)")
         print("-" * 44)
-
         content, filename, mime_type = create_sample_file("pdf")
         print_file_info(content, filename, mime_type)
-
         url, metadata = storage.save(
             content=content,
             filename=filename,
@@ -159,40 +134,31 @@ def demonstrate_file_types():
         )
         saved_files.append(("PDF Document", url))
         print(f"   ✅ Saved with URL: {url}")
-        print(f"       Object ID: {metadata['object_id']}")
+        print(f"       Object ID: {metadata.object_id}")
         print()
-
-        # Now let's load them all back to demonstrate retrieval
         print("🔄 Loading Files Back")
         print("=" * 20)
         print()
-
         for description, url in saved_files:
             content, metadata = storage.load(url)
-
             print(f"📄 {description}")
-            print(f"   Original name: {metadata['original_filename']}")
-            print(f"   Content type: {metadata['content_type']}")
+            print(f"   Original name: {metadata.original_filename}")
+            print(f"   Content type: {metadata.content_type}")
             print(f"   Size: {len(content)} bytes")
-            print(f"   Object ID: {metadata['object_id']}")
+            print(f"   Object ID: {metadata.object_id}")
             print()
 
 
 def demonstrate_real_world_scenarios():
     """Show common real-world use cases."""
-
     print("🌍 Real-World Use Cases")
     print("=" * 24)
     print()
-
     with tempfile.TemporaryDirectory() as temp_dir:
         storage = FSStorageProvider(base_path=temp_dir)
-
-        # Scenario 1: Log File Archival
         print("Scenario 1: Application Log Archival")
         print("-" * 38)
         print("📝 You want to archive application logs for compliance")
-
         log_content = SampleContent.LOG_ENTRY
         url, metadata = storage.save(
             content=log_content,
@@ -201,17 +167,13 @@ def demonstrate_real_world_scenarios():
             who="log_system",
             what="application_logs",
         )
-
         print(f"   ✅ Log file archived with URL: {url}")
-        print(f"       Object ID: {metadata['object_id']}")
+        print(f"       Object ID: {metadata.object_id}")
         print("   💡 Use case: Compliance, debugging, audit trails")
         print()
-
-        # Scenario 2: Data Pipeline
         print("Scenario 2: Data Pipeline Processing")
         print("-" * 36)
         print("📊 You're processing sales data in a pipeline")
-
         csv_content, _, _ = create_sample_file("csv")
         url, metadata = storage.save(
             content=csv_content,
@@ -220,17 +182,13 @@ def demonstrate_real_world_scenarios():
             who="data_pipeline",
             what="daily_sales",
         )
-
         print(f"   ✅ Sales data stored with URL: {url}")
-        print(f"       Object ID: {metadata['object_id']}")
+        print(f"       Object ID: {metadata.object_id}")
         print("   💡 Use case: ETL processes, data analysis, reporting")
         print()
-
-        # Scenario 3: Configuration Backup
         print("Scenario 3: Configuration Backup")
         print("-" * 32)
         print("⚙️  You want to backup application configuration")
-
         xml_content, _, _ = create_sample_file("xml")
         url, metadata = storage.save(
             content=xml_content,
@@ -239,25 +197,21 @@ def demonstrate_real_world_scenarios():
             who="devops_team",
             what="config_backup",
         )
-
         print(f"   ✅ Config backup saved with URL: {url}")
-        print(f"       Object ID: {metadata['object_id']}")
+        print(f"       Object ID: {metadata.object_id}")
         print("   💡 Use case: Disaster recovery, version control, rollbacks")
         print()
 
 
 def main():
     """Run the basic usage demonstrations."""
-
     print("📚 Basic Usage Guide for rpsd-storage")
     print("=" * 38)
     print("This example shows how to work with different file types")
     print("and common real-world scenarios.")
     print()
-
     demonstrate_file_types()
     demonstrate_real_world_scenarios()
-
     print("🎯 Key Takeaways:")
     print("-" * 16)
     print("• rpsd-storage works with ANY file type (text, binary, etc.)")
@@ -270,6 +224,10 @@ def main():
     print("📖 Next Steps:")
     print("• 03_metadata_and_types.py - Learn about custom metadata")
     print("• 04_advanced_features.py - Error handling and advanced features")
+    print("• 05_typed_dict_benefits.py - Benefits of tuple unpacking")
+    print(
+        "• 06_separate_load_methods.py - Separate load methods for content and metadata"
+    )
 
 
 if __name__ == "__main__":

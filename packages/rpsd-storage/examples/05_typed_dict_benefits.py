@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 Tuple Unpacking Benefits - Ergonomic Data Access
 
@@ -18,11 +17,10 @@ import tempfile
 from typing import Any
 
 from rpsd_storage import FSStorageProvider
+from rpsd_storage.metadata import StorageMetadata
 
-# LoadResult removed - now using tuples directly
 
-
-def analyze_file_content(content: bytes, metadata: dict[str, Any]) -> dict[str, Any]:
+def analyze_file_content(content: bytes, metadata: StorageMetadata) -> dict[str, Any]:
     """
     Analyze file content with direct tuple access.
 
@@ -33,14 +31,9 @@ def analyze_file_content(content: bytes, metadata: dict[str, Any]) -> dict[str, 
     Returns:
         dict: Analysis results with direct access
     """
-    # Direct access to unpacked values
-
-    # Type-safe metadata access
-    filename: str = metadata["original_filename"]
-    content_type: str = metadata["content_type"]
-    object_id: str = metadata["object_id"]
-
-    # Analyze content based on type
+    filename: str = metadata.original_filename
+    content_type: str = metadata.content_type
+    object_id: str = metadata.object_id
     analysis = {
         "filename": filename,
         "content_type": content_type,
@@ -50,8 +43,6 @@ def analyze_file_content(content: bytes, metadata: dict[str, Any]) -> dict[str, 
         "is_text": content_type.startswith("text/"),
         "is_binary": not content_type.startswith("text/"),
     }
-
-    # Type-safe content analysis
     if content_type.startswith("text/"):
         try:
             text_content: str = content.decode("utf-8")
@@ -64,7 +55,6 @@ def analyze_file_content(content: bytes, metadata: dict[str, Any]) -> dict[str, 
             )
         except UnicodeDecodeError:
             analysis["encoding_error"] = True
-
     return analysis
 
 
@@ -82,20 +72,13 @@ def batch_process_files(
         list: Analysis results for each file
     """
     results: list[dict[str, Any]] = []
-
     for url in urls:
         try:
-            # Load with tuple unpacking - direct access to values
             content, metadata = storage.load(url)
-
-            # Direct analysis with unpacked values
             analysis = analyze_file_content(content, metadata)
             analysis["status"] = "success"
-
             results.append(analysis)
-
         except Exception as e:
-            # Error handling with type safety
             error_result = {
                 "url": url,
                 "status": "error",
@@ -103,29 +86,27 @@ def batch_process_files(
                 "error_type": type(e).__name__,
             }
             results.append(error_result)
-
     return results
 
 
 def extract_metadata_safely(
-    metadata: dict[str, Any], field: str, default: Any = None
+    metadata: StorageMetadata, field: str, default: Any = None
 ) -> Any:
     """
     Safely extract metadata field with type checking.
 
     Args:
-        metadata: Metadata dictionary from unpacked tuple
+        metadata: Metadata from unpacked tuple
         field: Metadata field name
         default: Default value if field missing
 
     Returns:
         The field value or default
     """
-    # Direct access to metadata from unpacked tuple
-    return metadata.get(field, default)
+    return getattr(metadata, field, default)
 
 
-def validate_file_integrity(content: bytes, metadata: dict[str, Any]) -> bool:
+def validate_file_integrity(content: bytes, metadata: StorageMetadata) -> bool:
     """
     Validate file integrity using unpacked tuple values.
 
@@ -136,42 +117,26 @@ def validate_file_integrity(content: bytes, metadata: dict[str, Any]) -> bool:
     Returns:
         bool: True if file appears valid
     """
-    # Direct validation with unpacked values
-
-    # Check required fields exist
-    required_fields = ["object_id", "original_filename", "content_type"]
-    for field in required_fields:
-        if field not in metadata:
-            return False
-
-    # Check content exists
     if not content or len(content) == 0:
         return False
-
-    # Check metadata types
-    if not isinstance(metadata["object_id"], str):
+    if not isinstance(metadata.object_id, str):
         return False
-    if not isinstance(metadata["original_filename"], str):
+    if not isinstance(metadata.original_filename, str):
         return False
-    if not isinstance(metadata["content_type"], str):
+    if not isinstance(metadata.content_type, str):
         return False
-
     return True
 
 
 def demonstrate_tuple_unpacking_benefits():
     """Demonstrate the benefits of tuple unpacking in practice."""
-
     print("🔍 Tuple Unpacking Benefits Demonstration")
     print("=" * 44)
     print("This example shows how tuple unpacking provides ergonomic")
     print("and clean access to rpsd-storage load results.")
     print()
-
     with tempfile.TemporaryDirectory() as temp_dir:
         storage = FSStorageProvider(base_path=temp_dir)
-
-        # Create test files
         test_files = [
             (b"Hello, TypedDict world!", "greeting.txt", "text/plain"),
             (
@@ -185,10 +150,8 @@ def demonstrate_tuple_unpacking_benefits():
                 "text/csv",
             ),
         ]
-
         print("📁 Creating Test Files")
         print("-" * 22)
-
         urls = []
         for content, filename, content_type in test_files:
             url, metadata = storage.save(
@@ -201,37 +164,23 @@ def demonstrate_tuple_unpacking_benefits():
             urls.append(url)
             print(f"   ✅ Created: {filename}")
             print(f"       URL: {url}")
-            print(f"       Object ID: {metadata['object_id']}")
-
+            print(f"       Object ID: {metadata.object_id}")
         print()
-
-        # Demonstrate tuple unpacking loading
         print("🔒 Tuple Unpacking File Loading")
         print("-" * 32)
-
         for i, url in enumerate(urls):
-            # Load with tuple unpacking - direct access!
             content, metadata = storage.load(url)
-
-            # Direct access to unpacked values
-            filename: str = metadata["original_filename"]
-
+            filename: str = metadata.original_filename
             print(f"   📄 File {i + 1}: {filename}")
             print(f"      Content type: {type(content).__name__}")
             print(f"      Metadata type: {type(metadata).__name__}")
             print(f"      Size: {len(content)} bytes")
-
-            # Validate with unpacked values
             is_valid = validate_file_integrity(content, metadata)
-            print(f"      Valid: {'✅' if is_valid else '❌'}")
+            print(f"      Valid: {('✅' if is_valid else '❌')}")
             print()
-
-        # Demonstrate batch processing
         print("📊 Batch Processing with Tuple Unpacking")
         print("-" * 42)
-
         analysis_results = batch_process_files(storage, urls)
-
         for result in analysis_results:
             if result["status"] == "success":
                 print(f"   📈 {result['filename']}")
@@ -241,24 +190,16 @@ def demonstrate_tuple_unpacking_benefits():
                     print(f"      Lines: {result['line_count']}")
                     print(f"      Words: {result['word_count']}")
                 print()
-
-        # Demonstrate tuple-based metadata extraction
         print("🏷️  Tuple-Based Metadata Extraction")
         print("-" * 37)
-
         content, metadata = storage.load(urls[0])
-
-        # Safe extraction with unpacked metadata
         who = extract_metadata_safely(metadata, "who", "unknown")
         what = extract_metadata_safely(metadata, "what", "unknown")
         timestamp = extract_metadata_safely(metadata, "ingestion_timestamp")
-
         print(f"   Who: {who} (type: {type(who).__name__})")
         print(f"   What: {what} (type: {type(what).__name__})")
         print(f"   When: {timestamp} (type: {type(timestamp).__name__})")
         print()
-
-        # Show the benefits
         print("🎯 Benefits Summary")
         print("-" * 17)
         print("✅ Direct access to content and metadata")
@@ -268,7 +209,6 @@ def demonstrate_tuple_unpacking_benefits():
         print("✅ Reduced cognitive overhead")
         print("✅ More intuitive API design")
         print()
-
         print("💡 Tuple Unpacking Best Practices:")
         print("• Always unpack immediately after load()")
         print("• Use descriptive variable names")
@@ -280,15 +220,14 @@ def demonstrate_tuple_unpacking_benefits():
 def main():
     """Run the tuple unpacking benefits demonstration."""
     demonstrate_tuple_unpacking_benefits()
-
     print("🎉 Tuple unpacking demonstration complete!")
     print("   You now have direct, ergonomic access to")
     print("   rpsd-storage content and metadata.")
     print()
     print("📚 Continue learning:")
-    print("   • Use tuple unpacking consistently in your code")
-    print("   • Pass unpacked values directly to functions")
-    print("   • Embrace the conceptual alignment of save/load")
+    print(
+        "   • 06_separate_load_methods.py - Separate load methods for content and metadata"
+    )
 
 
 if __name__ == "__main__":
