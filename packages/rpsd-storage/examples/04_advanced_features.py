@@ -318,6 +318,7 @@ def main():
     print(
         "• 06_separate_load_methods.py - Separate load methods for content and metadata"
     )
+    print("• 07_metadata_comparison.py - Metadata comparison and version control")
 
 
 if __name__ == "__main__":

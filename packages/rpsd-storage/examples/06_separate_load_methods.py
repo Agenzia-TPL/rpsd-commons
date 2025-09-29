@@ -342,7 +342,11 @@ def main():
     example_7_deletion_error_handling()
     print("\n" + "=" * 60)
     print("✅ All examples completed!")
-    print("\n🎉 Congratulations! You've completed the rpsd-storage tutorial series.")
+    print()
+    print("📚 Continue learning:")
+    print("   • 07_metadata_comparison.py - Metadata comparison and version control")
+    print()
+    print("🎉 Congratulations! You've completed the core rpsd-storage tutorial series.")
     print("   You're now ready to use rpsd-storage in production applications!")
 
 
