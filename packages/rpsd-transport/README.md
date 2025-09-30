@@ -231,13 +231,13 @@ This package follows the rpsd-commons development standards:
 uv sync
 
 # Run tests
-uv run pytest packages/rpsd-messaging/tests/
+uv run pytest packages/rpsd-transport/tests/
 
 # Format code
-uv run ruff format packages/rpsd-messaging/
+uv run ruff format packages/rpsd-transport/
 
 # Lint code
-uv run ruff check packages/rpsd-messaging/
+uv run ruff check packages/rpsd-transport/
 ```
 
 ## Design Decisions
