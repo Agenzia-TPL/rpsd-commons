@@ -345,6 +345,7 @@ def main():
     print()
     print("📚 Continue learning:")
     print("   • 07_metadata_comparison.py - Metadata comparison and version control")
+    print("   • 08_url_comparison.py - URL-based comparison for efficient workflows")
     print()
     print("🎉 Congratulations! You've completed the core rpsd-storage tutorial series.")
     print("   You're now ready to use rpsd-storage in production applications!")
