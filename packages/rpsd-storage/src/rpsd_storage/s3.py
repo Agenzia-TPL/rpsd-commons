@@ -46,9 +46,13 @@ class S3StorageProvider(StorageProvider):
         uuid_part = str(uuid.uuid4())
         timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
 
-        file_extension = os.path.splitext(filename)[1] if filename else ".xml"
+        # Determine file extension with priority:
+        # 1. From filename if provided and has extension
+        # 2. From content_type using MIME type mapping
+        # 3. Default to .xml
+        file_extension = os.path.splitext(filename)[1] if filename else ""
         if not file_extension:
-            file_extension = ".xml"
+            file_extension = StorageProvider.extension_from_mime(content_type)
 
         # Include extension in object_id to make it complete
         object_id = f"{uuid_part}{file_extension}"

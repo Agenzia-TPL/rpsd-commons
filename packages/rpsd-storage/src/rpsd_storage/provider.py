@@ -1,3 +1,4 @@
+import mimetypes
 from abc import ABC, abstractmethod
 from urllib.parse import urlparse
 
@@ -8,6 +9,40 @@ class StorageProvider(ABC):
     """
     Abstract base class for storage providers.
     """
+
+    @staticmethod
+    def extension_from_mime(mime_type: str) -> str:
+        """
+        Convert a MIME type to a file extension.
+
+        Uses Python's mimetypes module with overrides for common quirks.
+
+        Args:
+            mime_type: MIME type string (e.g., "application/json")
+
+        Returns:
+            str: File extension including the dot (e.g., ".json")
+                 Falls back to ".xml" if no mapping is found.
+
+        Example:
+            >>> StorageProvider.extension_from_mime("application/json")
+            '.json'
+            >>> StorageProvider.extension_from_mime("application/xml")
+            '.xml'
+            >>> StorageProvider.extension_from_mime("unknown/type")
+            '.xml'
+        """
+        # Override dict for MIME types where mimetypes module
+        # returns unexpected extensions
+        overrides = {
+            "application/xml": ".xml",  # Default returns .xsl
+        }
+
+        if mime_type in overrides:
+            return overrides[mime_type]
+
+        extension = mimetypes.guess_extension(mime_type)
+        return extension if extension else ".xml"
 
     @abstractmethod
     def save(

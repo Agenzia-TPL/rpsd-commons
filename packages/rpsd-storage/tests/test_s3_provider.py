@@ -152,7 +152,8 @@ class TestS3StorageProviderSave:
         assert metadata_loaded.original_filename == "testfile"
         response = s3_client.list_objects_v2(Bucket=bucket_name)
         s3_key = response["Contents"][0]["Key"]
-        assert s3_key.endswith(".xml")
+        # Should use extension from content_type (text/plain -> .txt)
+        assert s3_key.endswith(".txt")
 
     @pytest.mark.error_handling
     def test_save_with_s3_error(self):

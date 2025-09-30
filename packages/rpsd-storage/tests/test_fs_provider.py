@@ -154,7 +154,8 @@ class TestFSStorageProviderSave:
         )
         content_loaded, metadata_loaded = fs_storage_provider.load(url)
         assert metadata_loaded.original_filename == "testfile"
-        files = [f for f in Path(fs_storage_provider.base_path).rglob("*.xml")]
+        # Should use extension from content_type (text/plain -> .txt)
+        files = [f for f in Path(fs_storage_provider.base_path).rglob("*.txt")]
         assert len(files) == 1
 
 
