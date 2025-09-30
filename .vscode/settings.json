@@ -2,11 +2,16 @@
     "python.testing.pytestEnabled": true,
     "python.testing.unittestEnabled": false,
     "python.testing.pytestArgs": [
-        "packages/rpsd-storage/tests",
+        "packages",
         "-v"
     ],
     "python.testing.cwd": "${workspaceFolder}",
     "python.testing.autoTestDiscoverOnSaveEnabled": true,
     "python.defaultInterpreterPath": "${workspaceFolder}/.venv/bin/python",
-    "python.terminal.activateEnvironment": true
+    "python.terminal.activateEnvironment": true,
+    "python.analysis.extraPaths": [
+        "${workspaceFolder}/packages/rpsd-storage/src",
+        "${workspaceFolder}/packages/rpsd-transport/src",
+        "${workspaceFolder}/packages/rpsd-workflow/src"
+    ]
 }
