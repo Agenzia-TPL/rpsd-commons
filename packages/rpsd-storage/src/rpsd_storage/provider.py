@@ -279,6 +279,42 @@ class StorageProvider(ABC):
             raise ValueError(f"Unsupported URL scheme: {scheme}")
 
     @staticmethod
+    def compare_from_url(current_url: str, candidate_url: str) -> int:
+        """
+        Compare metadata from two URLs to determine their relationship.
+
+        This static method loads metadata from both URLs and compares them
+        using StorageMetadata.compare() to determine if the candidate
+        represents an update, identical content, or older content.
+
+        Args:
+            current_url: URL of the currently stored/existing content
+            candidate_url: URL of the candidate content to compare
+
+        Returns:
+            int: Comparison result:
+                -1: candidate is older than current
+                 0: candidate has identical content to current
+                 1: candidate is newer than current
+
+        Raises:
+            ValueError: If who or what fields differ between the metadata
+            FileNotFoundError: If either URL does not exist
+            Exception: For other storage-related errors
+
+        Example:
+            >>> result = StorageProvider.compare_from_url(
+            ...     "s3://bucket/who/what/id1.xml",
+            ...     "s3://bucket/who/what/id2.xml"
+            ... )
+            >>> if result == 1:
+            ...     print("Candidate is an update")
+        """
+        current_metadata = StorageProvider.load_metadata_from_url(current_url)
+        candidate_metadata = StorageProvider.load_metadata_from_url(candidate_url)
+        return StorageMetadata.compare(current_metadata, candidate_metadata)
+
+    @staticmethod
     def load_from_parts(
         who: str, what: str, object_id: str
     ) -> tuple[bytes, StorageMetadata]:
