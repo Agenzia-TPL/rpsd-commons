@@ -40,7 +40,7 @@ def example_1_basic_url_comparison():
         )
         print(f"Saved: {metadata1.original_filename}")
         print(f"  URL: {url1}")
-        print(f"  Timestamp: {metadata1.ingestion_timestamp}")
+        print(f"  Timestamp: {metadata1.save_stamp}")
 
         url2, metadata2 = provider.save(
             b"Version 2 of the document - updated",
@@ -50,7 +50,7 @@ def example_1_basic_url_comparison():
         )
         print(f"\nSaved: {metadata2.original_filename}")
         print(f"  URL: {url2}")
-        print(f"  Timestamp: {metadata2.ingestion_timestamp}")
+        print(f"  Timestamp: {metadata2.save_stamp}")
 
         # Compare using URLs directly
         result = StorageProvider.compare_from_url(url1, url2)
@@ -102,8 +102,8 @@ def example_2_efficiency_demonstration():
         print("\nMetadata used for comparison:")
         print(f"  File 1 hash: {metadata1.hash}")
         print(f"  File 2 hash: {metadata2.hash}")
-        print(f"  File 1 timestamp: {metadata1.ingestion_timestamp}")
-        print(f"  File 2 timestamp: {metadata2.ingestion_timestamp}")
+        print(f"  File 1 timestamp: {metadata1.save_stamp}")
+        print(f"  File 2 timestamp: {metadata2.save_stamp}")
 
 
 def example_3_remote_storage_pattern():
@@ -244,13 +244,13 @@ def example_5_change_detection_pipeline():
         # Pipeline stages: raw → processed → analyzed
         pipeline_stages = {}
 
-        # Stage 1: Ingest raw data
+        # Stage 1: Save raw data
         raw_data = b"Raw sensor measurements: [100, 101, 102, ...]"
         url_raw, _ = provider.save(
             raw_data, "raw_data.csv", who="pipeline", what="sensor_data"
         )
         pipeline_stages["raw"] = url_raw
-        print("✓ Stage 1: Raw data ingested")
+        print("✓ Stage 1: Raw data saved")
 
         # Stage 2: Process data
         processed_data = b"Processed data: mean=101, stddev=0.8, ..."

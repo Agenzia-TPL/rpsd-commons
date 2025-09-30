@@ -99,7 +99,7 @@ class TestSeparateLoadMethods:
             "Metadata": {
                 "object_id": "test-object-id",
                 "original_filename": "test.txt",
-                "ingestion_timestamp": "20240101_120000",
+                "save_stamp": "20240101_120000",
                 "who": "testuser",
                 "what": "testdata",
                 "custom_metadata": json.dumps({"key": "value"}),

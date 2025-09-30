@@ -93,7 +93,7 @@ def print_metadata_info(metadata: StorageMetadata) -> None:
     print(f"       content_type: {metadata.content_type}")
     print(f"       content_length: {metadata.content_length}")
     print(f"       object_id: {metadata.object_id}")
-    print(f"       ingestion_timestamp: {metadata.ingestion_timestamp}")
+    print(f"       save_stamp: {metadata.save_stamp}")
     print(f"       source_url: {metadata.source_url}")
     if metadata.custom_metadata:
         print(f"       custom_metadata: {metadata.custom_metadata}")
@@ -225,7 +225,7 @@ def demonstrate_metadata_benefits():
             print(f"   📁 {description}")
             print(f"      Who: {metadata.who}")
             print(f"      What: {metadata.what}")
-            print(f"      When: {metadata.ingestion_timestamp}")
+            print(f"      When: {metadata.save_stamp}")
             print(f"      Size: {len(content)} bytes")
             print()
 

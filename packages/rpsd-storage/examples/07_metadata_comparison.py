@@ -40,7 +40,7 @@ def example_1_basic_comparison():
             initial_content, "document.txt", who="alice", what="report"
         )
         print(f"Saved initial version: {metadata1.original_filename}")
-        print(f"  Timestamp: {metadata1.ingestion_timestamp}")
+        print(f"  Timestamp: {metadata1.save_stamp}")
         print(f"  Hash: {metadata1.hash}")
 
         # Save updated version (different content)
@@ -49,7 +49,7 @@ def example_1_basic_comparison():
             updated_content, "document.txt", who="alice", what="report"
         )
         print(f"\nSaved updated version: {metadata2.original_filename}")
-        print(f"  Timestamp: {metadata2.ingestion_timestamp}")
+        print(f"  Timestamp: {metadata2.save_stamp}")
         print(f"  Hash: {metadata2.hash}")
 
         # Compare versions
@@ -73,7 +73,7 @@ def example_1_basic_comparison():
 
 def example_2_identical_content_detection():
     """
-    Example 2: Detecting identical content across different ingestion times.
+    Example 2: Detecting identical content across different save times.
 
     This shows how comparison handles cases where the same content
     is saved multiple times.
@@ -88,7 +88,7 @@ def example_2_identical_content_detection():
 
         url1, metadata1 = provider.save(content, "file_v1.txt", who="bob", what="data")
         print(f"First save: {metadata1.original_filename}")
-        print(f"  Timestamp: {metadata1.ingestion_timestamp}")
+        print(f"  Timestamp: {metadata1.save_stamp}")
 
         # Small delay to ensure different timestamp
         import time
@@ -102,7 +102,7 @@ def example_2_identical_content_detection():
             what="data",  # Same content!
         )
         print(f"\nSecond save: {metadata2.original_filename}")
-        print(f"  Timestamp: {metadata2.ingestion_timestamp}")
+        print(f"  Timestamp: {metadata2.save_stamp}")
 
         # Compare - should return 0 for identical content
         result = StorageMetadata.compare(metadata1, metadata2)
@@ -131,7 +131,7 @@ def example_3_update_detection_workflow():
         # Simulate a data pipeline scenario
         print("Simulating data pipeline with update detection...")
 
-        # Initial data ingestion
+        # Initial content
         datasets = [
             (b"Raw sensor data from device A", "sensor_a_raw.csv"),
             (b"Raw sensor data from device B", "sensor_b_raw.csv"),
@@ -252,7 +252,7 @@ def example_4_version_management():
                 latest_metadata = metadata
 
         print(f"Latest version: {latest_metadata.original_filename}")
-        print(f"  Timestamp: {latest_metadata.ingestion_timestamp}")
+        print(f"  Timestamp: {latest_metadata.save_stamp}")
 
         # Sort all versions chronologically
         print("\n--- Chronological ordering ---")
@@ -274,9 +274,7 @@ def example_4_version_management():
 
         print("Versions in chronological order (oldest to newest):")
         for i, metadata in enumerate(sorted_versions, 1):
-            print(
-                f"  {i}. {metadata.original_filename} - {metadata.ingestion_timestamp}"
-            )
+            print(f"  {i}. {metadata.original_filename} - {metadata.save_stamp}")
 
 
 def example_5_error_handling():
@@ -435,7 +433,7 @@ def example_6_real_world_scenarios():
 
         print("\n--- Final Document Registry ---")
         for filename, metadata in document_registry.items():
-            print(f"  {filename} (timestamp: {metadata.ingestion_timestamp})")
+            print(f"  {filename} (timestamp: {metadata.save_stamp})")
 
 
 def main():

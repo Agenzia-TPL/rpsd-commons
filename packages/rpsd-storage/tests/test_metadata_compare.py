@@ -22,7 +22,7 @@ class TestStorageMetadataCompare:
             what="document",
             original_filename="test.txt",
             object_id="obj1",
-            ingestion_timestamp="2024-01-01T10:00:00Z",
+            save_stamp="2024-01-01T10:00:00Z",
             schema_version=1,
             source_url="http://example.com/test.txt",
             custom_metadata={},
@@ -38,7 +38,7 @@ class TestStorageMetadataCompare:
             what="document",  # Same what
             original_filename="test.txt",
             object_id="obj2",
-            ingestion_timestamp="2024-01-01T11:00:00Z",  # Different timestamp
+            save_stamp="2024-01-01T11:00:00Z",  # Different timestamp
             schema_version=1,
             source_url="http://example.com/test.txt",
             custom_metadata={},
@@ -59,7 +59,7 @@ class TestStorageMetadataCompare:
             what="document",
             original_filename="test.txt",
             object_id="obj1",
-            ingestion_timestamp="2024-01-01T10:00:00Z",  # Earlier
+            save_stamp="2024-01-01T10:00:00Z",  # Earlier
             schema_version=1,
             source_url="http://example.com/test.txt",
             custom_metadata={},
@@ -75,7 +75,7 @@ class TestStorageMetadataCompare:
             what="document",
             original_filename="test.txt",
             object_id="obj2",
-            ingestion_timestamp="2024-01-01T11:00:00Z",  # Later
+            save_stamp="2024-01-01T11:00:00Z",  # Later
             schema_version=1,
             source_url="http://example.com/test.txt",
             custom_metadata={},
@@ -96,7 +96,7 @@ class TestStorageMetadataCompare:
             what="document",
             original_filename="test.txt",
             object_id="obj1",
-            ingestion_timestamp="2024-01-01T11:00:00Z",  # Later
+            save_stamp="2024-01-01T11:00:00Z",  # Later
             schema_version=1,
             source_url="http://example.com/test.txt",
             custom_metadata={},
@@ -112,7 +112,7 @@ class TestStorageMetadataCompare:
             what="document",
             original_filename="test.txt",
             object_id="obj2",
-            ingestion_timestamp="2024-01-01T10:00:00Z",  # Earlier
+            save_stamp="2024-01-01T10:00:00Z",  # Earlier
             schema_version=1,
             source_url="http://example.com/test.txt",
             custom_metadata={},
@@ -133,7 +133,7 @@ class TestStorageMetadataCompare:
             what="document",
             original_filename="test.txt",
             object_id="obj1",
-            ingestion_timestamp="2024-01-01T10:00:00Z",
+            save_stamp="2024-01-01T10:00:00Z",
             schema_version=1,
             source_url="http://example.com/test.txt",
             custom_metadata={},
@@ -149,7 +149,7 @@ class TestStorageMetadataCompare:
             what="document",
             original_filename="test.txt",
             object_id="obj2",
-            ingestion_timestamp="2024-01-01T11:00:00Z",
+            save_stamp="2024-01-01T11:00:00Z",
             schema_version=1,
             source_url="http://example.com/test.txt",
             custom_metadata={},
@@ -172,7 +172,7 @@ class TestStorageMetadataCompare:
             what="document",  # Different what
             original_filename="test.txt",
             object_id="obj1",
-            ingestion_timestamp="2024-01-01T10:00:00Z",
+            save_stamp="2024-01-01T10:00:00Z",
             schema_version=1,
             source_url="http://example.com/test.txt",
             custom_metadata={},
@@ -188,7 +188,7 @@ class TestStorageMetadataCompare:
             what="image",  # Different what
             original_filename="test.txt",
             object_id="obj2",
-            ingestion_timestamp="2024-01-01T11:00:00Z",
+            save_stamp="2024-01-01T11:00:00Z",
             schema_version=1,
             source_url="http://example.com/test.txt",
             custom_metadata={},
@@ -211,7 +211,7 @@ class TestStorageMetadataCompare:
             what="document",
             original_filename="test.txt",
             object_id="obj1",
-            ingestion_timestamp="2024-01-01T10:00:00Z",  # Earlier
+            save_stamp="2024-01-01T10:00:00Z",  # Earlier
             schema_version=1,
             source_url="http://example.com/test.txt",
             custom_metadata={},
@@ -227,7 +227,7 @@ class TestStorageMetadataCompare:
             what="document",
             original_filename="test.txt",
             object_id="obj2",
-            ingestion_timestamp="2024-01-01T11:00:00Z",  # Later
+            save_stamp="2024-01-01T11:00:00Z",  # Later
             schema_version=1,
             source_url="http://example.com/test.txt",
             custom_metadata={},
@@ -252,7 +252,7 @@ class TestStorageMetadataIsUpdateOf:
             what="document",
             original_filename="test.txt",
             object_id="obj1",
-            ingestion_timestamp="2024-01-01T10:00:00Z",  # Earlier
+            save_stamp="2024-01-01T10:00:00Z",  # Earlier
             schema_version=1,
             source_url="http://example.com/test.txt",
             custom_metadata={},
@@ -268,7 +268,7 @@ class TestStorageMetadataIsUpdateOf:
             what="document",
             original_filename="test.txt",
             object_id="obj2",
-            ingestion_timestamp="2024-01-01T11:00:00Z",  # Later
+            save_stamp="2024-01-01T11:00:00Z",  # Later
             schema_version=1,
             source_url="http://example.com/test.txt",
             custom_metadata={},
@@ -288,7 +288,7 @@ class TestStorageMetadataIsUpdateOf:
             what="document",
             original_filename="test.txt",
             object_id="obj1",
-            ingestion_timestamp="2024-01-01T11:00:00Z",  # Later
+            save_stamp="2024-01-01T11:00:00Z",  # Later
             schema_version=1,
             source_url="http://example.com/test.txt",
             custom_metadata={},
@@ -304,7 +304,7 @@ class TestStorageMetadataIsUpdateOf:
             what="document",
             original_filename="test.txt",
             object_id="obj2",
-            ingestion_timestamp="2024-01-01T10:00:00Z",  # Earlier
+            save_stamp="2024-01-01T10:00:00Z",  # Earlier
             schema_version=1,
             source_url="http://example.com/test.txt",
             custom_metadata={},
@@ -324,7 +324,7 @@ class TestStorageMetadataIsUpdateOf:
             what="document",
             original_filename="test.txt",
             object_id="obj1",
-            ingestion_timestamp="2024-01-01T10:00:00Z",
+            save_stamp="2024-01-01T10:00:00Z",
             schema_version=1,
             source_url="http://example.com/test.txt",
             custom_metadata={},
@@ -340,7 +340,7 @@ class TestStorageMetadataIsUpdateOf:
             what="document",
             original_filename="test.txt",
             object_id="obj2",
-            ingestion_timestamp="2024-01-01T11:00:00Z",  # Different timestamp
+            save_stamp="2024-01-01T11:00:00Z",  # Different timestamp
             schema_version=1,
             source_url="http://example.com/test.txt",
             custom_metadata={},
@@ -360,7 +360,7 @@ class TestStorageMetadataIsUpdateOf:
             what="document",
             original_filename="test.txt",
             object_id="obj1",
-            ingestion_timestamp="2024-01-01T10:00:00Z",
+            save_stamp="2024-01-01T10:00:00Z",
             schema_version=1,
             source_url="http://example.com/test.txt",
             custom_metadata={},
@@ -376,7 +376,7 @@ class TestStorageMetadataIsUpdateOf:
             what="document",
             original_filename="test.txt",
             object_id="obj2",
-            ingestion_timestamp="2024-01-01T11:00:00Z",
+            save_stamp="2024-01-01T11:00:00Z",
             schema_version=1,
             source_url="http://example.com/test.txt",
             custom_metadata={},

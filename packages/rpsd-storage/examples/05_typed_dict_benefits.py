@@ -195,7 +195,7 @@ def demonstrate_tuple_unpacking_benefits():
         content, metadata = storage.load(urls[0])
         who = extract_metadata_safely(metadata, "who", "unknown")
         what = extract_metadata_safely(metadata, "what", "unknown")
-        timestamp = extract_metadata_safely(metadata, "ingestion_timestamp")
+        timestamp = extract_metadata_safely(metadata, "save_stamp")
         print(f"   Who: {who} (type: {type(who).__name__})")
         print(f"   What: {what} (type: {type(what).__name__})")
         print(f"   When: {timestamp} (type: {type(timestamp).__name__})")

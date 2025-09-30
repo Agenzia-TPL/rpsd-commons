@@ -70,7 +70,7 @@ class FSStorageProvider(StorageProvider):
             what=what,
             original_filename=filename or "unknown",
             object_id=object_id,
-            ingestion_timestamp=timestamp,
+            save_stamp=timestamp,
             schema_version=1,
             source_url=source_url or "",
             custom_metadata=custom_metadata or {},

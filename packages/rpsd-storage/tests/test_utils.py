@@ -223,7 +223,7 @@ def verify_metadata_structure(metadata: StorageMetadata | dict[str, Any]) -> boo
         required_fields = [
             "object_id",
             "original_filename",
-            "ingestion_timestamp",
+            "save_stamp",
             "content_type",
             "who",
             "what",
@@ -244,7 +244,7 @@ def verify_metadata_structure(metadata: StorageMetadata | dict[str, Any]) -> boo
         required_fields = [
             "object_id",
             "original_filename",
-            "ingestion_timestamp",
+            "save_stamp",
             "content_type",
             "who",
             "what",

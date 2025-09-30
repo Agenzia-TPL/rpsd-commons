@@ -73,7 +73,7 @@ class S3StorageProvider(StorageProvider):
             what=what,
             original_filename=filename or "unknown",
             object_id=object_id,
-            ingestion_timestamp=timestamp,
+            save_stamp=timestamp,
             schema_version=1,
             source_url=source_url or "",
             custom_metadata=custom_metadata or {},
@@ -194,7 +194,7 @@ class S3StorageProvider(StorageProvider):
             "source_url": "",
             "original_filename": "unknown",
             "object_id": "",
-            "ingestion_timestamp": "",
+            "save_stamp": "",
             "who": "",
             "what": "",
         }

@@ -193,7 +193,7 @@ class HTTPStorageProvider(StorageProvider):
             what="resource",
             original_filename=original_filename,
             object_id=object_id,
-            ingestion_timestamp=timestamp,
+            save_stamp=timestamp,
             schema_version=1,
             source_url=url,  # For HTTP, source_url is the same as url
             custom_metadata={},

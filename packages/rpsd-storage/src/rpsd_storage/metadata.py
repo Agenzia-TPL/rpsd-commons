@@ -29,9 +29,7 @@ class StorageMetadata(BaseModel):
         ..., description="The original filename of the content."
     )
     object_id: str = Field(..., description="Unique identifier for the object.")
-    ingestion_timestamp: str = Field(
-        ..., description="Timestamp of when the object was ingested."
-    )
+    save_stamp: str = Field(..., description="Timestamp of when the content was saved.")
     schema_version: int = Field(..., description="The version of the metadata schema.")
     source_url: str = Field(..., description="Origin URL of the content.")
     custom_metadata: dict[str, Any] = Field(
@@ -98,10 +96,10 @@ class StorageMetadata(BaseModel):
         ):
             return 0
 
-        # Compare ingestion timestamps
-        # If current was ingested after candidate, candidate is older (-1)
-        # If current was ingested before candidate, candidate is newer (1)
-        if current.ingestion_timestamp > candidate.ingestion_timestamp:
+        # Compare save timestamps
+        # If current was saved after candidate, candidate is older (-1)
+        # If current was saved before candidate, candidate is newer (1)
+        if current.save_stamp > candidate.save_stamp:
             return -1
         else:
             return 1
