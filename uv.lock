@@ -5,8 +5,8 @@ requires-python = ">=3.13"
 [manifest]
 members = [
     "rpsd-commons",
-    "rpsd-messaging",
     "rpsd-storage",
+    "rpsd-transport",
     "rpsd-workflow",
 ]
 
@@ -1040,8 +1040,8 @@ name = "rpsd-commons"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
-    { name = "rpsd-messaging" },
     { name = "rpsd-storage" },
+    { name = "rpsd-transport" },
     { name = "rpsd-workflow" },
 ]
 
@@ -1055,8 +1055,8 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "rpsd-messaging", editable = "packages/rpsd-messaging" },
     { name = "rpsd-storage", editable = "packages/rpsd-storage" },
+    { name = "rpsd-transport", editable = "packages/rpsd-transport" },
     { name = "rpsd-workflow", editable = "packages/rpsd-workflow" },
 ]
 
@@ -1066,21 +1066,6 @@ dev = [
     { name = "pytest", specifier = ">=8.0.0" },
     { name = "respx", specifier = ">=0.20.0" },
     { name = "ruff", specifier = ">=0.13.1" },
-]
-
-[[package]]
-name = "rpsd-messaging"
-version = "0.1.0"
-source = { editable = "packages/rpsd-messaging" }
-dependencies = [
-    { name = "fastapi", extra = ["standard"] },
-    { name = "rpsd-storage" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "fastapi", extras = ["standard"], specifier = ">=0.116.0,<0.117.0" },
-    { name = "rpsd-storage", editable = "packages/rpsd-storage" },
 ]
 
 [[package]]
@@ -1099,6 +1084,34 @@ requires-dist = [
     { name = "httpx", specifier = ">=0.25.0" },
     { name = "pydantic", specifier = ">=2.0.0" },
 ]
+
+[[package]]
+name = "rpsd-transport"
+version = "0.1.0"
+source = { editable = "packages/rpsd-transport" }
+dependencies = [
+    { name = "fastapi", extra = ["standard"] },
+    { name = "httpx" },
+    { name = "pydantic" },
+    { name = "rpsd-storage" },
+]
+
+[package.optional-dependencies]
+test = [
+    { name = "pytest" },
+    { name = "respx" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "fastapi", extras = ["standard"], specifier = ">=0.116.0,<0.117.0" },
+    { name = "httpx", specifier = ">=0.27.0" },
+    { name = "pydantic", specifier = ">=2.0.0" },
+    { name = "pytest", marker = "extra == 'test'", specifier = ">=8.0.0" },
+    { name = "respx", marker = "extra == 'test'", specifier = ">=0.22.0" },
+    { name = "rpsd-storage", editable = "packages/rpsd-storage" },
+]
+provides-extras = ["test"]
 
 [[package]]
 name = "rpsd-workflow"
