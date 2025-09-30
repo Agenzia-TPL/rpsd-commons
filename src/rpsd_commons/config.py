@@ -13,6 +13,7 @@ def load_config():
             "provider": os.environ.get("STORAGE_PROVIDER", "fs"),
             "s3": {"bucket_name": os.environ.get("S3_BUCKET_NAME")},
             "fs": {"base_path": os.environ.get("FS_BASE_PATH", "/tmp/ingested")},
+            "http": {"timeout": float(os.environ.get("HTTP_TIMEOUT", "30.0"))},
         },
         "api_key": os.environ.get("API_KEY"),
     }

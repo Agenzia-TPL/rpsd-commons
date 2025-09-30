@@ -1,12 +1,16 @@
+from __future__ import annotations
+
 import logging
 from urllib.parse import urlparse
 
 import httpx
 
 from rpsd_storage.metadata import StorageMetadata
-from rpsd_storage.provider import StorageProvider
 
 logger = logging.getLogger(__name__)
+
+# Import StorageProvider after other imports to avoid circular dependency
+from rpsd_storage.provider import StorageProvider  # noqa: E402
 
 
 class HTTPStorageProvider(StorageProvider):

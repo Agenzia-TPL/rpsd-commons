@@ -1,7 +1,7 @@
 from rpsd_commons.config import config
 
 from rpsd_storage.fs import FSStorageProvider
-from rpsd_storage.http import HTTPStorageProvider as HTTPStorageProvider
+from rpsd_storage.http import HTTPStorageProvider
 from rpsd_storage.provider import StorageProvider
 from rpsd_storage.s3 import S3StorageProvider
 
@@ -15,6 +15,8 @@ def get_storage_provider():
         return S3StorageProvider(config["storage"]["s3"]["bucket_name"])
     elif provider == "fs":
         return FSStorageProvider(config["storage"]["fs"]["base_path"])
+    elif provider == "http":
+        return HTTPStorageProvider(config["storage"]["http"]["timeout"])
     else:
         raise Exception(f"Unknown storage provider: {provider}")
 
