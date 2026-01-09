@@ -11,28 +11,3 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
 # Stage 2: for development (devcontainer)
 FROM base AS development
-
-# Copy everything at once - no layer separation needed for development
-COPY pyproject.toml uv.lock ./
-COPY packages packages/
-
-# Remove empty placeholder lockfile, then generate real one
-# (notice the "--dev" and "--no-install-project" flags)
-RUN if [ ! -s uv.lock ]; then rm uv.lock; fi && \
-    uv lock && \
-    uv sync --dev --no-install-project
-
-# Stage 3: production
-FROM base AS production
-
-WORKDIR /app  # Only set WORKDIR for production
-
-# Copy and install production dependencies
-COPY pyproject.toml uv.lock ./
-COPY packages packages/
-
-# Remove empty placeholder lockfile, then generate real one
-# (notice the "--no-dev" flag)
-RUN if [ ! -s uv.lock ]; then rm uv.lock; fi && \
-    uv lock && \
-    uv sync --no-dev

@@ -21,8 +21,7 @@
 		}
 	}, */
 	// Features to add to the dev container. More info: https://containers.dev/features.
-	"features": {
-	},
+	"features": {},
 	// Use 'forwardPorts' to make a list of ports inside the container available locally.
 	// "forwardPorts": [],
 	// Uncomment the next line if you want start specific services in your Docker Compose config.
@@ -30,7 +29,8 @@
 	// Uncomment the next line if you want to keep your containers running after VS Code shuts down.
 	// "shutdownAction": "none",
 	// Uncomment the next line to run commands after the container is created.
-	"postCreateCommand": "bash scripts/setup-dev.sh",
+	// Remove empty placeholder lockfile, then generate real one
+	"postCreateCommand": "bash -c 'test -s uv.lock || rm -f uv.lock; uv sync --dev'",
 	// Configure tool-specific properties.
 	"customizations": {
 		// Configure properties specific to VS Code.

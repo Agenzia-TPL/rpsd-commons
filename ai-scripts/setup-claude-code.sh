@@ -2,7 +2,7 @@
 
 # Setup script for Claude Code in devcontainer
 # This script installs Node.js via nvm and then installs Claude Code
-# Usage: ./scripts/setup-claude-code.sh
+# Usage: ./ai-scripts/setup-claude-code.sh
 
 set -e  # Exit on any error
 
@@ -231,7 +231,10 @@ if [ ! -f ".claude/settings.local.json" ]; then
       "Bash(uv remove:*)",
       "Bash(git add:*)",
       "Bash(git commit:*)",
-      "Read"
+      "Read",
+      "WebSearch",
+      "Fetch",
+      "Fetch(domain:*)"
     ]
   }
 }

@@ -11,7 +11,7 @@ This directory contains setup scripts for various AI-powered development assista
 **Best for:** Code generation, refactoring, debugging, and conversational programming
 
 ```bash
-./scripts/setup-claude-code.sh
+./ai-scripts/setup-claude-code.sh
 ```
 
 ### 🐙 GitHub Copilot CLI
@@ -21,7 +21,7 @@ This directory contains setup scripts for various AI-powered development assista
 **Best for:** Command suggestions and explanations in terminal
 
 ```bash
-./scripts/setup-github-copilot.sh
+./ai-scripts/setup-github-copilot.sh
 ```
 
 ## Usage Philosophy
