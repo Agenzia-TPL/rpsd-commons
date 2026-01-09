@@ -1,26 +1,39 @@
-from rpsd_commons.config import config
-
 from rpsd_storage.fs import FSStorageProvider
 from rpsd_storage.http import HTTPStorageProvider
 from rpsd_storage.provider import StorageProvider
 from rpsd_storage.s3 import S3StorageProvider
+from rpsd_storage.settings import StorageSettings
 
 
-def get_storage_provider():
+def get_storage_provider(settings: StorageSettings | None = None):
     """
-    Returns the configured storage provider.
+    Returns a storage provider based on settings.
+
+    Args:
+        settings: StorageSettings instance. If None, creates default settings
+            from environment variables.
+
+    Returns:
+        StorageProvider instance (S3, FS, or HTTP)
+
+    Raises:
+        ValueError: If provider type is unknown
     """
-    provider = config["storage"]["provider"]
-    if provider == "s3":
-        return S3StorageProvider(config["storage"]["s3"]["bucket_name"])
-    elif provider == "fs":
-        return FSStorageProvider(config["storage"]["fs"]["base_path"])
-    elif provider == "http":
-        return HTTPStorageProvider(config["storage"]["http"]["timeout"])
+    if settings is None:
+        settings = StorageSettings()
+
+    if settings.provider == "s3":
+        return S3StorageProvider(settings.s3.bucket_name)
+    elif settings.provider == "fs":
+        return FSStorageProvider(settings.fs.base_path)
+    elif settings.provider == "http":
+        return HTTPStorageProvider(settings.http.timeout)
     else:
-        raise Exception(f"Unknown storage provider: {provider}")
+        raise ValueError(f"Unknown storage provider: {settings.provider}")
 
 
+# Module-level singleton for backward compatibility
+# Applications should use get_storage_provider() with explicit settings instead
 storage_provider = get_storage_provider()
 
 # Export static methods for convenience

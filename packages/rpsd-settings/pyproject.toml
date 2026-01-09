@@ -1,29 +1,23 @@
 [project]
-name = "rpsd-transport"
+name = "rpsd-settings"
 version = "0.1.0"
-description = "Data transport utilities (part of rpsd-commons)"
+description = "Composable settings system for rpsd-commons (OPTIONAL convenience package)"
 readme = "README.md"
 authors = [
     { name = "caipirginka", email = "github@oicom.com" }
 ]
 requires-python = ">=3.13"
 dependencies = [
-    "fastapi[standard]>=0.116.0,<0.117.0",
-    "httpx>=0.27.0",
     "pydantic>=2.0.0",
     "pydantic-settings>=2.0.0",
     "rpsd-storage",
-]
-
-[project.optional-dependencies]
-test = [
-    "pytest>=8.0.0",
-    "respx>=0.22.0",
+    "rpsd-transport",
 ]
 
 [tool.uv.sources]
 # Internal workspace dependencies
 rpsd-storage = { workspace = true }
+rpsd-transport = { workspace = true }
 
 [build-system]
 requires = ["hatchling"]

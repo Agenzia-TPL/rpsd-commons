@@ -2,7 +2,6 @@
 Tests for StorageProvider base class.
 """
 
-
 from rpsd_storage.provider import StorageProvider
 
 

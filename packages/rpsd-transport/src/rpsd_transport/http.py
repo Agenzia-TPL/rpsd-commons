@@ -8,18 +8,28 @@ import urllib.parse
 import urllib.request
 import zipfile
 
-from rpsd_commons.config import config
-
 from rpsd_storage import storage_provider
+from rpsd_transport.settings import TransportSettings
 
 logger = logging.getLogger()
 
 
-def validate_request(event):
+def validate_request(event, settings: TransportSettings | None = None):
     """
     Validates the incoming request, checking API key and HTTP method.
-    Raises an exception if validation fails.
+
+    Args:
+        event: Request event dictionary
+        settings: TransportSettings instance. If None, creates default settings
+            from environment variables.
+
+    Raises:
+        PermissionError: If API key validation fails
+        ValueError: If HTTP method is not POST
     """
+    if settings is None:
+        settings = TransportSettings()
+
     headers = event.get("headers", {})
     api_key = None
     auth_header = headers.get("authorization") or headers.get("Authorization")
@@ -32,9 +42,7 @@ def validate_request(event):
     if not api_key:
         api_key = headers.get("x-api-key") or headers.get("X-API-Key")
 
-    expected_key = config["api_key"]
-
-    if not expected_key or api_key != expected_key:
+    if settings.api_key and api_key != settings.api_key:
         raise PermissionError("Unauthorized - Invalid API key")
 
     method = event.get("httpMethod") or event.get("requestContext", {}).get(

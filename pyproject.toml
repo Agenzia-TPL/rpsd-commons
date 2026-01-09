@@ -10,6 +10,7 @@ requires-python = ">=3.13"
 dependencies = [
     "rpsd-transport",
     "rpsd-storage",
+    "rpsd-settings",
     "rpsd-workflow"
 ]
 
@@ -17,6 +18,7 @@ dependencies = [
 # Tell uv these dependencies come from workspace, not PyPI
 rpsd-transport = { workspace = true }
 rpsd-storage = { workspace = true }
+rpsd-settings = { workspace = true }
 rpsd-workflow = { workspace = true }
 
 [tool.uv.workspace]

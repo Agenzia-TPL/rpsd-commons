@@ -56,9 +56,7 @@ class ErrorResponse(BaseModel):
     status: Literal["failed"] = "failed"
     error_code: str = Field(..., description="Machine-readable error code")
     message: str = Field(..., description="Human-readable error message")
-    details: dict | None = Field(
-        default=None, description="Additional error context"
-    )
+    details: dict | None = Field(default=None, description="Additional error context")
 
 
 # Standard error codes
