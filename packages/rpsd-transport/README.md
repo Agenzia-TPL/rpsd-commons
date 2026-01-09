@@ -135,9 +135,13 @@ Error responses include structured information:
 Heavy messages integrate with `rpsd-storage` for data persistence:
 
 - **Receiving**: Automatically saves external data to internal storage
-- **Sending**: Can expose existing storage URLs via HTTP
-  - S3: Generates presigned URLs (built-in TTL)
-  - FS: Creates temporary FastAPI endpoints (manual TTL cleanup)
+- **Sending**: Storage URL exposure depends on transport type:
+  - **External transports** (HTTP): Must use HTTP URLs
+    - S3: Generates presigned URLs (built-in TTL)
+    - FS: Creates temporary FastAPI endpoints (manual TTL cleanup)
+  - **Internal transports** (Dapr): Can use direct storage URLs
+    - S3: Exposes `s3://` URLs directly (if shared access)
+    - FS: Exposes `file://` URLs directly (if shared filesystem)
 
 ### FastAPI Integration
 
