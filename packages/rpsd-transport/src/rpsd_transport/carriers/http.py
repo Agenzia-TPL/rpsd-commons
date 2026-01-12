@@ -1,16 +1,42 @@
 """
 HTTP carrier implementation for rpsd-transport.
+
+Supports both inline and outline metadata organization:
+- Inline: JSON body with {"metadata": {...}, "content": "..."}
+- Outline: Metadata in headers/query params, content in body or multipart
 """
 
+import base64
 import json
 import logging
 
 import httpx
 from fastapi import Request
 from fastapi.responses import JSONResponse
+from pydantic import ValidationError
 
 from rpsd_transport.carriers.base import BaseCarrier
-from rpsd_transport.models import ERROR_CODES, ErrorResponse, FastMessage
+from rpsd_transport.carriers.http_utils import (
+    MetadataOrganization,
+    detect_metadata_organization,
+    extract_outline_content,
+    extract_outline_metadata,
+)
+from rpsd_transport.compression import decompress_content
+from rpsd_transport.exceptions import (
+    CompressionError,
+    DuplicateMetadataError,
+    InvalidJsonError,
+    InvalidMetadataError,
+    MissingMetadataError,
+)
+from rpsd_transport.models import (
+    ERROR_CODES,
+    ErrorResponse,
+    InlineMessagePayload,
+    MessageMetadata,
+    TransportMessage,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +46,10 @@ class HTTPCarrier(BaseCarrier):
     HTTP-based carrier for external system communication.
 
     Implements transport via HTTP POST for sending and receiving messages.
-    Currently supports fast mode only (Phase 1 implementation).
+    Supports both inline and outline metadata organization.
+
+    Inline metadata: JSON body with {"metadata": {...}, "content": "..."}
+    Outline metadata: Metadata in headers/query params, content in body/multipart
     """
 
     def __init__(
@@ -39,7 +68,7 @@ class HTTPCarrier(BaseCarrier):
         self.timeout = timeout
         self._http_client = httpx.Client(timeout=timeout)
 
-    def send_fast(
+    def send_slimfast(
         self,
         recipient: str,
         data: bytes,
@@ -49,7 +78,7 @@ class HTTPCarrier(BaseCarrier):
         filename: str | None = None,
     ) -> dict:
         """
-        Send data inline via HTTP POST (fast/slim mode).
+        Send data inline via HTTP POST (fast/slim mode) with inline metadata.
 
         Args:
             recipient: Target URL for HTTP POST
@@ -65,27 +94,23 @@ class HTTPCarrier(BaseCarrier):
         Raises:
             httpx.HTTPError: If HTTP request fails
         """
-        message = FastMessage(
-            mode="fast",
-            who=who,
-            what=what,
-            data=data,
-            content_type=content_type,
-            filename=filename,
-        )
+        # Build inline message payload
+        payload = {
+            "metadata": {
+                "who": who,
+                "what": what,
+                "content_type": content_type,
+            },
+            "content": base64.b64encode(data).decode("utf-8"),
+        }
 
-        # Convert to dict for JSON serialization
-        # Note: bytes need special handling in JSON
-        message_dict = message.model_dump()
-        # Convert bytes to base64 for JSON transport
-        import base64
-
-        message_dict["data"] = base64.b64encode(data).decode("utf-8")
+        if filename:
+            payload["metadata"]["filename"] = filename
 
         try:
             response = self._http_client.post(
                 recipient,
-                json=message_dict,
+                json=payload,
                 headers={"Content-Type": "application/json"},
             )
             response.raise_for_status()
@@ -94,7 +119,7 @@ class HTTPCarrier(BaseCarrier):
             logger.error(f"Failed to send fast message to {recipient}: {e}")
             raise
 
-    def send_heavy(
+    def send_fatheavy(
         self,
         recipient: str,
         who: str,
@@ -132,9 +157,12 @@ class HTTPCarrier(BaseCarrier):
 
     async def handle_receive(self, request: Request) -> JSONResponse:
         """
-        Handle incoming HTTP message (fast or heavy mode).
+        Handle incoming HTTP message (inline or outline metadata).
 
-        Currently only supports fast mode (Phase 1).
+        Detects the metadata organization from the request and processes
+        accordingly:
+        - Inline: JSON body with {"metadata": {...}, "content": "..."}
+        - Outline: Metadata in headers/query params, content in body/multipart
 
         Args:
             request: FastAPI Request object
@@ -143,114 +171,214 @@ class HTTPCarrier(BaseCarrier):
             JSONResponse: Success or error response
         """
         try:
-            # Parse JSON body
-            try:
-                body = await request.json()
-            except json.JSONDecodeError:
-                return JSONResponse(
-                    status_code=400,
-                    content=ErrorResponse(
-                        status="failed",
-                        error_code="invalid_json",
-                        message=ERROR_CODES["invalid_json"],
-                    ).model_dump(),
-                )
+            body = await request.body()
+            content_type = request.headers.get("content-type", "")
 
-            # Validate required fields
-            if not all(k in body for k in ["mode", "who", "what"]):
-                return JSONResponse(
-                    status_code=400,
-                    content=ErrorResponse(
-                        status="failed",
-                        error_code="missing_fields",
-                        message=ERROR_CODES["missing_fields"],
-                    ).model_dump(),
-                )
+            # Detect metadata organization
+            organization = detect_metadata_organization(content_type, body)
 
-            mode = body.get("mode")
+            if organization == MetadataOrganization.INLINE:
+                message = await self._handle_inline_message(body)
+            else:
+                message = await self._handle_outline_message(request, body)
 
-            # Check for unsupported heavy mode
-            if mode == "heavy":
-                return JSONResponse(
-                    status_code=501,  # Not Implemented
-                    content=ErrorResponse(
-                        status="failed",
-                        error_code="not_implemented",
-                        message="Heavy mode not yet implemented (Phase 2)",
-                    ).model_dump(),
-                )
+            # Process the message
+            return await self._process_message(message)
 
-            # Handle fast mode
-            if mode == "fast":
-                return await self._handle_fast_message(body)
-
-            # Invalid mode
-            return JSONResponse(
-                status_code=400,
-                content=ErrorResponse(
-                    status="failed",
-                    error_code="invalid_mode",
-                    message=ERROR_CODES["invalid_mode"],
-                ).model_dump(),
+        except InvalidJsonError as e:
+            return self._error_response(400, "invalid_json", str(e))
+        except DuplicateMetadataError as e:
+            return self._error_response(400, "duplicate_metadata", str(e))
+        except MissingMetadataError as e:
+            return self._error_response(400, "missing_metadata", str(e))
+        except InvalidMetadataError as e:
+            return self._error_response(400, "invalid_identifier", str(e))
+        except CompressionError as e:
+            return self._error_response(400, "decompression_failed", str(e))
+        except ValidationError as e:
+            # Pydantic validation errors
+            return self._error_response(
+                400, "missing_fields", f"Validation error: {e.error_count()} errors"
             )
-
+        except ValueError as e:
+            return self._error_response(400, "missing_fields", str(e))
         except Exception as e:
             logger.error(f"Unexpected error handling request: {e}", exc_info=True)
-            return JSONResponse(
-                status_code=500,
-                content=ErrorResponse(
-                    status="failed",
-                    error_code="internal_error",
-                    message=ERROR_CODES["internal_error"],
-                ).model_dump(),
+            return self._error_response(
+                500, "internal_error", ERROR_CODES["internal_error"]
             )
 
-    async def _handle_fast_message(self, body: dict) -> JSONResponse:
+    async def _handle_inline_message(self, body: bytes) -> TransportMessage:
         """
-        Handle fast mode message.
+        Parse inline metadata message from JSON body.
+
+        Expected format:
+        {
+            "metadata": {"who": "x", "what": "y", "where": "z"},
+            "content": "base64-encoded-content"
+        }
 
         Args:
-            body: Parsed message body
+            body: Raw JSON body bytes
 
         Returns:
-            JSONResponse: Success or error response
+            TransportMessage instance
+
+        Raises:
+            InvalidJsonError: If body is not valid JSON
+            ValidationError: If payload doesn't match schema
         """
-        # Validate fast message has data field
-        if "data" not in body:
-            return JSONResponse(
-                status_code=400,
-                content=ErrorResponse(
-                    status="failed",
-                    error_code="missing_data",
-                    message=ERROR_CODES["missing_data"],
-                ).model_dump(),
-            )
-
-        # Decode base64 data
-        import base64
-
         try:
-            data = base64.b64decode(body["data"])
-        except Exception as e:
-            return JSONResponse(
-                status_code=400,
-                content=ErrorResponse(
-                    status="failed",
-                    error_code="invalid_data",
-                    message=f"Failed to decode data: {str(e)}",
-                ).model_dump(),
-            )
+            parsed = json.loads(body)
+        except json.JSONDecodeError as e:
+            raise InvalidJsonError(f"Request body is not valid JSON: {e}") from e
 
-        # For Phase 1, we just validate and return success
-        # Phase 2 will add storage integration
-        logger.info(
-            f"Received fast message: who={body['who']}, "
-            f"what={body['what']}, size={len(data)} bytes"
+        # Validate with Pydantic model
+        payload = InlineMessagePayload.model_validate(parsed)
+
+        # Decode content for fast messages
+        content = None
+        if payload.metadata.is_slimfast and payload.content:
+            try:
+                content = base64.b64decode(payload.content)
+            except Exception as e:
+                raise InvalidJsonError(f"Failed to decode base64 content: {e}") from e
+
+            # Decompress if needed
+            content = decompress_content(content, payload.metadata.filename)
+        elif payload.metadata.is_slimfast and not payload.content:
+            raise ValueError("Fast message requires content")
+
+        return TransportMessage(
+            metadata=payload.metadata,
+            content=content,
         )
 
+    async def _handle_outline_message(
+        self,
+        request: Request,
+        body: bytes,
+    ) -> TransportMessage:
+        """
+        Parse outline metadata message from headers/query params.
+
+        Content can be:
+        - Multipart attachment (with filename)
+        - Raw body
+
+        Args:
+            request: FastAPI request
+            body: Raw body bytes
+
+        Returns:
+            TransportMessage instance
+
+        Raises:
+            DuplicateMetadataError: If metadata in both header and query
+            MissingMetadataError: If required metadata missing
+        """
+        headers = dict(request.headers)
+        query_params = dict(request.query_params)
+        content_type = headers.get("content-type", "application/octet-stream")
+
+        # Extract metadata from headers/query params
+        metadata = extract_outline_metadata(headers, query_params, content_type)
+
+        # For heavy messages, we don't need content in body
+        if metadata.is_fatheavy:
+            return TransportMessage(metadata=metadata, content=None)
+
+        # Extract content from body or multipart
+        is_base64 = query_params.get("isBase64Encoded", "").lower() == "true"
+        content, filename = extract_outline_content(body, content_type, is_base64)
+
+        # Update metadata with filename if extracted from multipart
+        if filename and not metadata.filename:
+            metadata = MessageMetadata(
+                who=metadata.who,
+                what=metadata.what,
+                where=metadata.where,
+                content_type=metadata.content_type,
+                filename=filename,
+            )
+
+        # Decompress if needed
+        content = decompress_content(content, metadata.filename)
+
+        return TransportMessage(metadata=metadata, content=content)
+
+    async def _process_message(self, message: TransportMessage) -> JSONResponse:
+        """
+        Process a received message.
+
+        For Phase 1, just logs and returns success.
+        Phase 2 will add:
+        - Storage integration (save to rpsd-storage)
+        - Heavy message URL fetching
+        - Return internal_url in response
+
+        Args:
+            message: Parsed TransportMessage
+
+        Returns:
+            JSONResponse: Success response
+        """
+        if message.is_fatheavy:
+            # Heavy mode: content needs to be fetched from where URL
+            # Phase 2 will implement this
+            logger.info(
+                f"Received heavy message: who={message.who}, "
+                f"what={message.what}, where={message.where}"
+            )
+            return JSONResponse(
+                status_code=501,
+                content=ErrorResponse(
+                    status="failed",
+                    error_code="not_implemented",
+                    message="Heavy mode storage not yet implemented (Phase 2)",
+                ).model_dump(),
+            )
+
+        # Fast mode: content is already available
+        content_size = len(message.content) if message.content else 0
+        logger.info(
+            f"Received fast message: who={message.who}, "
+            f"what={message.what}, size={content_size} bytes"
+        )
+
+        # Phase 2 will save to storage and return internal_url
         return JSONResponse(
             status_code=200,
             content={"status": "received"},
+        )
+
+    def _error_response(
+        self,
+        status_code: int,
+        error_code: str,
+        message: str,
+        details: dict | None = None,
+    ) -> JSONResponse:
+        """
+        Create a standardized error response.
+
+        Args:
+            status_code: HTTP status code
+            error_code: Machine-readable error code
+            message: Human-readable error message
+            details: Optional additional error context
+
+        Returns:
+            JSONResponse with error details
+        """
+        return JSONResponse(
+            status_code=status_code,
+            content=ErrorResponse(
+                status="failed",
+                error_code=error_code,
+                message=message,
+                details=details,
+            ).model_dump(),
         )
 
     def __del__(self):

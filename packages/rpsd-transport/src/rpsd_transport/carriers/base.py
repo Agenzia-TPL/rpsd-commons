@@ -14,7 +14,7 @@ class BaseCarrier(ABC):
     """
 
     @abstractmethod
-    def send_fast(
+    def send_slimfast(
         self,
         recipient: str,
         data: bytes,
@@ -43,7 +43,7 @@ class BaseCarrier(ABC):
         pass
 
     @abstractmethod
-    def send_heavy(
+    def send_fatheavy(
         self,
         recipient: str,
         who: str,

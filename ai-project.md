@@ -15,12 +15,18 @@ Organized into packages (uv workspace project):
 # Workspace root
 
 ## Composable settings
+__DONE__
 
-Replace dict-based config.py with Pydantic Settings. Each package defines its own settings class (StorageSettings, TransportSettings). Create optional rpsd-settings package that composes them via RpsdSettings. Apps can use RpsdSettings or compose settings directly. Env vars use double underscore: STORAGE__PROVIDER, STORAGE__S3__BUCKET_NAME, TRANSPORT__API_KEY.
+Replace dict-based config.py with Pydantic Settings. 
+Each package defines its own settings class (StorageSettings, TransportSettings). 
+Create optional rpsd-settings package that composes them via RpsdSettings. 
+Apps can use RpsdSettings or compose settings directly. 
+Env vars use double underscore: STORAGE__PROVIDER, STORAGE__S3__BUCKET_NAME, TRANSPORT__API_KEY.
 
 # rpsd-storage
 
-## 001 - main refactoring
+## Refactoring
+__DONE__
 
 Refactor the save() method of provider (and derived classes) to return a tuple (url, metadata).
 The url must be the complete URL of the saved object/file, constructed like this:
@@ -42,41 +48,46 @@ Also add a static load_???() method that accept separate "who", "what" and "obje
 
 Update all documentation, tests and examples accordingly.
 
-## 002 - implement "http" provider
+## Implement "http" provider
 
 In addition to the existing S3 and FS providers, we must implement an "http" provider.
-The load() method must use HTTP GET to retrieve the data from the specified URL.
-The save() method will use HTTP POST to save the data to some API, but raise an unimplemented error for now.
+The load() method must use HTTP GET to retrieve the content from the specified URL.
+The save() method will use HTTP POST to save the content to some API, but raise an unimplemented error for now.
 
-## 003 - file naming
+## File naming
+__DONE__
 
 We must re-think the naming strategy for files in S3 and FS provider, considering the fact that S3 can filter objects having a key with a given prefix.
 In the current implementation, since the "Object_id" is at the end of the key, we get a list of ALL the objects and then filter them one by one.
 Also S3 object list method accept a parameter that sets the maximum number of keys to return.
-Since we're always looking for a single key, with can set that limit to 2.
-If 0 keys are found, it's an error.
-If 2 keys are found, it's an error as well, but kind of weird, because object_ids are UUIDs and, as suchm they could never be duplicated.
-If 1 key is found, that's it.
-I don't knnow for FS, but for S3 this way should be much faster, shouldn't it?
+Since we're always looking for a single key, we can set that limit to 2, so that:
+- if 0 keys are found => it's an error
+- if 2 keys are found => it's an error as well (kind of weird, because object_ids are UUIDs and, as such they could never be duplicated)
+- if 1 key is found => that's the looked upon object
+
+I don't know for FS, but for S3 this way should be much faster, shouldn't it?
 Besides... putting "who" and "what" into the object/file name is only to facilitate manual identification of objects/files, by looking at their names.
-From the point of view of hte code, using only the "object_id" would be much better...
+From the point of view of the code, using only the "object_id" would be much better...
 Should we put "who" and "what" into the path instead (or into "/" separated parts of the key for S3), like: who/what/object_id?
 This way object/files would be equally easy to manually locate, but, at the same time, fast to retrieve by code.
 What do you think?
 
-## 004 - indentifier
+## Storage identifier
+__DONE__
 
 We need to add to rpsd-storage a concept of "storage identifier", that must be a single value expressing both the type of storage (S3 or FS)
-and the address (URL or path) of a specific saved data.
+and the address (URL or path) of a specific saved content.
 We must add method that, given a "storage indentifier" , will instantiate the correct provider class
-and call its load() method, passing to it the data address.
-For the S3 provider, both ARNs and presigned URLs must be supported as data address.
-For the FS provider, both absolute/relative file path and file URLs must be supported as data address.
+and call its load() method, passing to it the content address.
+For the S3 provider, both ARNs and presigned URLs must be supported as content address.
+For the FS provider, both absolute/relative file path and file URLs must be supported as content address.
 We may consider to expand what is currently called "object_id" to also store the provider type part, 
-so that an object_id is sufficient to actually retrieve a specific save data.
+so that an object_id is sufficient to actually retrieve a specific save content.
 Or we may leave it as an indentifier valid only for the storage provider that created it and separately manage the provider type.
+We use the URL as the definitive absolute identifier, while the combination of who, what and object_id are valid aming a specified provider.
 
-## 005 - Metadata compare method
+## Metadata compare method
+__DONE__
 
 Add to the StorageMetadata model a "compare" staticmethod that takes in input two instances of StorageMetadata and compares them like this:
 - If who or what fields are different, it should raise a suitable Exception, because the two instances do not refer to the "same thing"
@@ -93,59 +104,106 @@ So, I expect only 0 or 1 results, in this use case.
 Maybe we should not use "compare" for this method, since it probably is not the "classical" compare method?
 Should we better create a boolean returning method, instead?
 
-# rpsd-messaging
-
-## 001 - renaming considerations
-
-I'm thinking about renaming the rpsd-messaging package to rpsd-transport, 
-because it won't actually be about sending messages, but about transporting data.
-This will be possible by three "transport means" (should find a good name for this concept),
-but more may come in the future, so we better plan for extensibility:
-- http (through HTTP POST)
-- Dapr service invocation
-- Dapr PubSub
-Regardless of the transport mean, I envision two types of messages:
-- Slim => data to be sent is small enough to be directly inlined into the message payload
-- Fat => data to be sent is too big to go into the message payload and it will be shared by some other method
-Since a Slim message will indeed be bigger than a Fat one, for data will be inside the payload, we'll add two new words:
-- Fast => data to be sent is small enough to be directly inlined into the message payload
-- Heavy => data to be sent is too big to go into the message payload and it will be shared by some other method
-that better convoy the meaning of having little data to send, through inlined, hence bigger payload, or more data, through a smaller message.
-In the end Slim/Fat and Fast/Heavy will be used interchengeably, with a good initial explanation, such as:
-> "Slim messages contain small data directly (fast access, bigger payload), while Fat messages reference large external data (heavy processing, smaller message)."
-
 # rpsd-transport
 
-## 001 - Overview
-This package (renamed form rpsd-messaging), should contain "library" code helping developers to implement
-receiving and sending data through one of the available trasport means (using FastAPI for receiving through HTTP)
-(refer to "# rpsd-messaging ## 001 - renaming considerations" in current file).
-In case of Fat (aka Heavy) data, the rpsd-storage package must be used for sharing data, and the message payload must have a "where" field,
-with the URL of the data itself.
+## Overview
 
-We must envision two kind data transport:
-- external => data is received or sent to an "external system" (a system that can not share storage with the receving or sending system)
-- internal => data is received or sent to an "internal system" (a system that can share storage with the receving or sending system)
-The "http" transport mean is primarly intended for external transports, but it may nonetheless be used for internal ones, too.
-The Dapr service invocation and Dapr PubSub transport means are available for internal transports only.
+Library code helping developers to implement receiving and sending content through one of the available trasport carriers, with focus on transporting content.
 
-In case of an external http transport of Fat (aka Heavy) data, the "where" value must be set to the URL that the receiving system must call
-(using an HTTP GET method), to retrieve the data itself.
+## Message modes
+See also: packages/rpsd-transport/README.md
+
+There are two message modes:
+- Slim => content to be sent is small enough to be directly inlined into the message payload
+- Fat => content to be sent is too big to go into the message payload and it will be shared by some other method
+
+Since a Slim message will indeed be bigger than a Fat one, for content will be inside the payload, we'll add two new words:
+- Fast => content to be sent is small enough to be directly inlined into the message payload
+- Heavy => content to be sent is too big to go into the message payload and it will be shared by some other method
+
+that better convoy the meaning of having little content to send, through inlined, hence bigger payload, or more content, through a smaller message.
+In the end Slim/Fast and Fat/Heavy will be used interchengeably, with a good initial explanation, such as:
+> "Slim messages contain small content directly (fast access, bigger payload), while Fat messages reference large external content (heavy processing, smaller message)."
+
+In both modes, message content can be compressed with zip or gzip.
+
+## Transport scopes
+
+There are two scope for transport:
+- external => content is received or sent to an "external system" (a system that can not share storage with the receving or sending system)
+- internal => content is received or sent to an "internal system" (a system that can share storage with the receving or sending system)
+
+In case of an external http transport of Fat (aka Heavy) content, the "where" value must be set to the URL that the receiving system must call
+(using an HTTP GET method), to retrieve the content itself.
 The sending part must make the content available at the URL specified by the "where" value without any authentication mechanism.
 The rpsd-transport package must facilitate the implementation of both cases.
 
-In case of an internal transport of Fat (aka Heavy) data, the "where" value must be set to the url where the receiving system can read the data itself,
-usng the "load_from_url" staticmethod of StorageProvider in rpsd-storage.
+In case of an internal transport of Fat (aka Heavy) content, the "where" value must be set to the url where the receiving system can read the content itself,
+using the "load_from_url" staticmethod of StorageProvider in rpsd-storage.
 
-The "http" transport mean is intended in this context to implement APIs that an external system may invoke (receive data from external systems)
-or to invoke an external system APIs (send data to external systems).
-In this case the external system does not have access to shared storage, hence, in case of a Fat/Heavy message, 
-data must be made available through HTTP as well.
-When receiving data, if the "where" value is specified, it must be an URL that the "http" mean can call to retrieve the data itself.
-When sending data, on reverse, the "http" mean must expose an API that the external system can call to retrieve the data (using FastAPI for this).
-Upon receving data from external system, the "http" transport mean must save it to one of the storage provided by the rpsd-package,
+## Content and metadata
+
+Messages delivered through rpsd-transport, in addition to content, also contain metadata, that can be organized "inline" or "outline".
+Messages with "inline" metadata, have a body containing both content and metadata, while the body of messages with "outline" metadata,
+is pure content, with metadata inside headers or other constructs, separated from the body.
+In both cases, message content can be compressed with zip or gzip.
+
+Here follows metadata definition:
+- who => identifies the sender of the content or the entity to which the containt pertains (i.e. contract ID)
+- what => specifies what the content is (i.e. kind of file or dataset)
+- where (optional) => if present, specifies content URL in a Fat/Heavy message, if missing, mandates it's a Slim/Fast message
+
+There's no "mode" metadata, if the "where" value is present, the message is Fat/Heavy, otherwise it's Slim/Fast.
+
+For Slim/Fast messages with inline metadata, the body of the message must be in JSON format and the content must be in the "content" field of the body itself.
+For Slim/Fast messages with outline metadata, the content can be attached to the body (MIME "multipart/form-data") or it can be the body itself.
+
+For Slim/Fast messages with inline metadata, the body of the message must be in JSON format and metadata values must be in the "metadata" field of the body itself.
+For Slim/Fast messages with outline metadata, metadata values are transported by carrier specific methods.
+
+For Fat/Heavy messages with inline metadata, the body of the message must be in JSON format and the content must be available at the URL specified by the "where" field of the metadata.
+For Fat/Heavy messages with outline metadata, the content must be available at the URL specified by the "where" field of the metadata.
+
+For Fat/Heavy messages with inline metadata, the body of the message must be in JSON format and metadata values must be in the "metadata" field of the body itself.
+For Fat/Heavy messages with outline metadata, metadata values are transported by carrier specific methods.
+
+## Carriers
+
+Initially there'll be three "transport carriers", but more may come in the future:
+- HTTP 
+- Dapr Service invocation
+- Dapr PubSub
+
+### HTTP carrier
+
+This carrier is based on FastAPI and is primarly intended for the external transport scope, but it may nonetheless be used for the internal one, too.
+Is intended to implement APIs that an external system may invoke (receive content from external systems)
+or to invoke an external system APIs (send content to external systems).
+In the latter case the external system does not have access to shared storage, hence, in case of a Fat/Heavy message, 
+content must be made available through HTTP as well.
+When receiving content, if the "where" value is specified, it must be an URL that the "http" carrier can call to retrieve the content itself.
+When sending content, on reverse, the "http" carrier must expose an API (using FastAPI for this) that the external system can call to retrieve the content.
+Upon receving content from external system, the "http" transport carrier must save it to one of the storage provided by the rpsd-storage package,
 so that, from that moment on, it can be shared with other internal systems.
-
-We may use the "config" sytem in rpsd_commons, to parametrize the type of storage to use (FS or S3) and their need arguments
+We may use the "config" sytem in rpsd_commons, to parametrize the type of storage to use for this (FS or S3) and their need arguments
 (e.g. base_path for FS and bucket_name for S3).
 
+In case of messages with outline metadata, each metadata value can be specified by either one HTTP header or one query parameter, but not both.
+If the same metadata value is specified by both an header and a query parameter, it's a caller error.
+Here follows the list of metadata value names, same as query parameter names, and their corresponding HTTP hader names:
+who => X-RAPS-INGEST_WHO (legacy)
+who => X-RPSD-WHO
+what => X-RAPS-INGEST_WHAT (legacy)
+what => X-RPSD-WHAT
+where => X-RAPS-INGEST_WHERE (legacy)
+where => X-RPSD-WHERE
+
+Legacy header names are supported, but not incentivated and they may be deprecated at some time in the future.
+
+### Dapr Service invocation
+
+This carrier is base on the Service invocation building block of Dapr and is available for the internal transport scope only.
+
+### Dapr PubSub
+
+This carrier is base on the Publish & subscribe building block of Dapr and is available for the internal transport scope only.
