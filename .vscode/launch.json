@@ -22,6 +22,16 @@
             "cwd": "${workspaceFolder}/src/rpsd_commons",
             "program": "app.py",
             "justMyCode": false
+        },
+        {
+            "name": "FastAPI Ingest Example",
+            "type": "debugpy",
+            "request": "launch",
+            "python": "${workspaceFolder}/.venv/bin/python",
+            "program": "${workspaceFolder}/examples/fastapi_ingest_app/src/fastapi_ingest_app/main.py",
+            "cwd": "${workspaceFolder}/examples/fastapi_ingest_app",
+            "justMyCode": false,
+            "console": "integratedTerminal"
         }
     ]
 }

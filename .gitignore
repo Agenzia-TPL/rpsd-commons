@@ -9,6 +9,15 @@ wheels/
 # Virtual environments
 .venv
 
+# secret key and environment variables
+.env
+.env.base
+.env.local
+.env.development
+.env.production
+.env.staging
+.env.*.local
+
 # Other
 mnt/
 

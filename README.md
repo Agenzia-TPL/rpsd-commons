@@ -173,6 +173,42 @@ See [rpsd-workflow README](packages/rpsd-workflow/README.md) for details.
 
 See [rpsd-settings README](packages/rpsd-settings/README.md) for details.
 
+## Examples
+
+This project includes two types of examples:
+
+### Package Examples (`packages/*/examples/`)
+
+Simple, educational Python scripts demonstrating individual package features:
+
+- **[rpsd-storage examples](packages/rpsd-storage/examples/)** - Storage provider usage, metadata handling, and advanced features
+  - `01_getting_started.py` - Basic storage operations
+  - `02_basic_usage.py` - Common usage patterns
+  - `03_metadata_and_types.py` - Working with metadata
+  - And more...
+
+Run package examples:
+```bash
+uv run python packages/rpsd-storage/examples/01_getting_started.py
+```
+
+### Integration Examples (`examples/`)
+
+Full applications demonstrating multi-package integration and real-world usage:
+
+- **[FastAPI Ingest App](examples/fastapi_ingest_app/)** - Complete FastAPI application using rpsd-transport and rpsd-storage
+  - HTTP carrier integration
+  - Storage abstraction (filesystem and S3)
+  - Authentication and configuration
+  - Dual metadata formats (inline and outline)
+
+Run integration examples:
+```bash
+uv run fastapi-ingest-app
+```
+
+Each example includes its own README with detailed documentation.
+
 ## Migration from config.py
 
 The old dictionary-based `config.py` has been replaced with pydantic-settings:

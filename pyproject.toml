@@ -22,7 +22,7 @@ rpsd-settings = { workspace = true }
 rpsd-workflow = { workspace = true }
 
 [tool.uv.workspace]
-members = ["packages/*"]
+members = ["packages/*", "examples/fastapi_ingest_app"]
 
 [build-system]
 requires = ["hatchling"]
@@ -38,7 +38,7 @@ dev = [
 
 [tool.ruff]
 target-version = "py313"
-src = ["packages/*/src"]
+src = ["packages/*/src", "examples/*/src"]
 line-length = 88
 
 [tool.ruff.lint]
@@ -47,6 +47,7 @@ ignore = []
 
 [tool.ruff.lint.per-file-ignores]
 "packages/*/examples/*" = ["N999"]
+"examples/*/src/*" = ["N999"]
 
 [tool.ruff.format]
 quote-style = "double"

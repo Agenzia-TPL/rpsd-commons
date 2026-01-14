@@ -1,0 +1,22 @@
+[project]
+name = "fastapi-ingest-app"
+version = "0.1.0"
+description = "Example FastAPI application using rpsd-transport and rpsd-storage"
+requires-python = ">=3.13"
+dependencies = [
+    "rpsd-transport",
+    "rpsd-storage",
+    "fastapi>=0.100.0",
+    "uvicorn[standard]>=0.24.0",
+]
+
+[tool.uv.sources]
+rpsd-transport = { workspace = true }
+rpsd-storage = { workspace = true }
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project.scripts]
+fastapi-ingest-app = "fastapi_ingest_app.main:run"
