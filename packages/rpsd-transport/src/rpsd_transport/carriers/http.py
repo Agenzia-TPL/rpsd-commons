@@ -18,6 +18,8 @@ from pydantic import ValidationError
 from rpsd_transport.carriers.base import BaseCarrier
 from rpsd_transport.carriers.http_utils import (
     MetadataOrganization,
+    build_outline_headers,
+    build_outline_query_params,
     detect_metadata_organization,
     extract_outline_content,
     extract_outline_metadata,
@@ -71,22 +73,30 @@ class HTTPCarrier(BaseCarrier):
     def send_slimfast(
         self,
         recipient: str,
-        data: bytes,
         who: str,
         what: str,
+        content: bytes,
         content_type: str = "application/octet-stream",
         filename: str | None = None,
+        metadata_use_inline: bool = True,
+        metadata_use_headers: bool = True,
+        content_use_body: bool = True,
     ) -> dict:
         """
-        Send data inline via HTTP POST (fast/slim mode) with inline metadata.
+        Send data inline via HTTP POST (fast/slim mode).
 
         Args:
             recipient: Target URL for HTTP POST
-            data: Data to send (inlined in message)
             who: Entity identifier
             what: Content type/category
+            content: Data to send
             content_type: MIME type of the data
             filename: Optional original filename
+            metadata_use_inline: True=inline JSON, False=outline headers/query
+            metadata_use_headers: True=headers, False=query params
+                (when metadata_use_inline=False)
+            content_use_body: True=raw body, False=multipart
+                (when metadata_use_inline=False)
 
         Returns:
             dict: Response from recipient
@@ -94,25 +104,53 @@ class HTTPCarrier(BaseCarrier):
         Raises:
             httpx.HTTPError: If HTTP request fails
         """
-        # Build inline message payload
-        payload = {
-            "metadata": {
-                "who": who,
-                "what": what,
-                "content_type": content_type,
-            },
-            "content": base64.b64encode(data).decode("utf-8"),
-        }
-
-        if filename:
-            payload["metadata"]["filename"] = filename
-
         try:
-            response = self._http_client.post(
-                recipient,
-                json=payload,
-                headers={"Content-Type": "application/json"},
-            )
+            if metadata_use_inline:
+                # INLINE MODE: JSON body with metadata and base64 content
+                payload = {
+                    "metadata": {
+                        "who": who,
+                        "what": what,
+                        "content_type": content_type,
+                    },
+                    "content": base64.b64encode(content).decode("utf-8"),
+                }
+                if filename:
+                    payload["metadata"]["filename"] = filename
+
+                response = self._http_client.post(
+                    recipient,
+                    json=payload,
+                    headers={"Content-Type": "application/json"},
+                )
+
+            else:  # OUTLINE MODE
+                if metadata_use_headers:
+                    headers = build_outline_headers(who, what)
+                    params = None
+                else:
+                    headers = {}
+                    params = build_outline_query_params(who, what)
+
+                if content_use_body:
+                    # Send as raw body
+                    headers["Content-Type"] = content_type
+                    response = self._http_client.post(
+                        recipient,
+                        content=content,
+                        headers=headers,
+                        params=params,
+                    )
+                else:
+                    # Send as multipart/form-data attachment
+                    files = {"file": (filename or "data.bin", content, content_type)}
+                    response = self._http_client.post(
+                        recipient,
+                        files=files,
+                        headers=headers,
+                        params=params,
+                    )
+
             response.raise_for_status()
             return response.json()
         except httpx.HTTPError as e:
@@ -124,36 +162,94 @@ class HTTPCarrier(BaseCarrier):
         recipient: str,
         who: str,
         what: str,
-        data: bytes | None = None,
-        storage_url: str | None = None,
-        expose_ttl: int = 3600,
+        content: bytes | None,
         content_type: str = "application/octet-stream",
         filename: str | None = None,
+        metadata_use_inline: bool = True,
+        metadata_use_headers: bool = True,
+        where: str | None = None,
+        expose_ttl: int = 3600,
     ) -> dict:
         """
         Send data by reference via HTTP POST (heavy/fat mode).
-
-        NOTE: Heavy mode not yet implemented (Phase 2).
 
         Args:
             recipient: Target URL for HTTP POST
             who: Entity identifier
             what: Content type/category
-            data: New data to save and expose
-            storage_url: Existing storage URL to expose
-            expose_ttl: Time-to-live for exposed URL in seconds
+            content: New data to save (Phase 2) or None if using existing 'where'
             content_type: MIME type of the data
             filename: Optional original filename
+            metadata_use_inline: True=inline JSON, False=outline headers/query
+            metadata_use_headers: True=headers, False=query params
+                (when metadata_use_inline=False)
+            where: URL where content is available (required for now)
+            expose_ttl: Time-to-live for exposed URL in seconds
 
         Returns:
             dict: Response from recipient
 
         Raises:
-            NotImplementedError: Heavy mode not yet implemented
+            ValueError: If neither content nor where provided
+            NotImplementedError: If content provided (storage integration Phase 2)
+            httpx.HTTPError: If HTTP request fails
         """
-        raise NotImplementedError(
-            "Heavy mode not yet implemented. This will be added in Phase 2."
-        )
+        # Validate parameters
+        if content is None and where is None:
+            raise ValueError("Must provide either 'content' or 'where'")
+
+        if content is not None and where is None:
+            raise NotImplementedError(
+                "Saving content and generating 'where' URL not yet implemented "
+                "(Phase 2). Please provide 'where' directly."
+            )
+
+        # Use provided 'where' as the URL
+        where_url = where
+
+        try:
+            if metadata_use_inline:
+                # INLINE MODE: JSON body with metadata including where URL
+                payload = {
+                    "metadata": {
+                        "who": who,
+                        "what": what,
+                        "where": where_url,
+                        "content_type": content_type,
+                    },
+                    "content": None,  # No content in heavy messages
+                }
+                if filename:
+                    payload["metadata"]["filename"] = filename
+
+                response = self._http_client.post(
+                    recipient,
+                    json=payload,
+                    headers={"Content-Type": "application/json"},
+                )
+
+            else:  # OUTLINE MODE
+                if metadata_use_headers:
+                    headers = build_outline_headers(who, what, where_url)
+                    params = None
+                else:
+                    headers = {}
+                    params = build_outline_query_params(who, what, where_url)
+
+                # Empty body for heavy messages with outline metadata
+                headers["Content-Type"] = "application/octet-stream"
+                response = self._http_client.post(
+                    recipient,
+                    content=b"",
+                    headers=headers,
+                    params=params,
+                )
+
+            response.raise_for_status()
+            return response.json()
+        except httpx.HTTPError as e:
+            logger.error(f"Failed to send heavy message to {recipient}: {e}")
+            raise
 
     async def handle_receive(self, request: Request) -> JSONResponse:
         """

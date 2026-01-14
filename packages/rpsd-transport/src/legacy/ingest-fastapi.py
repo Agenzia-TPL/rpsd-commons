@@ -1,7 +1,8 @@
 import logging
-from fastapi import FastAPI, Request, HTTPException
+
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
-from transport import validate_request, route_request
+from transport import route_request, validate_request
 
 # Configure logging
 logger = logging.getLogger()
@@ -19,7 +20,7 @@ async def ingest_data(request: Request):
         headers = dict(request.headers)
         query_params = dict(request.query_params)
         body = await request.body()
-        
+
         # Attempt to parse JSON, but fall back to raw body if it fails
         try:
             json_body = await request.json()

@@ -170,9 +170,33 @@ For Fat/Heavy messages with outline metadata, metadata values are transported by
 ## Carriers
 
 Initially there'll be three "transport carriers", but more may come in the future:
-- HTTP 
+- HTTP
 - Dapr Service invocation
 - Dapr PubSub
+
+Each carrier must implement a base interface, with the following methods:
+- send_slimfast => send content as a Slim/Fast message (must support both inline and outline metadata)
+- send_fatheavy => send content as a Fat/Heavy message (must support both inline and outline metadata)
+
+Both methods share these parameters (in order):
+- recipient => target identifier (URL for HTTP, app_id for Dapr, etc.)
+- who => entity identifier
+- what => content type/category
+- content => data bytes (required for send_slimfast, optional for send_fatheavy)
+- content_type => MIME type (default: "application/octet-stream")
+- filename => optional original filename
+- metadata_use_inline => boolean (default True): True=inline JSON, False=outline headers/query
+- metadata_use_headers => boolean (default True): True=headers, False=query params (when metadata_use_inline=False)
+
+Additional send_slimfast parameters:
+- content_use_body => boolean (default True): True=raw body, False=multipart attachment (when metadata_use_inline=False)
+
+Additional send_fatheavy parameters:
+- where => URL where content is available (required when content is None)
+- expose_ttl => time-to-live for exposed URL in seconds (default 3600)
+
+For outline metadata messages, metadata values must NOT be inside the message body itself, but must be transported by carrier specific methods,
+as described in the following chapters.
 
 ### HTTP carrier
 

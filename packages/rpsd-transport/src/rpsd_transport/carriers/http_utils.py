@@ -131,14 +131,17 @@ def extract_outline_metadata(
                 )
 
     # Validate required fields
-    if not result.get("who"):
+    who_value = result.get("who")
+    what_value = result.get("what")
+
+    if not who_value:
         raise MissingMetadataError("Must provide 'who' in query parameter or header")
-    if not result.get("what"):
+    if not what_value:
         raise MissingMetadataError("Must provide 'what' in query parameter or header")
 
     return MessageMetadata(
-        who=result["who"],
-        what=result["what"],
+        who=who_value,
+        what=what_value,
         where=result.get("where"),
         content_type=content_type or "application/octet-stream",
     )
@@ -258,3 +261,55 @@ def get_header_value(
     if value is None and legacy_name:
         value = request.headers.get(legacy_name)
     return value
+
+
+def build_outline_headers(
+    who: str,
+    what: str,
+    where: str | None = None,
+) -> dict[str, str]:
+    """
+    Build HTTP headers for outline metadata.
+
+    Uses current header naming convention (X-RPSD-*).
+
+    Args:
+        who: Entity identifier
+        what: Content type/category
+        where: Optional URL for heavy messages
+
+    Returns:
+        Dict of header name to value
+    """
+    headers = {
+        "X-RPSD-WHO": who,
+        "X-RPSD-WHAT": what,
+    }
+    if where:
+        headers["X-RPSD-WHERE"] = where
+    return headers
+
+
+def build_outline_query_params(
+    who: str,
+    what: str,
+    where: str | None = None,
+) -> dict[str, str]:
+    """
+    Build query parameters for outline metadata.
+
+    Args:
+        who: Entity identifier
+        what: Content type/category
+        where: Optional URL for heavy messages
+
+    Returns:
+        Dict of param name to value
+    """
+    params = {
+        "who": who,
+        "what": what,
+    }
+    if where:
+        params["where"] = where
+    return params

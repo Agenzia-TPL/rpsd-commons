@@ -42,8 +42,8 @@ class TestHTTPCarrierSendFast:
     """Test HTTPCarrier.send_slimfast() method."""
 
     @respx.mock
-    def test_send_slimfast_success(self, http_carrier):
-        """Test successful fast message send with inline metadata."""
+    def test_send_slimfast_success_inline(self, http_carrier):
+        """Test successful fast message send with inline metadata (default)."""
         recipient = "https://external.example.com/webhook"
         test_data = b"Hello, World!"
 
@@ -54,9 +54,9 @@ class TestHTTPCarrierSendFast:
 
         result = http_carrier.send_slimfast(
             recipient=recipient,
-            data=test_data,
             who="user123",
             what="document",
+            content=test_data,
             content_type="text/plain",
             filename="test.txt",
         )
@@ -64,7 +64,7 @@ class TestHTTPCarrierSendFast:
         assert result == {"status": "received"}
 
     @respx.mock
-    def test_send_slimfast_payload_structure(self, http_carrier):
+    def test_send_slimfast_payload_structure_inline(self, http_carrier):
         """Test send_slimfast creates correct inline metadata payload."""
         recipient = "https://external.example.com/webhook"
         test_data = b"Hello, World!"
@@ -87,9 +87,9 @@ class TestHTTPCarrierSendFast:
 
         http_carrier.send_slimfast(
             recipient=recipient,
-            data=test_data,
             who="user123",
             what="document",
+            content=test_data,
             content_type="text/plain",
             filename="test.txt",
         )
@@ -105,24 +105,251 @@ class TestHTTPCarrierSendFast:
         with pytest.raises(Exception):
             http_carrier.send_slimfast(
                 recipient=recipient,
-                data=test_data,
                 who="user123",
                 what="document",
+                content=test_data,
             )
+
+    @respx.mock
+    def test_send_slimfast_outline_body_headers(self, http_carrier):
+        """Test fast message send with outline metadata (headers) and body."""
+        recipient = "https://external.example.com/webhook"
+        test_data = b"Hello, World!"
+
+        def check_request(request):
+            # Verify headers contain metadata
+            assert request.headers["X-RPSD-WHO"] == "user123"
+            assert request.headers["X-RPSD-WHAT"] == "document"
+            assert request.headers["Content-Type"] == "text/plain"
+            # Verify body is raw content (not base64)
+            assert request.content == test_data
+            return respx.MockResponse(200, json={"status": "received"})
+
+        respx.post(recipient).mock(side_effect=check_request)
+
+        result = http_carrier.send_slimfast(
+            recipient=recipient,
+            who="user123",
+            what="document",
+            content=test_data,
+            content_type="text/plain",
+            metadata_use_inline=False,
+            metadata_use_headers=True,
+            content_use_body=True,
+        )
+
+        assert result == {"status": "received"}
+
+    @respx.mock
+    def test_send_slimfast_outline_body_query_params(self, http_carrier):
+        """Test fast message send with outline metadata (query params) and body."""
+        recipient = "https://external.example.com/webhook"
+        test_data = b"Hello, World!"
+
+        def check_request(request):
+            # Verify query params contain metadata
+            assert "who=user123" in str(request.url)
+            assert "what=document" in str(request.url)
+            # Verify body is raw content
+            assert request.content == test_data
+            assert request.headers["Content-Type"] == "text/plain"
+            return respx.MockResponse(200, json={"status": "received"})
+
+        respx.post(recipient).mock(side_effect=check_request)
+
+        result = http_carrier.send_slimfast(
+            recipient=recipient,
+            who="user123",
+            what="document",
+            content=test_data,
+            content_type="text/plain",
+            metadata_use_inline=False,
+            metadata_use_headers=False,
+            content_use_body=True,
+        )
+
+        assert result == {"status": "received"}
+
+    @respx.mock
+    def test_send_slimfast_outline_attachment_headers(self, http_carrier):
+        """Test fast message send with outline metadata (headers) and attachment."""
+        recipient = "https://external.example.com/webhook"
+        test_data = b"Hello, World!"
+
+        def check_request(request):
+            # Verify headers contain metadata
+            assert request.headers["X-RPSD-WHO"] == "user123"
+            assert request.headers["X-RPSD-WHAT"] == "document"
+            # Verify it's multipart
+            assert "multipart/form-data" in request.headers.get("Content-Type", "")
+            # Verify data is in body
+            assert test_data in request.content
+            return respx.MockResponse(200, json={"status": "received"})
+
+        respx.post(recipient).mock(side_effect=check_request)
+
+        result = http_carrier.send_slimfast(
+            recipient=recipient,
+            who="user123",
+            what="document",
+            content=test_data,
+            content_type="text/plain",
+            filename="test.txt",
+            metadata_use_inline=False,
+            metadata_use_headers=True,
+            content_use_body=False,
+        )
+
+        assert result == {"status": "received"}
+
+    @respx.mock
+    def test_send_slimfast_outline_attachment_query_params(self, http_carrier):
+        """
+        Test fast message send with outline metadata (query params)
+        and attachment.
+        """
+        recipient = "https://external.example.com/webhook"
+        test_data = b"Hello, World!"
+
+        def check_request(request):
+            # Verify query params contain metadata
+            assert "who=user123" in str(request.url)
+            assert "what=document" in str(request.url)
+            # Verify it's multipart
+            assert "multipart/form-data" in request.headers.get("Content-Type", "")
+            # Verify data is in body
+            assert test_data in request.content
+            return respx.MockResponse(200, json={"status": "received"})
+
+        respx.post(recipient).mock(side_effect=check_request)
+
+        result = http_carrier.send_slimfast(
+            recipient=recipient,
+            who="user123",
+            what="document",
+            content=test_data,
+            content_type="text/plain",
+            filename="test.txt",
+            metadata_use_inline=False,
+            metadata_use_headers=False,
+            content_use_body=False,
+        )
+
+        assert result == {"status": "received"}
 
 
 class TestHTTPCarrierSendHeavy:
     """Test HTTPCarrier.send_fatheavy() method."""
 
-    def test_send_fatheavy_not_implemented(self, http_carrier):
-        """Test that heavy mode raises NotImplementedError."""
-        with pytest.raises(NotImplementedError, match="Heavy mode not yet"):
+    def test_send_fatheavy_validation_no_content_no_where(self, http_carrier):
+        """Test that heavy mode requires either content or where."""
+        with pytest.raises(ValueError, match="Must provide either"):
             http_carrier.send_fatheavy(
                 recipient="https://example.com/webhook",
                 who="user123",
                 what="document",
-                data=b"test",
+                content=None,
+                where=None,
             )
+
+    def test_send_fatheavy_validation_content_without_where(self, http_carrier):
+        """Test that providing content without where raises NotImplementedError."""
+        with pytest.raises(NotImplementedError, match="Phase 2"):
+            http_carrier.send_fatheavy(
+                recipient="https://example.com/webhook",
+                who="user123",
+                what="document",
+                content=b"test",
+                where=None,
+            )
+
+    @respx.mock
+    def test_send_fatheavy_inline(self, http_carrier):
+        """Test heavy message send with inline metadata."""
+        recipient = "https://external.example.com/webhook"
+        where_url = "https://storage.example.com/file123"
+
+        def check_request(request):
+            import json
+
+            body = json.loads(request.content)
+            # Verify metadata structure with where URL
+            assert "metadata" in body
+            assert body["metadata"]["who"] == "user123"
+            assert body["metadata"]["what"] == "document"
+            assert body["metadata"]["where"] == where_url
+            assert body["content"] is None
+            return respx.MockResponse(200, json={"status": "received"})
+
+        respx.post(recipient).mock(side_effect=check_request)
+
+        result = http_carrier.send_fatheavy(
+            recipient=recipient,
+            who="user123",
+            what="document",
+            content=None,
+            where=where_url,
+        )
+
+        assert result == {"status": "received"}
+
+    @respx.mock
+    def test_send_fatheavy_outline_headers(self, http_carrier):
+        """Test heavy message send with outline metadata (headers)."""
+        recipient = "https://external.example.com/webhook"
+        where_url = "https://storage.example.com/file123"
+
+        def check_request(request):
+            # Verify headers contain metadata including where
+            assert request.headers["X-RPSD-WHO"] == "user123"
+            assert request.headers["X-RPSD-WHAT"] == "document"
+            assert request.headers["X-RPSD-WHERE"] == where_url
+            # Verify empty body
+            assert request.content == b""
+            return respx.MockResponse(200, json={"status": "received"})
+
+        respx.post(recipient).mock(side_effect=check_request)
+
+        result = http_carrier.send_fatheavy(
+            recipient=recipient,
+            who="user123",
+            what="document",
+            content=None,
+            where=where_url,
+            metadata_use_inline=False,
+            metadata_use_headers=True,
+        )
+
+        assert result == {"status": "received"}
+
+    @respx.mock
+    def test_send_fatheavy_outline_query_params(self, http_carrier):
+        """Test heavy message send with outline metadata (query params)."""
+        recipient = "https://external.example.com/webhook"
+        where_url = "https://storage.example.com/file123"
+
+        def check_request(request):
+            # Verify query params contain metadata including where
+            assert "who=user123" in str(request.url)
+            assert "what=document" in str(request.url)
+            assert "where=https" in str(request.url)
+            # Verify empty body
+            assert request.content == b""
+            return respx.MockResponse(200, json={"status": "received"})
+
+        respx.post(recipient).mock(side_effect=check_request)
+
+        result = http_carrier.send_fatheavy(
+            recipient=recipient,
+            who="user123",
+            what="document",
+            content=None,
+            where=where_url,
+            metadata_use_inline=False,
+            metadata_use_headers=False,
+        )
+
+        assert result == {"status": "received"}
 
 
 # =============================================================================

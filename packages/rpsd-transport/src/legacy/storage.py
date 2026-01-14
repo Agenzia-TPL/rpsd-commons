@@ -1,8 +1,9 @@
+import logging
 import os
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+
 import boto3
-import logging
 
 logger = logging.getLogger()
 
@@ -32,15 +33,15 @@ def save_to_s3(content, filename, content_type='application/xml', source_url=Non
         object_id = f"{who}-{object_id}"
     if what:
         object_id = f"{what}-{object_id}"
-        
-    timestamp = datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')
-    
+
+    timestamp = datetime.now(UTC).strftime('%Y%m%d_%H%M%S')
+
     file_extension = os.path.splitext(filename)[1] if filename else '.xml'
     if not file_extension:
         file_extension = '.xml'
-        
+
     s3_key = f"ingested/{object_id}{file_extension}"
-    
+
     metadata = {
         'object_id': object_id,
         'original_filename': filename or 'unknown',
@@ -60,6 +61,6 @@ def save_to_s3(content, filename, content_type='application/xml', source_url=Non
         ContentType=content_type,
         Metadata=metadata
     )
-    
+
     logger.info(f"Uploaded to S3: {s3_key}")
     return object_id

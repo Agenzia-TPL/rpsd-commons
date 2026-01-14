@@ -4,9 +4,10 @@ import io
 import logging
 import os
 import re
-import urllib.request
 import urllib.parse
+import urllib.request
 import zipfile
+
 from storage import save_to_s3
 
 logger = logging.getLogger()
@@ -24,7 +25,7 @@ def validate_request(event):
             api_key = auth_header.split('Bearer ')[1]
         elif auth_header.startswith('Token '):
             api_key = auth_header.split('Token ')[1]
-    
+
     if not api_key:
         api_key = headers.get('x-api-key') or headers.get('X-API-Key')
 
@@ -55,22 +56,22 @@ def route_request(event):
     query_params = event.get('queryStringParameters') or {}
     content_type = headers.get('content-type') or headers.get('Content-Type', '')
     is_attachment = content_type.startswith('multipart/form-data')
-    
+
     where_header = headers.get('x-raps-ingest_where') or headers.get('X-RAPS-INGEST_WHERE')
     where_query = query_params.get('where')
 
     what_header = headers.get('x-raps-ingest_what') or headers.get('X-RAPS-INGEST_WHAT')
     what_query = query_params.get('what')
-    
+
     who_header = headers.get('x-raps-ingest_who') or headers.get('X-RAPS-INGEST_WHO')
     who_query = query_params.get('who')
 
     if where_header and where_query:
         raise ValueError("Cannot specify 'where' in both query parameter and header.")
-    
+
     if what_header and what_query:
         raise ValueError("Cannot specify 'what' in both query parameter and header.")
-        
+
     if who_header and who_query:
         raise ValueError("Cannot specify 'who' in both query parameter and header.")
 
@@ -85,7 +86,7 @@ def route_request(event):
     sanitized_what = sanitize_value(what)
     if not sanitized_what:
         raise ValueError("Invalid 'what' value provided.")
-        
+
     sanitized_who = sanitize_value(who)
     if not sanitized_who:
         raise ValueError("Invalid 'who' value provided.")
@@ -123,13 +124,13 @@ def parse_multipart_data(body, boundary):
             if b'Content-Disposition' in part:
                 headers, content = part.split(b'\r\n\r\n', 1)
                 headers = headers.decode()
-                
+
                 filename = None
                 content_type = None
 
                 if 'filename=' in headers:
                     filename = headers.split('filename="')[1].split('"')[0]
-                
+
                 if 'Content-Type:' in headers:
                     content_type = headers.split('Content-Type: ')[1].split('\r\n')[0]
 
@@ -149,7 +150,7 @@ def decompress_content(content, filename):
         # Check if it's GZIP (magic bytes or filename)
         if content.startswith(b'\x1f\x8b') or (filename and filename.endswith('.gz')):
             return gzip.decompress(content)
-        
+
         # Check if it's ZIP
         elif filename and filename.endswith('.zip'):
             with zipfile.ZipFile(io.BytesIO(content), 'r') as zip_file:
@@ -157,10 +158,10 @@ def decompress_content(content, filename):
                 files = zip_file.namelist()
                 if files:
                     return zip_file.read(files[0])
-        
+
         # Not compressed, return as-is
         return content
-        
+
     except Exception as e:
         raise Exception(f"Failed to decompress: {str(e)}")
 
@@ -171,18 +172,18 @@ def handle_attachment(event, who=None, what=None):
     headers = event.get('headers', {})
     content_type_header = headers.get('content-type') or headers.get('Content-Type', '')
     boundary = content_type_header.split('boundary=')[1].strip()
-    
+
     body = event.get('body', '')
     if event.get('isBase64Encoded', False):
         body = base64.b64decode(body)
     elif isinstance(body, str):
         body = body.encode('utf-8')
-        
+
     file_content, filename, content_type = parse_multipart_data(body, boundary)
-    
+
     if not file_content:
         raise Exception('No file found in attachment')
-        
+
     decompressed_content = decompress_content(file_content, filename)
     return save_to_s3(decompressed_content, filename, content_type or 'application/xml', who=who, what=what)
 
@@ -192,7 +193,7 @@ def handle_body(event, who=None, what=None):
     """
     headers = event.get('headers', {})
     content_type = headers.get('content-type') or headers.get('Content-Type', 'application/octet-stream')
-    
+
     body = event.get('body', '')
     is_base64_encoded = event.get('isBase64Encoded', False)
 
@@ -204,7 +205,7 @@ def handle_body(event, who=None, what=None):
 
     # The filename is not available directly from the body, so we generate one
     filename = "body_content"
-    
+
     # Check for content-encoding header for compression
     content_encoding = headers.get('content-encoding') or headers.get('Content-Encoding')
     if content_encoding == 'gzip':
