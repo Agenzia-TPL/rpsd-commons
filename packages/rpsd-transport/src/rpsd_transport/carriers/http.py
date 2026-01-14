@@ -457,8 +457,7 @@ class HTTPCarrier(BaseCarrier):
             return TransportMessage(metadata=metadata, content=None)
 
         # Extract content from body or multipart
-        is_base64 = query_params.get("isBase64Encoded", "").lower() == "true"
-        content, filename = extract_outline_content(body, content_type, is_base64)
+        content, filename = extract_outline_content(body, content_type)
 
         # Update metadata with filename if extracted from multipart
         if filename and not metadata.filename:

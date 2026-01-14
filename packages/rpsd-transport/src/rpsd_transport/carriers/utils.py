@@ -150,7 +150,6 @@ def extract_outline_metadata(
 def extract_outline_content(
     body: bytes,
     content_type: str,
-    is_base64_encoded: bool = False,
 ) -> tuple[bytes, str | None]:
     """
     Extract content from outline mode request.
@@ -162,22 +161,15 @@ def extract_outline_content(
     Args:
         body: Raw request body bytes
         content_type: Content-Type header value
-        is_base64_encoded: Flag from API Gateway (check first)
 
     Returns:
         Tuple of (content_bytes, filename or None)
     """
-    import base64
-
     # Handle multipart/form-data
     if content_type.startswith("multipart/form-data"):
         return parse_multipart_content(body, content_type)
 
-    # Handle base64 encoding (API Gateway pattern)
-    if is_base64_encoded:
-        return base64.b64decode(body), None
-
-    # Return raw body as-is
+    # Return raw body as-is (FastAPI provides decoded bytes)
     return body, None
 
 
