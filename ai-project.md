@@ -174,11 +174,18 @@ Initially there'll be three "transport carriers", but more may come in the futur
 - Dapr Service invocation
 - Dapr PubSub
 
-Each carrier must implement a base interface, with the following methods:
+Each carrier must implement a base interface with methods for sending and receiving messages.
+
+For outline metadata messages, metadata values must NOT be inside the message body itself, but must be transported by carrier specific methods,
+as described in carrier specific chapters.
+
+### Sending
+
+Here follows sending methods definitions:
 - send_slimfast => send content as a Slim/Fast message (must support both inline and outline metadata)
 - send_fatheavy => send content as a Fat/Heavy message (must support both inline and outline metadata)
 
-Both methods share these parameters (in order):
+Both sending methods share these parameters (in order):
 - recipient => target identifier (URL for HTTP, app_id for Dapr, etc.)
 - who => entity identifier
 - what => content type/category
@@ -195,22 +202,52 @@ Additional send_fatheavy parameters:
 - where => URL where content is available (required when content is None)
 - expose_ttl => time-to-live for exposed URL in seconds (default 3600)
 
-For outline metadata messages, metadata values must NOT be inside the message body itself, but must be transported by carrier specific methods,
-as described in the following chapters.
+### Receiving
+
+The receive method parses incoming messages and returns a TransportMessage object containing metadata and content (if fast message).
+It supports all 4 combinations: (slim/fast vs fat/heavy) × (inline vs outline metadata).
+
+Method signature:
+- async receive(request: Request) -> TransportMessage
+
+The receive method:
+- Detects metadata organization (inline JSON vs outline headers/query)
+- Extracts and validates metadata (who, what, where, etc.)
+- Returns content for fast messages, URL reference for heavy messages
+- Does NOT fetch heavy content or save to storage
+- Calls received() hook for extensibility (metrics, validation, storage integration)
+
+Hook method signature:
+- received(message: TransportMessage) -> None
+
+The received hook:
+- Called automatically after successful message parsing
+- Override in subclasses for custom behavior (storage, metrics, validation, etc.)
+- Should have side effects only (no return value)
+- Should not modify the message object itself
+- CAN and SHOULD raise exceptions to reject messages (validation errors, storage failures, etc.)
+- Default implementation: no-op
+
+Storage integration:
+- Caller is responsible for fetching heavy content from where URL
+- Caller is responsible for saving to storage (if needed)
+- Applications can override received() hook for automatic storage integration
+- Utilities provided: message_to_json_response(), exception_to_json_response()
 
 ### HTTP carrier
 
 This carrier is based on FastAPI and is primarly intended for the external transport scope, but it may nonetheless be used for the internal one, too.
 Is intended to implement APIs that an external system may invoke (receive content from external systems)
 or to invoke an external system APIs (send content to external systems).
-In the latter case the external system does not have access to shared storage, hence, in case of a Fat/Heavy message, 
-content must be made available through HTTP as well.
-When receiving content, if the "where" value is specified, it must be an URL that the "http" carrier can call to retrieve the content itself.
-When sending content, on reverse, the "http" carrier must expose an API (using FastAPI for this) that the external system can call to retrieve the content.
-Upon receving content from external system, the "http" transport carrier must save it to one of the storage provided by the rpsd-storage package,
-so that, from that moment on, it can be shared with other internal systems.
-We may use the "config" sytem in rpsd_commons, to parametrize the type of storage to use for this (FS or S3) and their need arguments
-(e.g. base_path for FS and bucket_name for S3).
+
+For Fat/Heavy messages:
+- When receiving: "where" is an URL that can be used to fetch the content (caller's responsibility to fetch)
+- When sending: content must be made available through HTTP (expose API for external system to fetch)
+
+The HTTP carrier does NOT directly integrate with storage - it only handles transport layer concerns.
+Applications decide when/where/how to save received content by either:
+- Handling storage after receive() returns
+- Subclassing HTTPCarrier and overriding received() hook for automatic storage integration
 
 In case of messages with outline metadata, each metadata value can be specified by either one HTTP header or one query parameter, but not both.
 If the same metadata value is specified by both an header and a query parameter, it's a caller error.

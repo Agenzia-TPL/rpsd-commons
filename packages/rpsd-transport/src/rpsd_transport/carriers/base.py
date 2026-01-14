@@ -4,6 +4,10 @@ Base carrier abstract class for transport implementations.
 
 from abc import ABC, abstractmethod
 
+from fastapi import Request
+
+from rpsd_transport.models import TransportMessage
+
 
 class BaseCarrier(ABC):
     """
@@ -11,6 +15,15 @@ class BaseCarrier(ABC):
 
     Carriers implement different transport mechanisms (HTTP, Dapr, etc.)
     for sending and receiving data in both fast and heavy modes.
+
+    Methods to implement:
+    - send_slimfast: Send content inline (fast/slim mode)
+    - send_fatheavy: Send content by reference (heavy/fat mode)
+    - receive: Parse incoming message and return TransportMessage
+
+    Hook methods to override:
+    - received: Called after successful message parsing for custom behavior
+      (storage integration, metrics, validation, etc.)
     """
 
     @abstractmethod
@@ -88,5 +101,50 @@ class BaseCarrier(ABC):
         Raises:
             ValueError: If neither content nor where is provided
             Exception: If sending fails
+        """
+        pass
+
+    @abstractmethod
+    async def receive(self, request: Request) -> TransportMessage:
+        """
+        Receive and parse incoming message.
+
+        Extracts metadata and content (if fast message) from the carrier's
+        native request format. Logs the message and calls received() hook.
+        Does not fetch heavy content or save to storage.
+
+        Args:
+            request: Request object (FastAPI Request for HTTP/Dapr carriers)
+
+        Returns:
+            TransportMessage: Parsed message ready for processing
+
+        Raises:
+            Various transport exceptions for malformed requests
+        """
+        pass
+
+    def received(self, message: TransportMessage) -> None:
+        """
+        Hook called after successfully receiving and parsing a message.
+
+        Override this method in subclasses to add custom behavior:
+        - Storage integration (fetch heavy content, save to storage)
+        - Metrics collection
+        - Validation
+        - Notifications
+        - Auditing
+
+        Should have side effects only (no return value).
+        Should not modify the message object itself.
+        CAN raise exceptions to reject the message (validation, storage errors, etc.)
+
+        Args:
+            message: Successfully parsed TransportMessage
+
+        Raises:
+            Any exception to reject message and propagate error to caller
+
+        Default implementation: no-op
         """
         pass

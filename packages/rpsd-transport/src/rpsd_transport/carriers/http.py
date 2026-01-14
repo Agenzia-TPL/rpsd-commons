@@ -12,11 +12,9 @@ import logging
 
 import httpx
 from fastapi import Request
-from fastapi.responses import JSONResponse
-from pydantic import ValidationError
 
 from rpsd_transport.carriers.base import BaseCarrier
-from rpsd_transport.carriers.http_utils import (
+from rpsd_transport.carriers.utils import (
     MetadataOrganization,
     build_outline_headers,
     build_outline_query_params,
@@ -25,16 +23,8 @@ from rpsd_transport.carriers.http_utils import (
     extract_outline_metadata,
 )
 from rpsd_transport.compression import decompress_content
-from rpsd_transport.exceptions import (
-    CompressionError,
-    DuplicateMetadataError,
-    InvalidJsonError,
-    InvalidMetadataError,
-    MissingMetadataError,
-)
+from rpsd_transport.exceptions import InvalidJsonError
 from rpsd_transport.models import (
-    ERROR_CODES,
-    ErrorResponse,
     InlineMessagePayload,
     MessageMetadata,
     TransportMessage,
@@ -63,7 +53,7 @@ class HTTPCarrier(BaseCarrier):
         Initialize HTTP carrier.
 
         Args:
-            base_url: Base URL for generating temporary endpoints
+            base_url: Base URL for generating temporary endpoints (future use)
             timeout: HTTP request timeout in seconds
         """
         self.base_url = base_url
@@ -251,58 +241,140 @@ class HTTPCarrier(BaseCarrier):
             logger.error(f"Failed to send heavy message to {recipient}: {e}")
             raise
 
-    async def handle_receive(self, request: Request) -> JSONResponse:
+    async def receive(self, request: Request) -> TransportMessage:
         """
-        Handle incoming HTTP message (inline or outline metadata).
+        Receive and parse incoming HTTP message.
 
-        Detects the metadata organization from the request and processes
-        accordingly:
-        - Inline: JSON body with {"metadata": {...}, "content": "..."}
-        - Outline: Metadata in headers/query params, content in body/multipart
+        Detects metadata organization (inline vs outline), extracts into
+        TransportMessage, logs, and calls received() hook for extensibility.
+        Does not fetch heavy content or save to storage - caller is responsible.
 
         Args:
             request: FastAPI Request object
 
         Returns:
-            JSONResponse: Success or error response
+            TransportMessage: Parsed message with metadata and content (if fast)
+
+        Raises:
+            InvalidJsonError: If inline JSON is malformed
+            DuplicateMetadataError: If metadata in both header and query
+            MissingMetadataError: If required metadata missing
+            InvalidMetadataError: If who/what identifiers invalid
+            CompressionError: If decompression fails
+            ValidationError: If Pydantic validation fails
+
+        Example:
+            ```python
+            # FastAPI endpoint
+            @app.post("/receive")
+            async def receive_endpoint(request: Request):
+                carrier = HTTPCarrier()
+                message = await carrier.receive(request)
+
+                # Handle heavy content fetching if needed
+                if message.is_fatheavy:
+                    content = fetch_from_url(message.where)  # Your implementation
+                    save_to_storage(content, message.metadata)  # Your implementation
+                else:
+                    save_to_storage(message.content, message.metadata)
+
+                return {"status": "received"}
+            ```
         """
-        try:
-            body = await request.body()
-            content_type = request.headers.get("content-type", "")
+        body = await request.body()
+        content_type = request.headers.get("content-type", "")
 
-            # Detect metadata organization
-            organization = detect_metadata_organization(content_type, body)
+        # Detect metadata organization
+        organization = detect_metadata_organization(content_type, body)
 
-            if organization == MetadataOrganization.INLINE:
-                message = await self._handle_inline_message(body)
-            else:
-                message = await self._handle_outline_message(request, body)
+        if organization == MetadataOrganization.INLINE:
+            message = await self._handle_inline_message(body)
+        else:
+            message = await self._handle_outline_message(request, body)
 
-            # Process the message
-            return await self._process_message(message)
-
-        except InvalidJsonError as e:
-            return self._error_response(400, "invalid_json", str(e))
-        except DuplicateMetadataError as e:
-            return self._error_response(400, "duplicate_metadata", str(e))
-        except MissingMetadataError as e:
-            return self._error_response(400, "missing_metadata", str(e))
-        except InvalidMetadataError as e:
-            return self._error_response(400, "invalid_identifier", str(e))
-        except CompressionError as e:
-            return self._error_response(400, "decompression_failed", str(e))
-        except ValidationError as e:
-            # Pydantic validation errors
-            return self._error_response(
-                400, "missing_fields", f"Validation error: {e.error_count()} errors"
+        # Log received message
+        if message.is_fatheavy:
+            logger.info(
+                f"Received heavy message: who={message.who}, "
+                f"what={message.what}, where={message.where}"
             )
-        except ValueError as e:
-            return self._error_response(400, "missing_fields", str(e))
-        except Exception as e:
-            logger.error(f"Unexpected error handling request: {e}", exc_info=True)
-            return self._error_response(
-                500, "internal_error", ERROR_CODES["internal_error"]
+        else:
+            content_size = len(message.content) if message.content else 0
+            logger.info(
+                f"Received fast message: who={message.who}, "
+                f"what={message.what}, size={content_size} bytes"
             )
+
+        # Call hook for extensibility (side effects only: metrics, validation, etc.)
+        self.received(message)
+
+        return message
+
+    def received(self, message: TransportMessage) -> None:
+        """
+        Hook called after successfully receiving and parsing a message.
+
+        Override this method in subclasses to add custom behavior like:
+        - Storage integration (fetch heavy content, save to storage)
+        - Metrics collection (count messages by who/what)
+        - Validation (check against expected who/what values)
+        - Notifications (alert on specific message types)
+        - Auditing (record receipt in database)
+
+        This method should have side effects only and not return values.
+        It should not modify the message object itself (TransportMessage instance).
+        It CAN and SHOULD raise exceptions for error conditions like:
+        - Storage failures (cannot save to storage)
+        - Validation failures (unauthorized entity, invalid format)
+        - Heavy content unreachable (cannot fetch from where URL)
+
+        Args:
+            message: Successfully parsed TransportMessage
+
+        Raises:
+            Any exception to reject the message and propagate error to caller
+
+        Example - Storage Integration:
+            ```python
+            class StorageHTTPCarrier(HTTPCarrier):
+                def __init__(self, storage: StorageProvider, *args, **kwargs):
+                    super().__init__(*args, **kwargs)
+                    self.storage = storage
+
+                def received(self, message: TransportMessage) -> None:
+                    # Get content (fetch if heavy)
+                    if message.is_fatheavy:
+                        content = StorageProvider.load_content_from_url(message.where)
+                    else:
+                        content = message.content
+
+                    # Save to internal storage
+                    url, metadata = self.storage.save(
+                        content=content,
+                        filename=message.metadata.filename or "data.bin",
+                        who=message.who,
+                        what=message.what,
+                        content_type=message.metadata.content_type,
+                        source_url=message.where if message.is_fatheavy else None,
+                    )
+
+                    # Store URL for later retrieval by application
+                    self.last_internal_url = url
+            ```
+
+        Example - Validation:
+            ```python
+            class ValidatingCarrier(HTTPCarrier):
+                def received(self, message: TransportMessage) -> None:
+                    # Validate entity
+                    if message.who not in ALLOWED_ENTITIES:
+                        raise ValueError(f"Unauthorized entity: {message.who}")
+
+                    # Track metrics
+                    metrics.increment(f"messages.{message.who}.{message.what}")
+            ```
+        """
+        pass  # Default: no-op, subclasses can override
 
     async def _handle_inline_message(self, body: bytes) -> TransportMessage:
         """
@@ -402,80 +474,6 @@ class HTTPCarrier(BaseCarrier):
         content = decompress_content(content, metadata.filename)
 
         return TransportMessage(metadata=metadata, content=content)
-
-    async def _process_message(self, message: TransportMessage) -> JSONResponse:
-        """
-        Process a received message.
-
-        For Phase 1, just logs and returns success.
-        Phase 2 will add:
-        - Storage integration (save to rpsd-storage)
-        - Heavy message URL fetching
-        - Return internal_url in response
-
-        Args:
-            message: Parsed TransportMessage
-
-        Returns:
-            JSONResponse: Success response
-        """
-        if message.is_fatheavy:
-            # Heavy mode: content needs to be fetched from where URL
-            # Phase 2 will implement this
-            logger.info(
-                f"Received heavy message: who={message.who}, "
-                f"what={message.what}, where={message.where}"
-            )
-            return JSONResponse(
-                status_code=501,
-                content=ErrorResponse(
-                    status="failed",
-                    error_code="not_implemented",
-                    message="Heavy mode storage not yet implemented (Phase 2)",
-                ).model_dump(),
-            )
-
-        # Fast mode: content is already available
-        content_size = len(message.content) if message.content else 0
-        logger.info(
-            f"Received fast message: who={message.who}, "
-            f"what={message.what}, size={content_size} bytes"
-        )
-
-        # Phase 2 will save to storage and return internal_url
-        return JSONResponse(
-            status_code=200,
-            content={"status": "received"},
-        )
-
-    def _error_response(
-        self,
-        status_code: int,
-        error_code: str,
-        message: str,
-        details: dict | None = None,
-    ) -> JSONResponse:
-        """
-        Create a standardized error response.
-
-        Args:
-            status_code: HTTP status code
-            error_code: Machine-readable error code
-            message: Human-readable error message
-            details: Optional additional error context
-
-        Returns:
-            JSONResponse with error details
-        """
-        return JSONResponse(
-            status_code=status_code,
-            content=ErrorResponse(
-                status="failed",
-                error_code=error_code,
-                message=message,
-                details=details,
-            ).model_dump(),
-        )
 
     def __del__(self):
         """Cleanup HTTP client on deletion."""

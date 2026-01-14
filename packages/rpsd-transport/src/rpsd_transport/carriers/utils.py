@@ -313,3 +313,122 @@ def build_outline_query_params(
     if where:
         params["where"] = where
     return params
+
+
+def message_to_json_response(
+    message,
+    status_code: int = 200,
+):
+    """
+    Convert a TransportMessage to a FastAPI JSONResponse.
+
+    Utility for HTTP endpoints that need to return JSON responses.
+    For programmatic use, work with TransportMessage directly.
+
+    Args:
+        message: Parsed transport message
+        status_code: HTTP status code (default 200)
+
+    Returns:
+        JSONResponse with message metadata
+
+    Example:
+        ```python
+        # In FastAPI endpoint
+        @app.post("/receive")
+        async def receive_endpoint(request: Request):
+            carrier = HTTPCarrier()
+            message = await carrier.receive(request)
+            return message_to_json_response(message)
+        ```
+    """
+    from fastapi.responses import JSONResponse
+
+    from rpsd_transport.models import SuccessResponse
+
+    return JSONResponse(
+        status_code=status_code,
+        content=SuccessResponse(
+            status="received",
+            internal_url=None,  # Caller saves and sets if needed
+        ).model_dump(),
+    )
+
+
+def exception_to_json_response(exception: Exception):
+    """
+    Convert transport exceptions to FastAPI JSONResponse.
+
+    Utility for HTTP endpoints that need to return error responses.
+    Maps transport exceptions to appropriate HTTP status codes.
+
+    Args:
+        exception: Transport exception or any Exception
+
+    Returns:
+        JSONResponse with error details
+
+    Example:
+        ```python
+        @app.post("/receive")
+        async def receive_endpoint(request: Request):
+            try:
+                carrier = HTTPCarrier()
+                message = await carrier.receive(request)
+                return message_to_json_response(message)
+            except Exception as e:
+                return exception_to_json_response(e)
+        ```
+    """
+    import logging
+
+    from fastapi.responses import JSONResponse
+    from pydantic import ValidationError
+
+    from rpsd_transport.exceptions import (
+        CompressionError,
+        DuplicateMetadataError,
+        InvalidJsonError,
+        InvalidMetadataError,
+        MissingMetadataError,
+    )
+    from rpsd_transport.models import ERROR_CODES, ErrorResponse
+
+    logger = logging.getLogger(__name__)
+
+    # Map exception types to (status_code, error_code)
+    if isinstance(exception, InvalidJsonError):
+        status_code, error_code = 400, "invalid_json"
+        message = str(exception)
+    elif isinstance(exception, DuplicateMetadataError):
+        status_code, error_code = 400, "duplicate_metadata"
+        message = str(exception)
+    elif isinstance(exception, MissingMetadataError):
+        status_code, error_code = 400, "missing_metadata"
+        message = str(exception)
+    elif isinstance(exception, InvalidMetadataError):
+        status_code, error_code = 400, "invalid_identifier"
+        message = str(exception)
+    elif isinstance(exception, CompressionError):
+        status_code, error_code = 400, "decompression_failed"
+        message = str(exception)
+    elif isinstance(exception, ValidationError):
+        status_code, error_code = 400, "missing_fields"
+        message = f"Validation error: {exception.error_count()} errors"
+    elif isinstance(exception, ValueError):
+        status_code, error_code = 400, "missing_fields"
+        message = str(exception)
+    else:
+        # Unexpected errors
+        logger.error(f"Unexpected error: {exception}", exc_info=True)
+        status_code, error_code = 500, "internal_error"
+        message = ERROR_CODES.get("internal_error", "Internal server error")
+
+    return JSONResponse(
+        status_code=status_code,
+        content=ErrorResponse(
+            status="failed",
+            error_code=error_code,
+            message=message,
+        ).model_dump(),
+    )

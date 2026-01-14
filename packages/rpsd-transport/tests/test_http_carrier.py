@@ -24,11 +24,20 @@ def http_carrier():
 @pytest.fixture
 def test_app(http_carrier):
     """Create test FastAPI app with receive endpoint."""
+    from rpsd_transport.carriers.utils import (
+        exception_to_json_response,
+        message_to_json_response,
+    )
+
     app = FastAPI()
 
     @app.post("/receive")
     async def receive(request: Request):
-        return await http_carrier.handle_receive(request)
+        try:
+            message = await http_carrier.receive(request)
+            return message_to_json_response(message)
+        except Exception as e:
+            return exception_to_json_response(e)
 
     return app
 
@@ -358,7 +367,7 @@ class TestHTTPCarrierSendHeavy:
 
 
 class TestHTTPCarrierReceiveInline:
-    """Test HTTPCarrier.handle_receive() with inline metadata."""
+    """Test HTTPCarrier.receive() with inline metadata."""
 
     def test_receive_inline_fast_message(self, test_app):
         """Test receiving fast message with inline JSON metadata."""
@@ -393,9 +402,10 @@ class TestHTTPCarrierReceiveInline:
 
         response = client.post("/receive", json=message)
 
-        # Heavy mode returns 501 (not implemented yet)
-        assert response.status_code == 501
-        assert response.json()["error_code"] == "not_implemented"
+        # Heavy messages are now parsed successfully and returned
+        # (fetching content and storage is caller's responsibility)
+        assert response.status_code == 200
+        assert response.json()["status"] == "received"
 
     def test_receive_inline_with_compression_gzip(self, test_app):
         """Test receiving compressed content in inline format (GZIP)."""
@@ -513,7 +523,7 @@ class TestHTTPCarrierReceiveInline:
 
 
 class TestHTTPCarrierReceiveOutline:
-    """Test HTTPCarrier.handle_receive() with outline metadata."""
+    """Test HTTPCarrier.receive() with outline metadata."""
 
     def test_receive_outline_raw_body(self, test_app):
         """Test receiving with metadata in headers, content in raw body."""
@@ -579,8 +589,10 @@ class TestHTTPCarrierReceiveOutline:
             },
         )
 
-        # Heavy mode returns 501 (not implemented yet)
-        assert response.status_code == 501
+        # Heavy messages are now parsed successfully and returned
+        # (fetching content and storage is caller's responsibility)
+        assert response.status_code == 200
+        assert response.json()["status"] == "received"
 
     def test_receive_outline_multipart(self, test_app):
         """Test receiving with multipart/form-data attachment."""

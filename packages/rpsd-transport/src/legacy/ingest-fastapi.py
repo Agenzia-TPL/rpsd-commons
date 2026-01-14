@@ -10,6 +10,7 @@ logger.setLevel(logging.INFO)
 
 app = FastAPI()
 
+
 @app.post("/ingest")
 async def ingest_data(request: Request):
     """
@@ -32,22 +33,14 @@ async def ingest_data(request: Request):
             "queryStringParameters": query_params,
             "body": json_body if json_body is not None else body,
             "isBase64Encoded": False,  # FastAPI handles decoding
-            "requestContext": {
-                "http": {
-                    "method": request.method
-                }
-            }
+            "requestContext": {"http": {"method": request.method}},
         }
 
         validate_request(event)
         object_id = route_request(event)
 
         return JSONResponse(
-            status_code=201,
-            content={
-                'success': True,
-                'object_id': object_id
-            }
+            status_code=201, content={"success": True, "object_id": object_id}
         )
     except PermissionError as pe:
         logger.error(f"Permission Error: {str(pe)}")
@@ -59,12 +52,11 @@ async def ingest_data(request: Request):
         logger.error(f"Error: {str(e)}")
         raise HTTPException(
             status_code=500,
-            detail={
-                'error': 'Internal server error',
-                'message': str(e)
-            }
+            detail={"error": "Internal server error", "message": str(e)},
         )
+
 
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(app, host="0.0.0.0", port=8000)

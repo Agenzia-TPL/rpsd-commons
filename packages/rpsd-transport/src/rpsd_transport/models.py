@@ -208,11 +208,17 @@ FatMessage = HeavyMessage
 
 
 class SuccessResponse(BaseModel):
-    """Successful message receipt response."""
+    """
+    Successful message receipt response (for HTTP endpoints).
+
+    Note: internal_url is set by the application after saving to storage,
+    not by the carrier. Carriers only parse and return TransportMessage.
+    """
 
     status: Literal["received"] = "received"
     internal_url: str | None = Field(
-        default=None, description="Internal storage URL (for heavy messages)"
+        default=None,
+        description="Internal storage URL (set by caller after saving)",
     )
 
 
