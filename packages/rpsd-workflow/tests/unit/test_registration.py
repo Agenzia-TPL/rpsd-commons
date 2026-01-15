@@ -107,16 +107,21 @@ class TestRuntimeRegistration:
         registered_workflows = []
         registered_activities = []
 
+        def make_func(name: str, return_value: str):
+            def func():
+                return return_value
+
+            func.__name__ = name
+            return func
+
         for domain, wf_name, act_name in domains_and_functions:
             # Create workflow
-            wf_func = lambda: f"{domain}_workflow"
-            wf_func.__name__ = wf_name
+            wf_func = make_func(wf_name, f"{domain}_workflow")
             clean_engine.workflow(domain=domain)(wf_func)
             registered_workflows.append(wf_func)
 
             # Create activity
-            act_func = lambda: f"{domain}_activity"
-            act_func.__name__ = act_name
+            act_func = make_func(act_name, f"{domain}_activity")
             clean_engine.activity(domain=domain)(act_func)
             registered_activities.append(act_func)
 
@@ -157,15 +162,21 @@ class TestRuntimeRegistration:
 
     def test_register_with_runtime_returns_counts(self, clean_engine, mock_runtime):
         """Test that register_with_runtime returns correct counts"""
+
+        def make_func(name: str, return_value: str):
+            def func():
+                return return_value
+
+            func.__name__ = name
+            return func
+
         # Add mixed content
         for i in range(3):
-            wf = lambda: f"workflow_{i}"
-            wf.__name__ = f"workflow_{i}"
+            wf = make_func(f"workflow_{i}", f"workflow_{i}")
             clean_engine.workflow(domain="test")(wf)
 
         for i in range(2):
-            act = lambda: f"activity_{i}"
-            act.__name__ = f"activity_{i}"
+            act = make_func(f"activity_{i}", f"activity_{i}")
             clean_engine.activity(domain="test")(act)
 
         workflows_count, activities_count = clean_engine.register_with_runtime(

@@ -257,7 +257,6 @@ def demonstrate_production_patterns():
         )
         print(f"   2️⃣  Processed: {processed_url}")
         print(f"       Object ID: {processed_save_metadata.object_id}")
-        archive_metadata = get_metadata_preset("minimal")
         custom_metadata = {"original_url": incoming_url, "processed_url": processed_url}
         archive_url, archive_save_metadata = storages["archived"].save(
             content_loaded,
@@ -270,7 +269,6 @@ def demonstrate_production_patterns():
         print(f"   3️⃣  Archived: {archive_url}")
         print(f"       Object ID: {archive_save_metadata.object_id}")
     except Exception as e:
-        failed_metadata = get_metadata_preset("minimal")
         custom_metadata = {"error": str(e), "original_filename": filename}
         failed_url, failed_save_metadata = storages["failed"].save(
             content,

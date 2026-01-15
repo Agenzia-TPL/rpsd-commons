@@ -113,9 +113,8 @@ def main():
         print("   • 03_metadata_and_types.py - Add custom metadata")
         print("   • 04_advanced_features.py - Error handling and advanced features")
         print("   • 05_typed_dict_benefits.py - Benefits of tuple unpacking")
-        print(
-            "   • 06_separate_load_methods.py - Separate load methods for content and metadata"
-        )
+        print("   • 06_separate_load_methods.py - Separate load methods for")
+        print("     content and metadata")
         print(
             "   • 07_metadata_comparison.py - Metadata comparison and version control"
         )

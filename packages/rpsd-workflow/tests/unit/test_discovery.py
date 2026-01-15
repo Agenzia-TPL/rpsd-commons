@@ -31,7 +31,8 @@ class TestDiscoveryMechanisms:
             assert mock_importlib["import_module"].call_count >= 1
 
     def test_discover_domains_fallback_to_installed_packages(self, clean_engine):
-        """Test discover_domains falls back to installed packages when base package missing"""
+        """Test discover_domains falls back to installed packages
+        when no base package missing"""
         # Mock importlib.metadata.distributions()
         mock_dist1 = Mock()
         mock_dist1.metadata = {"Name": "workflows-orders"}
@@ -205,7 +206,8 @@ class TestDiscoveryIntegration:
     """Integration tests for discovery with actual decorators"""
 
     def test_discovery_triggers_decorator_registration(self, clean_engine):
-        """Test that importing modules during discovery triggers decorator registration"""
+        """Test that importing modules during discovery
+        triggers decorator registration"""
         # This would be an integration test that actually imports test modules
         # For now, we'll mock it to show the pattern
 

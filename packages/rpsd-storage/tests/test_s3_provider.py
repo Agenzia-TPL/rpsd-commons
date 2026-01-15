@@ -9,11 +9,6 @@ import pytest
 import respx
 from botocore.exceptions import ClientError
 from moto import mock_aws
-
-from rpsd_storage.http import HTTPStorageProvider
-from rpsd_storage.metadata import StorageMetadata
-from rpsd_storage.s3 import S3StorageProvider
-
 from test_utils import (
     SampleMetadata,
     TestContent,
@@ -21,6 +16,10 @@ from test_utils import (
     verify_file_content,
     verify_metadata_structure,
 )
+
+from rpsd_storage.http import HTTPStorageProvider
+from rpsd_storage.metadata import StorageMetadata
+from rpsd_storage.s3 import S3StorageProvider
 
 
 class TestS3StorageProviderInit:

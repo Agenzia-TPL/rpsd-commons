@@ -217,8 +217,10 @@ class TestDaprWorkflowPatterns:
             order_id = input_data.get("order_id")
 
             # In real Dapr workflow, these would be:
-            # payment_result = yield ctx.call_activity("validate_payment", input_data["payment"])
-            # inventory_result = yield ctx.call_activity("update_inventory", input_data["inventory"])
+            # payment_result = yield ctx.call_activity(
+            #     "validate_payment", input_data["payment"])
+            # inventory_result = yield ctx.call_activity(
+            #     "update_inventory", input_data["inventory"])
 
             # For testing, we simulate the pattern
             payment_result = validate_payment(input_data.get("payment", {}))

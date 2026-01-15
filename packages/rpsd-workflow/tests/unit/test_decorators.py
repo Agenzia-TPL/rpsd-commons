@@ -70,7 +70,9 @@ class TestWorkflowDecorator:
 
     def test_workflow_decorator_preserves_function(self, clean_engine):
         """Test that workflow decorator preserves the original function"""
-        original_function = lambda x: x + 1
+
+        def original_function(x):
+            return x + 1
 
         decorated = clean_engine.workflow()(original_function)
 
@@ -85,7 +87,7 @@ class TestWorkflowDecorator:
 
         test_func.__module__ = "workflows_shipping.main"
 
-        decorated = clean_engine.workflow()(test_func)
+        _ = clean_engine.workflow()(test_func)
 
         metadata = list(clean_engine.workflows.values())[0]
         assert metadata.domain == "shipping"
@@ -148,7 +150,9 @@ class TestActivityDecorator:
 
     def test_activity_decorator_preserves_function(self, clean_engine):
         """Test that activity decorator preserves the original function"""
-        original_function = lambda x: x * 2
+
+        def original_function(x):
+            return x * 2
 
         decorated = clean_engine.activity()(original_function)
 

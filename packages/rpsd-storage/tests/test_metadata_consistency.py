@@ -5,7 +5,6 @@ Tests for metadata consistency between storage providers.
 import hashlib
 
 import pytest
-
 from test_utils import TestContent
 
 

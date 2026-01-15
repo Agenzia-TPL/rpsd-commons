@@ -65,7 +65,10 @@ def print_file_info(content: bytes, filename: str, mime_type: str) -> None:
 class SampleContent:
     """Sample content for examples."""
 
-    LOG_ENTRY = b"2024-01-15 10:30:00 INFO Application started successfully\n2024-01-15 10:30:01 INFO Database connection established"
+    LOG_ENTRY = (
+        b"2024-01-15 10:30:00 INFO Application started successfully\n"
+        b"2024-01-15 10:30:01 INFO Database connection established"
+    )
 
 
 def demonstrate_file_types():

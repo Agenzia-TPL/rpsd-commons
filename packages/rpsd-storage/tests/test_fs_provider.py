@@ -6,10 +6,6 @@ import json
 from pathlib import Path
 
 import pytest
-
-from rpsd_storage.fs import FSStorageProvider
-from rpsd_storage.metadata import StorageMetadata
-
 from test_utils import (
     SampleMetadata,
     TestContent,
@@ -18,6 +14,9 @@ from test_utils import (
     verify_file_content,
     verify_metadata_structure,
 )
+
+from rpsd_storage.fs import FSStorageProvider
+from rpsd_storage.metadata import StorageMetadata
 
 
 class TestFSStorageProviderInit:

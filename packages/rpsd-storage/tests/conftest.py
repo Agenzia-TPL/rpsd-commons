@@ -9,10 +9,9 @@ from pathlib import Path
 import boto3
 import pytest
 from moto import mock_aws
+from test_utils import TEST_SCENARIOS, create_test_file_data, create_test_metadata
 
 from rpsd_storage import FSStorageProvider, S3StorageProvider
-
-from test_utils import TEST_SCENARIOS, create_test_file_data, create_test_metadata
 
 
 @pytest.fixture
