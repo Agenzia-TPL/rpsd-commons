@@ -6,7 +6,7 @@ import hashlib
 
 import pytest
 
-from .test_utils import TestContent
+from test_utils import TestContent
 
 
 @pytest.mark.fs

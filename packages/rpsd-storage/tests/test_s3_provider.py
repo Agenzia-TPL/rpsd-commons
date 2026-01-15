@@ -14,7 +14,7 @@ from rpsd_storage.http import HTTPStorageProvider
 from rpsd_storage.metadata import StorageMetadata
 from rpsd_storage.s3 import S3StorageProvider
 
-from .test_utils import (
+from test_utils import (
     SampleMetadata,
     TestContent,
     create_test_file_data,

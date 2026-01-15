@@ -13,7 +13,7 @@ from rpsd_storage import FSStorageProvider
 from rpsd_storage.metadata import StorageMetadata
 from rpsd_storage.provider import StorageProvider
 
-from .test_utils import (
+from test_utils import (
     create_sample_file,
     create_temp_storage_dir,
     demonstrate_typed_load_result,

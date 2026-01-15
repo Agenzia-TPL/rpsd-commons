@@ -9,7 +9,7 @@ from httpx import Response
 from rpsd_storage.http import HTTPStorageProvider
 from rpsd_storage.provider import StorageProvider
 
-from .test_utils import TestContent
+from test_utils import TestContent
 
 
 class TestHTTPStorageProviderInit:

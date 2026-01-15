@@ -10,7 +10,7 @@ import pytest
 from rpsd_storage.fs import FSStorageProvider
 from rpsd_storage.metadata import StorageMetadata
 
-from .test_utils import (
+from test_utils import (
     SampleMetadata,
     TestContent,
     count_files_in_directory,
@@ -283,7 +283,7 @@ class TestFSStorageProviderIntegration:
 
     def test_multiple_files_different_scenarios(self, fs_storage_provider):
         """Test handling multiple files with different scenarios."""
-        from .test_utils import (
+        from test_utils import (
             TEST_SCENARIOS,
             create_test_file_data,
             create_test_metadata,
