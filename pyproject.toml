@@ -34,6 +34,9 @@ dev = [
     "pytest>=8.0.0",
     "moto[s3]>=5.0.0",
     "respx>=0.20.0",
+    "hypothesis>=6.0.0",
+    "pytest-benchmark>=4.0.0",
+    "pytest-mock>=3.11.0",
 ]
 
 [tool.ruff]
@@ -63,4 +66,9 @@ markers = [
     "fs: marks tests as related to the file system storage provider",
     "s3: marks tests as related to the S3 storage provider",
     "integration: marks tests as integration tests",
+    "dapr: marks tests as Dapr runtime integration tests",
+    "benchmark: marks tests as performance benchmarks",
+    "slow: marks tests as slow-running tests",
+    "property: marks tests as property-based tests",
+    "unit: marks tests as unit tests",
 ]

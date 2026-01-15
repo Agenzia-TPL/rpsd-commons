@@ -1,4 +1,4 @@
-from .engine import WorkflowMetadata, default_engine
+from rpsd_workflow.engine import WorkflowMetadata, default_engine
 
 # Export the decorators and system
 workflow = default_engine.workflow

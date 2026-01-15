@@ -1,7 +1,7 @@
-import importlib
 import pkgutil
 from collections.abc import Callable
 from dataclasses import dataclass
+from importlib import import_module
 
 
 @dataclass
@@ -22,10 +22,10 @@ class WorkflowEngine:
 
     def workflow(
         self,
-        name: str = None,
-        domain: str = None,
-        description: str = None,
-        version: str = None,
+        name: str | None = None,
+        domain: str | None = None,
+        description: str | None = None,
+        version: str | None = None,
     ):
         def decorator(func):
             workflow_domain = domain or self._extract_domain_from_module(
@@ -49,7 +49,12 @@ class WorkflowEngine:
 
         return decorator
 
-    def activity(self, name: str = None, domain: str = None, description: str = None):
+    def activity(
+        self,
+        name: str | None = None,
+        domain: str | None = None,
+        description: str | None = None,
+    ):
         def decorator(func):
             activity_domain = domain or self._extract_domain_from_module(
                 func.__module__
@@ -74,7 +79,7 @@ class WorkflowEngine:
     def discover_domains(self, base_package: str = "domains"):
         """Auto-discover workflows from installed domain packages"""
         try:
-            base_pkg = importlib.import_module(base_package)
+            base_pkg = import_module(base_package)
             self._discover_domain_packages(base_pkg)
         except ImportError:
             # If no 'domains' package exists, try to discover from installed packages
@@ -82,23 +87,23 @@ class WorkflowEngine:
 
     def _discover_from_installed_packages(self):
         """Discover workflow packages that follow naming convention"""
-        import pkg_resources
+        from importlib.metadata import distributions
 
         # Look for packages that start with specific prefixes
-        for package in pkg_resources.working_set:
-            package_name = package.project_name
+        for dist in distributions():
+            package_name = dist.metadata["Name"]
             if package_name.startswith("workflows-") or package_name.endswith(
                 "-workflows"
             ):
                 try:
                     # Import the package to trigger decorators
                     module_name = package_name.replace("-", "_")
-                    importlib.import_module(module_name)
+                    import_module(module_name)
                     print(f"Discovered workflow package: {package_name}")
                 except ImportError as e:
                     print(f"Failed to import {package_name}: {e}")
 
-    def register_with_runtime(self, runtime, enabled_domains: list[str] = None):
+    def register_with_runtime(self, runtime, enabled_domains: list[str] | None = None):
         registered_workflows = 0
         registered_activities = 0
 
@@ -136,11 +141,13 @@ class WorkflowEngine:
 
         # Pattern: workflows_orders.workflows.order_by_phone
         if parts[0].startswith("workflows_"):
-            return parts[0].replace("workflows_", "")
+            domain = parts[0].replace("workflows_", "")
+            return domain if domain else "default"
 
         # Pattern: orders_workflows.workflows.order_by_phone
         if parts[0].endswith("_workflows"):
-            return parts[0].replace("_workflows", "")
+            domain = parts[0].replace("_workflows", "")
+            return domain if domain else "default"
 
         # Pattern: domains.orders.workflows.order_by_phone
         if len(parts) >= 2 and parts[0] == "domains":
@@ -160,7 +167,7 @@ class WorkflowEngine:
             onerror=lambda x: None,
         ):
             try:
-                importlib.import_module(modname)
+                import_module(modname)
             except Exception as e:
                 print(f"Warning: Failed to import {modname}: {e}")
 

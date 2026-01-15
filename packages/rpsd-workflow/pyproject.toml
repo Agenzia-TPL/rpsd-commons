@@ -12,6 +12,13 @@ dependencies = [
     "dapr-ext-workflow>=1.15.0"
 ]
 
+[project.optional-dependencies]
+test = [
+    "hypothesis>=6.0.0",
+    "pytest-benchmark>=4.0.0",
+    "pytest-mock>=3.11.0",
+]
+
 [tool.uv.sources]
 # Internal workspace dependencies
 #my-collection-utils = { workspace = true }
