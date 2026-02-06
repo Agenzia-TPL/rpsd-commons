@@ -19,7 +19,7 @@ distributed systems where loading full content would be inefficient.
 import tempfile
 
 from rpsd_storage import FSStorageProvider
-from rpsd_storage.provider import StorageProvider
+from rpsd_storage.providers.base import StorageProvider
 
 
 def example_1_basic_url_comparison():

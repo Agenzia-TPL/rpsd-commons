@@ -395,7 +395,7 @@ class TestStorageProviderCompareFromUrl:
         """Test comparing URLs with identical content."""
         import tempfile
 
-        from rpsd_storage.fs import FSStorageProvider
+        from rpsd_storage.providers.fs import FSStorageProvider
 
         with tempfile.TemporaryDirectory() as temp_dir:
             provider = FSStorageProvider(temp_dir)
@@ -406,7 +406,7 @@ class TestStorageProviderCompareFromUrl:
             url2, _ = provider.save(content, "file2.txt", who="user1", what="document")
 
             # Compare using the static method
-            from rpsd_storage.provider import StorageProvider
+            from rpsd_storage.providers.base import StorageProvider
 
             result = StorageProvider.compare_from_url(url1, url2)
             assert result == 0
@@ -416,7 +416,7 @@ class TestStorageProviderCompareFromUrl:
         import tempfile
         import time
 
-        from rpsd_storage.fs import FSStorageProvider
+        from rpsd_storage.providers.fs import FSStorageProvider
 
         with tempfile.TemporaryDirectory() as temp_dir:
             provider = FSStorageProvider(temp_dir)
@@ -435,7 +435,7 @@ class TestStorageProviderCompareFromUrl:
             )
 
             # Compare using the static method
-            from rpsd_storage.provider import StorageProvider
+            from rpsd_storage.providers.base import StorageProvider
 
             result = StorageProvider.compare_from_url(url1, url2)
             assert result == 1
@@ -445,7 +445,7 @@ class TestStorageProviderCompareFromUrl:
         import tempfile
         import time
 
-        from rpsd_storage.fs import FSStorageProvider
+        from rpsd_storage.providers.fs import FSStorageProvider
 
         with tempfile.TemporaryDirectory() as temp_dir:
             provider = FSStorageProvider(temp_dir)
@@ -465,7 +465,7 @@ class TestStorageProviderCompareFromUrl:
 
             # Compare: url2 is current, url1 is candidate
             # Since url1 has an earlier timestamp, it should be older (-1)
-            from rpsd_storage.provider import StorageProvider
+            from rpsd_storage.providers.base import StorageProvider
 
             result = StorageProvider.compare_from_url(url2, url1)
             assert result == -1  # url1 is older than url2
@@ -479,7 +479,7 @@ class TestStorageProviderCompareFromUrl:
         """Test that comparing URLs with different 'who' raises ValueError."""
         import tempfile
 
-        from rpsd_storage.fs import FSStorageProvider
+        from rpsd_storage.providers.fs import FSStorageProvider
 
         with tempfile.TemporaryDirectory() as temp_dir:
             provider = FSStorageProvider(temp_dir)
@@ -493,7 +493,7 @@ class TestStorageProviderCompareFromUrl:
             )
 
             # Compare should raise ValueError
-            from rpsd_storage.provider import StorageProvider
+            from rpsd_storage.providers.base import StorageProvider
 
             with pytest.raises(
                 ValueError, match="Cannot compare metadata for different entities"
@@ -504,7 +504,7 @@ class TestStorageProviderCompareFromUrl:
         """Test that comparing URLs with different 'what' raises ValueError."""
         import tempfile
 
-        from rpsd_storage.fs import FSStorageProvider
+        from rpsd_storage.providers.fs import FSStorageProvider
 
         with tempfile.TemporaryDirectory() as temp_dir:
             provider = FSStorageProvider(temp_dir)
@@ -518,7 +518,7 @@ class TestStorageProviderCompareFromUrl:
             )
 
             # Compare should raise ValueError
-            from rpsd_storage.provider import StorageProvider
+            from rpsd_storage.providers.base import StorageProvider
 
             with pytest.raises(
                 ValueError, match="Cannot compare metadata for different entities"
@@ -529,8 +529,8 @@ class TestStorageProviderCompareFromUrl:
         """Test that comparing nonexistent URLs raises FileNotFoundError."""
         import tempfile
 
-        from rpsd_storage.fs import FSStorageProvider
-        from rpsd_storage.provider import StorageProvider
+        from rpsd_storage.providers.base import StorageProvider
+        from rpsd_storage.providers.fs import FSStorageProvider
 
         with tempfile.TemporaryDirectory() as temp_dir:
             provider = FSStorageProvider(temp_dir)
@@ -551,7 +551,7 @@ class TestStorageProviderCompareFromUrl:
         """Test comparing URLs from different providers (FS and HTTP mock)."""
         import tempfile
 
-        from rpsd_storage.fs import FSStorageProvider
+        from rpsd_storage.providers.fs import FSStorageProvider
 
         with tempfile.TemporaryDirectory() as temp_dir:
             provider = FSStorageProvider(temp_dir)
@@ -563,7 +563,7 @@ class TestStorageProviderCompareFromUrl:
 
             # This test would require a real HTTP server or mock
             # For now, we'll just verify the method exists and works with FS
-            from rpsd_storage.provider import StorageProvider
+            from rpsd_storage.providers.base import StorageProvider
 
             # Save another local file to compare
             url2, _ = provider.save(

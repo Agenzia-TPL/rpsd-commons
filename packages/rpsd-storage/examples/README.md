@@ -65,12 +65,12 @@ Master advanced concepts for production use:
 **Prerequisites:** Complete previous examples
 
 ### 🔍 [05_typed_dict_benefits.py](./05_typed_dict_benefits.py)
-**"Type safety with TypedDict"**
+**"Type safety with tuples and Pydantic"**
 
 Discover the benefits of modern Python typing:
-- TypedDict for compile-time type checking
+- Tuple unpacking with type hints
+- Pydantic models for metadata validation
 - IDE autocompletion and error detection
-- Type-safe functions with LoadResult
 - Best practices for typed code
 
 **Time investment:** 15 minutes
@@ -82,14 +82,14 @@ If you want to jump right in:
 
 ```python
 from rpsd_storage import FSStorageProvider
-from rpsd_storage.provider import LoadResult  # TypedDict for type safety
+from rpsd_storage.metadata import StorageMetadata
 
 # Create a storage provider
 storage = FSStorageProvider(base_path="/path/to/storage")
 
 # Save a file
 content = b"Hello, World!"
-object_id = storage.save(
+url, metadata = storage.save(
     content=content,
     filename="hello.txt",
     content_type="text/plain",
@@ -97,10 +97,12 @@ object_id = storage.save(
     what="demo_data"
 )
 
-# Load it back with TypedDict type safety
-loaded_file: LoadResult = storage.load(object_id)
-print(loaded_file["content"])  # b"Hello, World!" (IDE knows this is bytes)
-print(loaded_file["metadata"]["original_filename"])  # "hello.txt" (typed access)
+# Load it back with type hints
+loaded_content: bytes
+loaded_metadata: StorageMetadata
+loaded_content, loaded_metadata = storage.load(url)
+print(loaded_content)  # b"Hello, World!"
+print(loaded_metadata.original_filename)  # "hello.txt"
 ```
 
 ## Running the Examples
@@ -182,40 +184,49 @@ from rpsd_storage import get_storage_provider
 storage = get_storage_provider()
 ```
 
-## TypedDict Benefits
+## Type Safety with Tuples and Pydantic
 
-rpsd-storage uses **TypedDict** for the `load()` method return type, providing:
+rpsd-storage uses **tuple returns with Pydantic models** for type safety:
 
 ### 🔍 **Type Safety**
 ```python
-from rpsd_storage.provider import LoadResult
+from rpsd_storage import FSStorageProvider
+from rpsd_storage.metadata import StorageMetadata
 
-result: LoadResult = storage.load(object_id)
-content: bytes = result["content"]      # IDE knows this is bytes
-metadata: dict = result["metadata"]     # IDE knows this is dict
+# Type-safe tuple unpacking
+content: bytes
+metadata: StorageMetadata
+content, metadata = storage.load(url)
 ```
 
 ### 💡 **IDE Support**
-- **Autocompletion** for dictionary keys (`"content"`, `"metadata"`)
-- **Error detection** for typos in key names
+- **Autocompletion** for StorageMetadata attributes (`.original_filename`, `.content_type`, etc.)
+- **Error detection** for typos in attribute names
 - **Type checking** with mypy or similar tools
 - **Better refactoring** support
 
 ### 📝 **Clear Documentation**
-The `LoadResult` TypedDict clearly documents what the `load()` method returns:
+The `load()` method returns a typed tuple:
 ```python
-class LoadResult(TypedDict):
-    content: bytes              # The file content
-    metadata: dict[str, Any]    # File metadata and information
+def load(self, url: str) -> tuple[bytes, StorageMetadata]:
+    """
+    Returns:
+        tuple: A tuple containing:
+            - content (bytes): The file content
+            - metadata (StorageMetadata): The metadata Pydantic model
+    """
 ```
 
 ### 🔧 **Type-Safe Functions**
-Write functions that work with LoadResult:
+Write functions with tuple unpacking:
 ```python
-def analyze_file(result: LoadResult) -> dict:
-    content: bytes = result["content"]
-    metadata: dict = result["metadata"]
-    return {"size": len(content), "type": metadata["content_type"]}
+def analyze_file(url: str, storage: FSStorageProvider) -> dict:
+    content, metadata = storage.load(url)
+    return {
+        "size": len(content),
+        "type": metadata.content_type,
+        "filename": metadata.original_filename
+    }
 ```
 
 ## Best Practices
@@ -262,7 +273,7 @@ After completing the examples:
 
 1. **Integrate with your application** - Start with file system storage for simplicity
 2. **Add error handling** - Use the patterns from `04_advanced_features.py`
-3. **Use TypedDict** - Import `LoadResult` for type safety in your code
+3. **Use type hints** - Use tuple unpacking with type annotations for type safety
 4. **Plan your metadata** - Design consistent metadata for your use case
 5. **Enable type checking** - Use mypy or similar tools to catch errors early
 6. **Consider S3** - For production deployments requiring scale and durability

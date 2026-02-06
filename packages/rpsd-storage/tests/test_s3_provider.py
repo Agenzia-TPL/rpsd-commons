@@ -17,9 +17,9 @@ from test_utils import (
     verify_metadata_structure,
 )
 
-from rpsd_storage.http import HTTPStorageProvider
 from rpsd_storage.metadata import StorageMetadata
-from rpsd_storage.s3 import S3StorageProvider
+from rpsd_storage.providers.http import HTTPStorageProvider
+from rpsd_storage.providers.s3 import S3StorageProvider
 
 
 class TestS3StorageProviderInit:

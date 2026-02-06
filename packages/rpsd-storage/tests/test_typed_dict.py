@@ -19,7 +19,7 @@ from test_utils import (
 
 from rpsd_storage import FSStorageProvider
 from rpsd_storage.metadata import StorageMetadata
-from rpsd_storage.provider import StorageProvider
+from rpsd_storage.providers.base import StorageProvider
 
 
 class TestTupleInterface:

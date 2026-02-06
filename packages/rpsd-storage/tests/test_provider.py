@@ -2,7 +2,7 @@
 Tests for StorageProvider base class.
 """
 
-from rpsd_storage.provider import StorageProvider
+from rpsd_storage.providers.base import StorageProvider
 
 
 class TestStorageProviderExtensionFromMime:

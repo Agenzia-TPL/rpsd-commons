@@ -7,8 +7,8 @@ import respx
 from httpx import Response
 from test_utils import TestContent
 
-from rpsd_storage.http import HTTPStorageProvider
-from rpsd_storage.provider import StorageProvider
+from rpsd_storage.providers.base import StorageProvider
+from rpsd_storage.providers.http import HTTPStorageProvider
 
 
 class TestHTTPStorageProviderInit:

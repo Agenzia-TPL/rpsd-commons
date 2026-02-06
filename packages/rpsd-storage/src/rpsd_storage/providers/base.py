@@ -217,7 +217,7 @@ class StorageProvider(ABC):
         scheme = parsed.scheme.lower()
 
         if scheme == "s3":
-            from rpsd_storage.s3 import S3StorageProvider
+            from rpsd_storage.providers.s3 import S3StorageProvider
 
             bucket_name = parsed.netloc
             provider = S3StorageProvider(bucket_name)
@@ -228,13 +228,13 @@ class StorageProvider(ABC):
             # We'll use a temporary provider just to call load method
             import tempfile
 
-            from rpsd_storage.fs import FSStorageProvider
+            from rpsd_storage.providers.fs import FSStorageProvider
 
             with tempfile.TemporaryDirectory() as temp_dir:
                 provider = FSStorageProvider(temp_dir)
                 return provider.load(url)
         elif scheme in ("http", "https"):
-            from rpsd_storage.http import HTTPStorageProvider
+            from rpsd_storage.providers.http import HTTPStorageProvider
 
             provider = HTTPStorageProvider()
             return provider.load(url)
@@ -256,7 +256,7 @@ class StorageProvider(ABC):
         scheme = parsed.scheme.lower()
 
         if scheme == "s3":
-            from rpsd_storage.s3 import S3StorageProvider
+            from rpsd_storage.providers.s3 import S3StorageProvider
 
             bucket_name = parsed.netloc
             provider = S3StorageProvider(bucket_name)
@@ -264,13 +264,13 @@ class StorageProvider(ABC):
         elif scheme == "file":
             import tempfile
 
-            from rpsd_storage.fs import FSStorageProvider
+            from rpsd_storage.providers.fs import FSStorageProvider
 
             with tempfile.TemporaryDirectory() as temp_dir:
                 provider = FSStorageProvider(temp_dir)
                 return provider.load_content(url)
         elif scheme in ("http", "https"):
-            from rpsd_storage.http import HTTPStorageProvider
+            from rpsd_storage.providers.http import HTTPStorageProvider
 
             provider = HTTPStorageProvider()
             return provider.load_content(url)
@@ -292,7 +292,7 @@ class StorageProvider(ABC):
         scheme = parsed.scheme.lower()
 
         if scheme == "s3":
-            from rpsd_storage.s3 import S3StorageProvider
+            from rpsd_storage.providers.s3 import S3StorageProvider
 
             bucket_name = parsed.netloc
             provider = S3StorageProvider(bucket_name)
@@ -300,13 +300,13 @@ class StorageProvider(ABC):
         elif scheme == "file":
             import tempfile
 
-            from rpsd_storage.fs import FSStorageProvider
+            from rpsd_storage.providers.fs import FSStorageProvider
 
             with tempfile.TemporaryDirectory() as temp_dir:
                 provider = FSStorageProvider(temp_dir)
                 return provider.load_metadata(url)
         elif scheme in ("http", "https"):
-            from rpsd_storage.http import HTTPStorageProvider
+            from rpsd_storage.providers.http import HTTPStorageProvider
 
             provider = HTTPStorageProvider()
             return provider.load_metadata(url)
@@ -428,7 +428,7 @@ class StorageProvider(ABC):
         scheme = parsed.scheme.lower()
 
         if scheme == "s3":
-            from rpsd_storage.s3 import S3StorageProvider
+            from rpsd_storage.providers.s3 import S3StorageProvider
 
             bucket_name = parsed.netloc
             provider = S3StorageProvider(bucket_name)
@@ -436,13 +436,13 @@ class StorageProvider(ABC):
         elif scheme == "file":
             import tempfile
 
-            from rpsd_storage.fs import FSStorageProvider
+            from rpsd_storage.providers.fs import FSStorageProvider
 
             with tempfile.TemporaryDirectory() as temp_dir:
                 provider = FSStorageProvider(temp_dir)
                 provider.delete(url)
         elif scheme in ("http", "https"):
-            from rpsd_storage.http import HTTPStorageProvider
+            from rpsd_storage.providers.http import HTTPStorageProvider
 
             provider = HTTPStorageProvider()
             provider.delete(url)

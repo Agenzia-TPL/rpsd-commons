@@ -10,7 +10,7 @@ from rpsd_storage.metadata import StorageMetadata
 logger = logging.getLogger(__name__)
 
 # Import StorageProvider after other imports to avoid circular dependency
-from rpsd_storage.provider import StorageProvider  # noqa: E402
+from rpsd_storage.providers.base import StorageProvider  # noqa: E402
 
 
 class HTTPStorageProvider(StorageProvider):

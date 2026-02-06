@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 from urllib.parse import urlparse
 
 from rpsd_storage.metadata import StorageMetadata
-from rpsd_storage.provider import StorageProvider
+from rpsd_storage.providers.base import StorageProvider
 
 logger = logging.getLogger()
 

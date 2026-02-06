@@ -7,7 +7,7 @@ import logging
 import httpx
 
 from rpsd_storage.metadata import StorageMetadata
-from rpsd_storage.provider import StorageProvider
+from rpsd_storage.providers.base import StorageProvider
 from rpsd_transport.carriers.http import HTTPCarrier
 from rpsd_transport.models import TransportMessage
 
