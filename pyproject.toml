@@ -11,7 +11,6 @@ dependencies = [
     "rpsd-transport",
     "rpsd-storage",
     "rpsd-settings",
-    "rpsd-workflow"
 ]
 
 [tool.uv.sources]
@@ -19,7 +18,6 @@ dependencies = [
 rpsd-transport = { workspace = true }
 rpsd-storage = { workspace = true }
 rpsd-settings = { workspace = true }
-rpsd-workflow = { workspace = true }
 
 [tool.uv.workspace]
 members = ["packages/*", "examples/fastapi_ingest_app"]
@@ -66,7 +64,6 @@ markers = [
     "fs: marks tests as related to the file system storage provider",
     "s3: marks tests as related to the S3 storage provider",
     "integration: marks tests as integration tests",
-    "dapr: marks tests as Dapr runtime integration tests",
     "benchmark: marks tests as performance benchmarks",
     "slow: marks tests as slow-running tests",
     "property: marks tests as property-based tests",

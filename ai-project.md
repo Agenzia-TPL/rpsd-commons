@@ -10,7 +10,6 @@ Library of commond code for the Rapsodia project.
 Organized into packages (uv workspace project):
 - rpsd-storage
 - rpsd-transport
-- rpsd-workflow
 
 # Workspace root
 
@@ -171,8 +170,7 @@ For Fat/Heavy messages with outline metadata, metadata values are transported by
 
 Initially there'll be three "transport carriers", but more may come in the future:
 - HTTP
-- Dapr Service invocation
-- Dapr PubSub
+- PubSub
 
 Each carrier must implement a base interface with methods for sending and receiving messages.
 
@@ -186,7 +184,7 @@ Here follows sending methods definitions:
 - send_fatheavy => send content as a Fat/Heavy message (must support both inline and outline metadata)
 
 Both sending methods share these parameters (in order):
-- recipient => target identifier (URL for HTTP, app_id for Dapr, etc.)
+- recipient => target identifier (URL for HTTP, topic/channel for PubSub, etc.)
 - who => entity identifier
 - what => content type/category
 - content => data bytes (required for send_slimfast, optional for send_fatheavy)
@@ -261,10 +259,6 @@ where => X-RPSD-WHERE
 
 Legacy header names are supported, but not incentivated and they may be deprecated at some time in the future.
 
-### Dapr Service invocation
+### PubSub
 
-This carrier is base on the Service invocation building block of Dapr and is available for the internal transport scope only.
-
-### Dapr PubSub
-
-This carrier is base on the Publish & subscribe building block of Dapr and is available for the internal transport scope only.
+This carrier is based on the Publish & Subscribe functionality of some Event Broker and is available for the internal transport scope only.

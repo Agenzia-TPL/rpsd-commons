@@ -1,23 +1,5 @@
-############################
-# Dapr platform
-############################
-include:
-  - ./docker-compose-dapr.yml
-
 services:
   rpsd-commons:
     extends:
       file: ./docker-compose-base.yml
       service: rpsd-commons
-
-  ############################
-  # Dapr sidecar
-  ############################
-  rpsd-commons-dapr:
-    extends:
-      file: ./docker-compose-base.yml
-      service: rpsd-commons-dapr
-    depends_on:
-      - placement
-      - scheduler
-      - redis

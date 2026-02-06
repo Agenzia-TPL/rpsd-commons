@@ -6,7 +6,6 @@ Common libraries for the Rapsodia project, organized as a uv workspace with mult
 
 - **[rpsd-storage](packages/rpsd-storage/)** - Storage providers (S3, Filesystem, HTTP)
 - **[rpsd-transport](packages/rpsd-transport/)** - Data transport utilities
-- **[rpsd-workflow](packages/rpsd-workflow/)** - Dapr workflow engine integration
 - **[rpsd-settings](packages/rpsd-settings/)** - Composable settings system (optional convenience package)
 
 ## Installation
@@ -116,9 +115,8 @@ rpsd-commons/
 ├── packages/               # Workspace packages
 │   ├── rpsd-storage/
 │   ├── rpsd-transport/
-│   ├── rpsd-workflow/
 │   └── rpsd-settings/
-├── src/rpsd_commons/       # Workspace root (Dapr components, etc.)
+├── src/rpsd_commons/       # Workspace root
 ├── pyproject.toml          # Workspace configuration
 └── .env.example            # Environment variable template
 ```
@@ -156,16 +154,9 @@ See [rpsd-storage README](packages/rpsd-storage/README.md) for details.
 
 Data transport utilities for receiving/sending data through:
 - HTTP APIs (FastAPI-based)
-- Dapr service invocation
-- Dapr PubSub
+- PubSub
 
 See [rpsd-transport README](packages/rpsd-transport/README.md) for details.
-
-### rpsd-workflow
-
-Dapr workflow engine integration for orchestrating workflows and activities.
-
-See [rpsd-workflow README](packages/rpsd-workflow/README.md) for details.
 
 ### rpsd-settings
 

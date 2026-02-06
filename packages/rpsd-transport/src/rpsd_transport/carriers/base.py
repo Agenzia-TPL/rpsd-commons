@@ -13,7 +13,7 @@ class BaseCarrier(ABC):
     """
     Abstract base class for transport carriers.
 
-    Carriers implement different transport mechanisms (HTTP, Dapr, etc.)
+    Carriers implement different transport mechanisms (HTTP, PubSub, etc.)
     for sending and receiving data in both fast and heavy modes.
 
     Methods to implement:
@@ -43,7 +43,7 @@ class BaseCarrier(ABC):
         Send data inline (fast/slim mode).
 
         Args:
-            recipient: Target identifier (URL for HTTP, app_id for Dapr, etc.)
+            recipient: Target identifier (URL for HTTP, topic/channel for PubSub, etc.)
             who: Entity identifier
             what: Content type/category
             content: Data to send
@@ -83,7 +83,7 @@ class BaseCarrier(ABC):
         Either content or where must be provided.
 
         Args:
-            recipient: Target identifier (URL for HTTP, app_id for Dapr, etc.)
+            recipient: Target identifier (URL for HTTP, topic/channel for PubSub, etc.)
             who: Entity identifier
             what: Content type/category
             content: New data to save and expose (Phase 2) or None
@@ -114,7 +114,7 @@ class BaseCarrier(ABC):
         Does not fetch heavy content or save to storage.
 
         Args:
-            request: Request object (FastAPI Request for HTTP/Dapr carriers)
+            request: Request object (FastAPI Request for HTTP/PubSub carriers)
 
         Returns:
             TransportMessage: Parsed message ready for processing

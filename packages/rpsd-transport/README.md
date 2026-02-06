@@ -13,8 +13,7 @@ A library for transporting data between services using various transport methods
 Transport is accomplished through **carriers** - pluggable implementations for different transport mechanisms:
 
 - **HTTPCarrier**: HTTP-based transport for external systems (REST APIs)
-- **DaprServiceCarrier**: Dapr service-to-service invocation (internal only) - TODO
-- **DaprPubSubCarrier**: Dapr pub/sub messaging (internal only) - TODO
+- **PubSubCarrier**: Event Broker pub/sub messaging (internal only) - TODO
 
 #### Message Modes
 
@@ -213,7 +212,7 @@ Heavy messages integrate with `rpsd-storage` for data persistence:
   - **External transports** (HTTP): Must use HTTP URLs
     - S3: Generates presigned URLs (built-in TTL)
     - FS: Creates temporary FastAPI endpoints (manual TTL cleanup)
-  - **Internal transports** (Dapr): Can use direct storage URLs
+  - **Internal transports** (PubSub): Can use direct storage URLs
     - S3: Exposes `s3://` URLs directly (if shared access)
     - FS: Exposes `file://` URLs directly (if shared filesystem)
 
@@ -278,9 +277,8 @@ async def fetch_temp_data(temp_id: str):
 - [ ] Manual integration helpers
 - [ ] Example application
 
-### Phase 4: Dapr Carriers (TODO)
-- [ ] `DaprServiceCarrier` implementation
-- [ ] `DaprPubSubCarrier` implementation
+### Phase 4: PubSub Carrier (TODO)
+- [ ] `PubSubCarrier` implementation
 
 ## Configuration
 
