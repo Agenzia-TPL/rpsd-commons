@@ -347,16 +347,18 @@ version = "0.1.0"
 source = { editable = "examples/fastapi_ingest_app" }
 dependencies = [
     { name = "fastapi" },
+    { name = "httpx" },
     { name = "rpsd-storage" },
-    { name = "rpsd-transport" },
+    { name = "rpsd-transport", extra = ["kafka"] },
     { name = "uvicorn", extra = ["standard"] },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "fastapi", specifier = ">=0.100.0" },
+    { name = "httpx", specifier = ">=0.24.0" },
     { name = "rpsd-storage", editable = "packages/rpsd-storage" },
-    { name = "rpsd-transport", editable = "packages/rpsd-transport" },
+    { name = "rpsd-transport", extras = ["kafka"], editable = "packages/rpsd-transport" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.24.0" },
 ]
 

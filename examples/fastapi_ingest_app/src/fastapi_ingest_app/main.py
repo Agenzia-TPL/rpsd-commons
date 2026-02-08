@@ -4,6 +4,7 @@ FastAPI application demonstrating HTTPCarrier with IngestProcessor.
 This example shows how to:
 - Use HTTPCarrier.receive() to parse incoming messages
 - Use IngestProcessor to save content to storage
+- Optionally forward to Kafka after storage
 - Support both inline (JSON) and outline (headers/query) metadata formats
 - Validate API keys
 - Configure storage providers (FS or S3) via settings
@@ -17,6 +18,7 @@ from fastapi.responses import JSONResponse
 from fastapi_ingest_app.auth import validate_api_key
 from fastapi_ingest_app.settings import AppSettings
 from rpsd_storage import get_storage_provider
+from rpsd_transport import get_carrier
 from rpsd_transport.carriers.http import HTTPCarrier
 from rpsd_transport.exceptions import (
     InvalidMetadataError,
@@ -24,6 +26,7 @@ from rpsd_transport.exceptions import (
     TransportError,
 )
 from rpsd_transport.processors.ingest import IngestProcessor
+from rpsd_transport.settings import TransportSettings
 
 # Configure logging
 logging.basicConfig(
@@ -36,7 +39,28 @@ logger = logging.getLogger(__name__)
 settings = AppSettings()
 storage_provider = get_storage_provider(settings.storage)
 carrier = HTTPCarrier(timeout=30.0)
-processor = IngestProcessor(storage=storage_provider)
+
+# Create forward carrier if configured
+forward_carrier = None
+if settings.forward.carrier:
+    forward_settings = TransportSettings(
+        carrier=settings.forward.carrier,
+        kafka=settings.forward.kafka,
+    )
+    forward_carrier = get_carrier(forward_settings)
+    logger.info(
+        "Forward carrier configured: %s -> %s",
+        settings.forward.carrier,
+        settings.forward.recipient,
+    )
+
+# Create processor with optional forwarding
+processor = IngestProcessor(
+    storage=storage_provider,
+    forward_carrier=forward_carrier,
+    forward_recipient=settings.forward.recipient,
+    forward_mode=settings.forward.mode,
+)
 
 # Create FastAPI app
 app = FastAPI(
@@ -44,6 +68,24 @@ app = FastAPI(
     description=("Example FastAPI app using HTTPCarrier and IngestProcessor"),
     version="1.0.0",
 )
+
+
+@app.on_event("startup")
+async def startup_event():
+    """Initialize forward carrier on startup."""
+    if forward_carrier and hasattr(forward_carrier, "start"):
+        logger.info("Starting forward carrier...")
+        await forward_carrier.start()
+        logger.info("Forward carrier started successfully")
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Cleanup forward carrier on shutdown."""
+    if forward_carrier and hasattr(forward_carrier, "stop"):
+        logger.info("Stopping forward carrier...")
+        await forward_carrier.stop()
+        logger.info("Forward carrier stopped successfully")
 
 
 @app.post("/ingest")
@@ -74,13 +116,14 @@ async def ingest_data(request: Request):
         message = await carrier.receive(request)
 
         # Process: resolve heavy content + save to storage
-        result = processor.process(message)
+        result = await processor.process_async(message)
 
-        # Build response with storage URL
+        # Build response with storage URL and forward status
         response_data = {
             "success": True,
             "message": "Content received and stored",
             "storage_url": result.storage_url,
+            "forwarded": result.forwarded,
             "metadata": {
                 "who": message.who,
                 "what": message.what,
@@ -95,10 +138,11 @@ async def ingest_data(request: Request):
             )
 
         logger.info(
-            "Successfully processed message: who=%s, what=%s, url=%s",
+            "Successfully processed message: who=%s, what=%s, url=%s, forwarded=%s",
             message.who,
             message.what,
             result.storage_url,
+            result.forwarded,
         )
 
         return JSONResponse(status_code=201, content=response_data)
@@ -132,6 +176,8 @@ async def health_check():
     return {
         "status": "healthy",
         "storage_provider": settings.storage.provider,
+        "forward_carrier": settings.forward.carrier,
+        "forward_recipient": settings.forward.recipient if settings.forward.carrier else None,
     }
 
 
@@ -141,6 +187,10 @@ def run():
 
     logger.info("Starting RPSD Ingest Example application")
     logger.info(f"Storage provider: {settings.storage.provider}")
+    if settings.forward.carrier:
+        logger.info(f"Forward carrier: {settings.forward.carrier} -> {settings.forward.recipient}")
+    else:
+        logger.info("Forward carrier: disabled")
 
     uvicorn.run(app, host="0.0.0.0", port=8000, log_level="info")
 

@@ -165,6 +165,59 @@ run_test "ERROR: Invalid 'who' characters (expect 400)" \
 
 echo ""
 echo "======================================"
+echo "Kafka Forwarding Tests"
+echo "======================================"
+echo ""
+echo "Note: These tests require Kafka to be running."
+echo "      Start Kafka: cd ../../host-scripts && ./kafka-start.sh"
+echo ""
+
+# Test 9: Verify forwarding enabled (check response contains 'forwarded' field)
+RESPONSE=$(curl -s -X POST "$BASE_URL/ingest" \
+    -H "Authorization: Bearer $API_KEY" \
+    -H "X-RPSD-WHO: forward-test" \
+    -H "X-RPSD-WHAT: test-forwarding" \
+    -H "Content-Type: text/plain" \
+    -d "Test message for Kafka forwarding")
+
+echo -e "${BLUE}Test: Kafka Forwarding - Response Check${NC}"
+echo "$RESPONSE" | python3 -m json.tool
+
+FORWARDED=$(echo "$RESPONSE" | python3 -c "import sys, json; print(json.load(sys.stdin).get('forwarded', False))")
+if [ "$FORWARDED" = "True" ]; then
+    echo -e "${GREEN}✓ Forwarding enabled (forwarded: true)${NC}"
+else
+    echo -e "${BLUE}ℹ Forwarding disabled or Kafka not available (forwarded: false)${NC}"
+fi
+echo ""
+
+# Test 10: Verify fatheavy forwarding (message should contain storage URL)
+echo -e "${BLUE}Test: Fatheavy Forwarding - Check Kafka Message Format${NC}"
+echo "After running this test, check Kafka UI at http://localhost:8080"
+echo "Expected in Kafka message:"
+echo "  - 'where' field should contain storage URL"
+echo "  - 'content' field should be null or absent"
+echo ""
+echo "Manual verification:"
+echo "  1. Open http://localhost:8080"
+echo "  2. Navigate to Topics → enriched-events"
+echo "  3. View the latest message"
+echo "  4. Verify it contains 'where' field with storage URL"
+echo ""
+echo -e "${GREEN}---${NC}"
+echo ""
+
+# Test 11: Slimfast forwarding (if mode is set to slimfast)
+echo -e "${BLUE}Test: Slimfast Forwarding - Inline Content${NC}"
+echo "If APP__FORWARD__MODE=slimfast, Kafka message should contain:"
+echo "  - 'content' field with actual content"
+echo "  - No 'where' field"
+echo ""
+echo -e "${GREEN}---${NC}"
+echo ""
+
+echo ""
+echo "======================================"
 echo "All tests completed!"
 echo "======================================"
 echo ""
@@ -172,4 +225,9 @@ echo "Check storage directory for saved files:"
 echo "  ls -la /tmp/rpsd-storage/alice/"
 echo "  ls -la /tmp/rpsd-storage/bob/"
 echo "  ls -la /tmp/rpsd-storage/charlie/"
+echo "  ls -la /tmp/rpsd-storage/forward-test/"
+echo ""
+echo "Check Kafka for forwarded messages:"
+echo "  Kafka UI: http://localhost:8080"
+echo "  Topic: enriched-events"
 echo ""
