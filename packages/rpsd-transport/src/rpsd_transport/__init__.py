@@ -6,7 +6,11 @@ Supports both inline and outline metadata organization:
 - Outline: Metadata in headers/query params, content in body or multipart
 """
 
-from rpsd_transport.compression import decompress_content, is_compressed
+from rpsd_transport.carriers.base import BaseCarrier, CarrierOptions
+from rpsd_transport.compression import (
+    decompress_content,
+    is_compressed,
+)
 from rpsd_transport.exceptions import (
     CompressionError,
     ContentFetchError,
@@ -32,11 +36,58 @@ from rpsd_transport.models import (
     SuccessResponse,
     TransportMessage,
 )
-from rpsd_transport.settings import TransportSettings
+from rpsd_transport.settings import KafkaSettings, TransportSettings
+
+
+def get_carrier(
+    settings: TransportSettings | None = None,
+) -> BaseCarrier:
+    """Create a carrier based on settings.
+
+    Mirrors rpsd-storage's get_storage_provider() pattern.
+
+    Args:
+        settings: Transport settings. If None, loads from
+            environment variables.
+
+    Returns:
+        BaseCarrier: Configured carrier instance
+
+    Raises:
+        ValueError: If carrier type is unknown
+        ImportError: If broker dependencies are missing
+    """
+    if settings is None:
+        settings = TransportSettings()
+
+    if settings.carrier == "http":
+        from rpsd_transport.carriers.http import HTTPCarrier
+
+        return HTTPCarrier()
+
+    if settings.carrier == "kafka":
+        from rpsd_transport.carriers.pubsub.kafka import (
+            KafkaPubSubCarrier,
+        )
+
+        return KafkaPubSubCarrier(
+            bootstrap_servers=settings.kafka.bootstrap_servers,
+            group_id=settings.kafka.group_id,
+            client_id=settings.kafka.client_id,
+        )
+
+    raise ValueError(f"Unknown carrier type: {settings.carrier}")
+
 
 __all__ = [
+    # Factory
+    "get_carrier",
+    # Base classes
+    "BaseCarrier",
+    "CarrierOptions",
     # Settings
     "TransportSettings",
+    "KafkaSettings",
     # Core models
     "MessageMetadata",
     "TransportMessage",

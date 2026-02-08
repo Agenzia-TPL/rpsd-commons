@@ -168,7 +168,7 @@ For Fat/Heavy messages with outline metadata, metadata values are transported by
 
 ## Carriers
 
-Initially there'll be three "transport carriers", but more may come in the future:
+Initially there'll be two "transport carriers", but more may come in the future:
 - HTTP
 - PubSub
 
@@ -233,6 +233,7 @@ Storage integration:
 - Utilities provided: message_to_json_response(), exception_to_json_response()
 
 ### HTTP carrier
+__DONE__
 
 This carrier is based on FastAPI and is primarly intended for the external transport scope, but it may nonetheless be used for the internal one, too.
 Is intended to implement APIs that an external system may invoke (receive content from external systems)
@@ -260,5 +261,16 @@ where => X-RPSD-WHERE
 Legacy header names are supported, but not incentivated and they may be deprecated at some time in the future.
 
 ### PubSub
+__DONE__ (Kafka carrier)
 
 This carrier is based on the Publish & Subscribe functionality of some Event Broker and is available for the internal transport scope only.
+
+Architecture: Abstract PubSubCarrier base class (sub-ABC of BaseCarrier) + one implementing class per broker. Starting with Kafka, Redis and RabbitMQ to follow.
+
+Key design decisions:
+- Two-level hierarchy: BaseCarrier -> PubSubCarrier -> KafkaPubSubCarrier. Justified because PubSub carriers share a distinct receive contract (raw bytes + headers) from HTTP (FastAPI Request).
+- CarrierOptions Pydantic model pattern: CarrierOptions -> HTTPCarrierOptions / KafkaCarrierOptions. Each carrier specializes options with carrier-specific fields.
+- Carrier manages consumer lifecycle via consume() async iterator (unlike HTTP where FastAPI handles the server).
+- receive() on PubSubCarrier is sync (just parsing, no I/O). For advanced use when caller manages own consumer.
+- get_carrier() factory function mirrors rpsd-storage's get_storage_provider() pattern.
+- aiokafka is an optional dependency: uv add rpsd-transport[kafka].

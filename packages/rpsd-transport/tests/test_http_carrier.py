@@ -12,6 +12,7 @@ from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
 
 from rpsd_transport.carriers import HTTPCarrier
+from rpsd_transport.carriers.http import HTTPCarrierOptions
 from rpsd_transport.models import FastMessage
 
 
@@ -52,7 +53,7 @@ class TestHTTPCarrierSendFast:
 
     @respx.mock
     def test_send_slimfast_success_inline(self, http_carrier):
-        """Test successful fast message send with inline metadata (default)."""
+        """Test successful fast message send with inline metadata."""
         recipient = "https://external.example.com/webhook"
         test_data = b"Hello, World!"
 
@@ -74,7 +75,7 @@ class TestHTTPCarrierSendFast:
 
     @respx.mock
     def test_send_slimfast_payload_structure_inline(self, http_carrier):
-        """Test send_slimfast creates correct inline metadata payload."""
+        """Test send_slimfast creates correct inline payload."""
         recipient = "https://external.example.com/webhook"
         test_data = b"Hello, World!"
 
@@ -121,7 +122,7 @@ class TestHTTPCarrierSendFast:
 
     @respx.mock
     def test_send_slimfast_outline_body_headers(self, http_carrier):
-        """Test fast message send with outline metadata (headers) and body."""
+        """Test fast send with outline metadata (headers) and body."""
         recipient = "https://external.example.com/webhook"
         test_data = b"Hello, World!"
 
@@ -142,16 +143,18 @@ class TestHTTPCarrierSendFast:
             what="document",
             content=test_data,
             content_type="text/plain",
-            metadata_use_inline=False,
-            metadata_use_headers=True,
-            content_use_body=True,
+            options=HTTPCarrierOptions(
+                metadata_use_inline=False,
+                metadata_use_headers=True,
+                content_use_body=True,
+            ),
         )
 
         assert result == {"status": "received"}
 
     @respx.mock
     def test_send_slimfast_outline_body_query_params(self, http_carrier):
-        """Test fast message send with outline metadata (query params) and body."""
+        """Test fast send with outline metadata (query) and body."""
         recipient = "https://external.example.com/webhook"
         test_data = b"Hello, World!"
 
@@ -172,16 +175,18 @@ class TestHTTPCarrierSendFast:
             what="document",
             content=test_data,
             content_type="text/plain",
-            metadata_use_inline=False,
-            metadata_use_headers=False,
-            content_use_body=True,
+            options=HTTPCarrierOptions(
+                metadata_use_inline=False,
+                metadata_use_headers=False,
+                content_use_body=True,
+            ),
         )
 
         assert result == {"status": "received"}
 
     @respx.mock
     def test_send_slimfast_outline_attachment_headers(self, http_carrier):
-        """Test fast message send with outline metadata (headers) and attachment."""
+        """Test fast send with outline metadata (headers) and attachment."""
         recipient = "https://external.example.com/webhook"
         test_data = b"Hello, World!"
 
@@ -204,19 +209,18 @@ class TestHTTPCarrierSendFast:
             content=test_data,
             content_type="text/plain",
             filename="test.txt",
-            metadata_use_inline=False,
-            metadata_use_headers=True,
-            content_use_body=False,
+            options=HTTPCarrierOptions(
+                metadata_use_inline=False,
+                metadata_use_headers=True,
+                content_use_body=False,
+            ),
         )
 
         assert result == {"status": "received"}
 
     @respx.mock
     def test_send_slimfast_outline_attachment_query_params(self, http_carrier):
-        """
-        Test fast message send with outline metadata (query params)
-        and attachment.
-        """
+        """Test fast send with outline metadata (query) and attachment."""
         recipient = "https://external.example.com/webhook"
         test_data = b"Hello, World!"
 
@@ -239,9 +243,11 @@ class TestHTTPCarrierSendFast:
             content=test_data,
             content_type="text/plain",
             filename="test.txt",
-            metadata_use_inline=False,
-            metadata_use_headers=False,
-            content_use_body=False,
+            options=HTTPCarrierOptions(
+                metadata_use_inline=False,
+                metadata_use_headers=False,
+                content_use_body=False,
+            ),
         )
 
         assert result == {"status": "received"}
@@ -262,7 +268,7 @@ class TestHTTPCarrierSendHeavy:
             )
 
     def test_send_fatheavy_validation_content_without_where(self, http_carrier):
-        """Test that providing content without where raises NotImplementedError."""
+        """Test that content without where raises NotImplementedError."""
         with pytest.raises(NotImplementedError, match="Phase 2"):
             http_carrier.send_fatheavy(
                 recipient="https://example.com/webhook",
@@ -325,15 +331,17 @@ class TestHTTPCarrierSendHeavy:
             what="document",
             content=None,
             where=where_url,
-            metadata_use_inline=False,
-            metadata_use_headers=True,
+            options=HTTPCarrierOptions(
+                metadata_use_inline=False,
+                metadata_use_headers=True,
+            ),
         )
 
         assert result == {"status": "received"}
 
     @respx.mock
     def test_send_fatheavy_outline_query_params(self, http_carrier):
-        """Test heavy message send with outline metadata (query params)."""
+        """Test heavy send with outline metadata (query params)."""
         recipient = "https://external.example.com/webhook"
         where_url = "https://storage.example.com/file123"
 
@@ -354,8 +362,10 @@ class TestHTTPCarrierSendHeavy:
             what="document",
             content=None,
             where=where_url,
-            metadata_use_inline=False,
-            metadata_use_headers=False,
+            options=HTTPCarrierOptions(
+                metadata_use_inline=False,
+                metadata_use_headers=False,
+            ),
         )
 
         assert result == {"status": "received"}
@@ -402,13 +412,11 @@ class TestHTTPCarrierReceiveInline:
 
         response = client.post("/receive", json=message)
 
-        # Heavy messages are now parsed successfully and returned
-        # (fetching content and storage is caller's responsibility)
         assert response.status_code == 200
         assert response.json()["status"] == "received"
 
     def test_receive_inline_with_compression_gzip(self, test_app):
-        """Test receiving compressed content in inline format (GZIP)."""
+        """Test receiving compressed content in inline format."""
         client = TestClient(test_app)
         original = b"Hello, World! This is compressed content."
         compressed = gzip.compress(original)
@@ -431,8 +439,6 @@ class TestHTTPCarrierReceiveInline:
         """Test receiving invalid JSON falls back to outline mode."""
         client = TestClient(test_app)
 
-        # When JSON parsing fails, detection falls back to outline mode
-        # which requires metadata in headers/query params
         response = client.post(
             "/receive",
             content="not valid json",
@@ -440,15 +446,12 @@ class TestHTTPCarrierReceiveInline:
         )
 
         assert response.status_code == 400
-        # Falls back to outline mode, which requires who/what in headers
         assert response.json()["error_code"] == "missing_metadata"
 
     def test_receive_inline_missing_who(self, test_app):
-        """Test receiving inline message missing 'who' falls back to outline."""
+        """Test receiving inline message missing 'who'."""
         client = TestClient(test_app)
 
-        # Missing 'who' in metadata means detection sees incomplete inline
-        # and falls back to outline mode
         message = {
             "metadata": {
                 "what": "document",
@@ -459,15 +462,12 @@ class TestHTTPCarrierReceiveInline:
         response = client.post("/receive", json=message)
 
         assert response.status_code == 400
-        # Falls back to outline mode due to incomplete metadata
         assert response.json()["error_code"] == "missing_metadata"
 
     def test_receive_inline_missing_what(self, test_app):
-        """Test receiving inline message missing 'what' falls back to outline."""
+        """Test receiving inline message missing 'what'."""
         client = TestClient(test_app)
 
-        # Missing 'what' in metadata means detection sees incomplete inline
-        # and falls back to outline mode
         message = {
             "metadata": {
                 "who": "user123",
@@ -478,7 +478,6 @@ class TestHTTPCarrierReceiveInline:
         response = client.post("/receive", json=message)
 
         assert response.status_code == 400
-        # Falls back to outline mode due to incomplete metadata
         assert response.json()["error_code"] == "missing_metadata"
 
     def test_receive_inline_fast_missing_content(self, test_app):
@@ -490,7 +489,6 @@ class TestHTTPCarrierReceiveInline:
                 "who": "user123",
                 "what": "document",
             },
-            # Missing content for fast message
         }
 
         response = client.post("/receive", json=message)
@@ -513,7 +511,6 @@ class TestHTTPCarrierReceiveInline:
         response = client.post("/receive", json=message)
 
         assert response.status_code == 400
-        # Could be missing_fields due to Pydantic validation
         assert response.json()["status"] == "failed"
 
 
@@ -526,7 +523,7 @@ class TestHTTPCarrierReceiveOutline:
     """Test HTTPCarrier.receive() with outline metadata."""
 
     def test_receive_outline_raw_body(self, test_app):
-        """Test receiving with metadata in headers, content in raw body."""
+        """Test receiving with metadata in headers, content in body."""
         client = TestClient(test_app)
         test_data = b"<xml>content</xml>"
 
@@ -581,16 +578,14 @@ class TestHTTPCarrierReceiveOutline:
 
         response = client.post(
             "/receive",
-            content=b"",  # No body content for heavy message
+            content=b"",
             headers={
                 "X-RPSD-WHO": "user123",
                 "X-RPSD-WHAT": "document",
-                "X-RPSD-WHERE": "https://storage.example.com/file.xml",
+                "X-RPSD-WHERE": ("https://storage.example.com/file.xml"),
             },
         )
 
-        # Heavy messages are now parsed successfully and returned
-        # (fetching content and storage is caller's responsibility)
         assert response.status_code == 200
         assert response.json()["status"] == "received"
 
@@ -600,7 +595,13 @@ class TestHTTPCarrierReceiveOutline:
 
         response = client.post(
             "/receive",
-            files={"file": ("test.xml", b"<xml>content</xml>", "application/xml")},
+            files={
+                "file": (
+                    "test.xml",
+                    b"<xml>content</xml>",
+                    "application/xml",
+                )
+            },
             headers={
                 "X-RPSD-WHO": "user123",
                 "X-RPSD-WHAT": "document",
@@ -622,7 +623,6 @@ class TestHTTPCarrierReceiveOutline:
             headers={"Content-Type": "application/gzip"},
         )
 
-        # Content is auto-decompressed based on magic bytes
         assert response.status_code == 200
         assert response.json()["status"] == "received"
 
@@ -636,15 +636,15 @@ class TestHTTPCarrierReceiveValidation:
     """Test validation error handling."""
 
     def test_reject_duplicate_metadata_header_and_query(self, test_app):
-        """Test rejection when metadata in both header and query param."""
+        """Test rejection when metadata in both header and query."""
         client = TestClient(test_app)
 
         response = client.post(
-            "/receive?who=user123",  # who in query
+            "/receive?who=user123",
             content=b"test content",
             headers={
                 "Content-Type": "text/plain",
-                "X-RPSD-WHO": "user456",  # who also in header
+                "X-RPSD-WHO": "user456",
                 "X-RPSD-WHAT": "document",
             },
         )
@@ -662,7 +662,6 @@ class TestHTTPCarrierReceiveValidation:
             headers={
                 "Content-Type": "text/plain",
                 "X-RPSD-WHAT": "document",
-                # Missing X-RPSD-WHO
             },
         )
 
@@ -679,7 +678,6 @@ class TestHTTPCarrierReceiveValidation:
             headers={
                 "Content-Type": "text/plain",
                 "X-RPSD-WHO": "user123",
-                # Missing X-RPSD-WHAT
             },
         )
 
@@ -695,7 +693,7 @@ class TestHTTPCarrierReceiveValidation:
             content=b"test content",
             headers={
                 "Content-Type": "text/plain",
-                "X-RPSD-WHO": "user@invalid",  # Invalid character
+                "X-RPSD-WHO": "user@invalid",
                 "X-RPSD-WHAT": "document",
             },
         )
@@ -740,7 +738,12 @@ class TestFastMessage:
         """Test FastMessage with default values."""
         with warnings.catch_warnings(record=True):
             warnings.simplefilter("always")
-            msg = FastMessage(mode="fast", who="user123", what="document", data=b"test")
+            msg = FastMessage(
+                mode="fast",
+                who="user123",
+                what="document",
+                data=b"test",
+            )
 
         assert msg.content_type == "application/octet-stream"
         assert msg.filename is None

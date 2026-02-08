@@ -4,26 +4,44 @@ Base carrier abstract class for transport implementations.
 
 from abc import ABC, abstractmethod
 
-from fastapi import Request
+from pydantic import BaseModel
 
 from rpsd_transport.models import TransportMessage
 
 
-class BaseCarrier(ABC):
-    """
-    Abstract base class for transport carriers.
+class CarrierOptions(BaseModel):
+    """Base options common to all carriers.
 
-    Carriers implement different transport mechanisms (HTTP, PubSub, etc.)
-    for sending and receiving data in both fast and heavy modes.
+    Each carrier type can extend this with carrier-specific options
+    using Pydantic validation and defaults.
+
+    Attributes:
+        metadata_use_inline: If True, metadata is embedded in the
+            message payload (JSON). If False, metadata is sent
+            via carrier-specific outline mechanisms.
+    """
+
+    metadata_use_inline: bool = True
+
+
+class BaseCarrier(ABC):
+    """Abstract base class for transport carriers.
+
+    Carriers implement different transport mechanisms (HTTP, PubSub,
+    etc.) for sending and receiving data in both slim/fast and
+    fat/heavy modes.
 
     Methods to implement:
     - send_slimfast: Send content inline (fast/slim mode)
     - send_fatheavy: Send content by reference (heavy/fat mode)
-    - receive: Parse incoming message and return TransportMessage
 
     Hook methods to override:
-    - received: Called after successful message parsing for custom behavior
-      (storage integration, metrics, validation, etc.)
+    - received: Called after successful message parsing for custom
+      behavior (storage integration, metrics, validation, etc.)
+
+    Each carrier type defines its own receive mechanism:
+    - HTTPCarrier: async receive(request) -> TransportMessage
+    - PubSubCarrier: async consume(topic) -> AsyncIterator
     """
 
     @abstractmethod
@@ -35,28 +53,23 @@ class BaseCarrier(ABC):
         content: bytes,
         content_type: str = "application/octet-stream",
         filename: str | None = None,
-        metadata_use_inline: bool = True,
-        metadata_use_headers: bool = True,
-        content_use_body: bool = True,
+        options: CarrierOptions | None = None,
     ) -> dict:
-        """
-        Send data inline (fast/slim mode).
+        """Send data inline (fast/slim mode).
 
         Args:
-            recipient: Target identifier (URL for HTTP, topic/channel for PubSub, etc.)
+            recipient: Target identifier (URL for HTTP, topic
+                for PubSub, etc.)
             who: Entity identifier
             what: Content type/category
             content: Data to send
             content_type: MIME type of the data
             filename: Optional original filename
-            metadata_use_inline: True=inline JSON, False=outline headers/query
-            metadata_use_headers: True=headers, False=query params
-                (when metadata_use_inline=False)
-            content_use_body: True=raw body, False=multipart
-                (when metadata_use_inline=False)
+            options: Carrier-specific options. Each carrier type
+                defines its own options subclass with defaults.
 
         Returns:
-            dict: Response from recipient (SuccessResponse or ErrorResponse)
+            dict: Response from recipient
 
         Raises:
             Exception: If sending fails
@@ -72,31 +85,29 @@ class BaseCarrier(ABC):
         content: bytes | None,
         content_type: str = "application/octet-stream",
         filename: str | None = None,
-        metadata_use_inline: bool = True,
-        metadata_use_headers: bool = True,
+        options: CarrierOptions | None = None,
         where: str | None = None,
         expose_ttl: int = 3600,
     ) -> dict:
-        """
-        Send data by reference (heavy/fat mode).
+        """Send data by reference (heavy/fat mode).
 
         Either content or where must be provided.
 
         Args:
-            recipient: Target identifier (URL for HTTP, topic/channel for PubSub, etc.)
+            recipient: Target identifier (URL for HTTP, topic
+                for PubSub, etc.)
             who: Entity identifier
             what: Content type/category
-            content: New data to save and expose (Phase 2) or None
+            content: New data to save and expose or None
             content_type: MIME type of the data
             filename: Optional original filename
-            metadata_use_inline: True=inline JSON, False=outline headers/query
-            metadata_use_headers: True=headers, False=query params
-                (when metadata_use_inline=False)
+            options: Carrier-specific options. Each carrier type
+                defines its own options subclass with defaults.
             where: URL where content is available
             expose_ttl: Time-to-live for exposed URL in seconds
 
         Returns:
-            dict: Response from recipient (SuccessResponse or ErrorResponse)
+            dict: Response from recipient
 
         Raises:
             ValueError: If neither content nor where is provided
@@ -104,29 +115,8 @@ class BaseCarrier(ABC):
         """
         pass
 
-    @abstractmethod
-    async def receive(self, request: Request) -> TransportMessage:
-        """
-        Receive and parse incoming message.
-
-        Extracts metadata and content (if fast message) from the carrier's
-        native request format. Logs the message and calls received() hook.
-        Does not fetch heavy content or save to storage.
-
-        Args:
-            request: Request object (FastAPI Request for HTTP/PubSub carriers)
-
-        Returns:
-            TransportMessage: Parsed message ready for processing
-
-        Raises:
-            Various transport exceptions for malformed requests
-        """
-        pass
-
     def received(self, message: TransportMessage) -> None:
-        """
-        Hook called after successfully receiving and parsing a message.
+        """Hook called after receiving and parsing a message.
 
         Override this method in subclasses to add custom behavior:
         - Storage integration (fetch heavy content, save to storage)
@@ -137,13 +127,13 @@ class BaseCarrier(ABC):
 
         Should have side effects only (no return value).
         Should not modify the message object itself.
-        CAN raise exceptions to reject the message (validation, storage errors, etc.)
+        CAN raise exceptions to reject the message.
 
         Args:
             message: Successfully parsed TransportMessage
 
         Raises:
-            Any exception to reject message and propagate error to caller
+            Any exception to reject message and propagate error
 
         Default implementation: no-op
         """

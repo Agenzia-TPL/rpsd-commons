@@ -13,7 +13,8 @@ A library for transporting data between services using various transport methods
 Transport is accomplished through **carriers** - pluggable implementations for different transport mechanisms:
 
 - **HTTPCarrier**: HTTP-based transport for external systems (REST APIs)
-- **PubSubCarrier**: Event Broker pub/sub messaging (internal only) - TODO
+- **PubSubCarrier**: Event Broker pub/sub messaging (internal only)
+  - **KafkaPubSubCarrier**: Kafka-based PubSub transport
 
 #### Message Modes
 
@@ -131,31 +132,106 @@ Content can be provided as:
 
 ```python
 from rpsd_transport.carriers import HTTPCarrier
+from rpsd_transport.carriers.http import HTTPCarrierOptions
 
-# Initialize carrier
-carrier = HTTPCarrier(
-    base_url="https://your-service.com"  # For generating temp URLs
-)
+carrier = HTTPCarrier(base_url="https://your-service.com")
 
-# Send fast message (inline metadata format)
+# Send fast message (inline metadata, default)
 carrier.send_slimfast(
     recipient="https://external-system.com/webhook",
-    data=small_payload,
     who="user123",
-    what="document"
+    what="document",
+    content=b"small payload",
+)
+
+# Send fast message (outline metadata in headers, raw body)
+carrier.send_slimfast(
+    recipient="https://external-system.com/webhook",
+    who="user123",
+    what="document",
+    content=b"small payload",
+    options=HTTPCarrierOptions(
+        metadata_use_inline=False,
+        metadata_use_headers=True,
+        content_use_body=True,
+    ),
 )
 
 # Send heavy message (data by reference)
 carrier.send_fatheavy(
     recipient="https://external-system.com/webhook",
-    storage_url="s3://bucket/path/to/data",
-    expose_ttl=3600,  # Data available for 1 hour
     who="user123",
-    what="document"
+    what="document",
+    content=None,
+    where="s3://bucket/path/to/data",
+    expose_ttl=3600,
 )
 
 # Receive messages (handles both inline and outline metadata)
-response = await carrier.handle_receive(request)
+from fastapi import FastAPI, Request
+app = FastAPI()
+
+@app.post("/ingest")
+async def ingest(request: Request):
+    message = await carrier.receive(request)
+    # message.who, message.what, message.content, ...
+```
+
+### KafkaPubSubCarrier API
+
+Requires the optional `kafka` dependency: `uv add rpsd-transport[kafka]`
+
+```python
+from rpsd_transport.carriers.pubsub.kafka import (
+    KafkaPubSubCarrier,
+    KafkaCarrierOptions,
+)
+
+carrier = KafkaPubSubCarrier(
+    bootstrap_servers="localhost:9092",
+    group_id="my-group",
+)
+
+# Publishing (async)
+await carrier.start()
+await carrier.send_slimfast_async(
+    recipient="my-topic",
+    who="sender1",
+    what="report",
+    content=b"hello world",
+)
+await carrier.stop()
+
+# Publishing with outline metadata and custom key
+await carrier.send_slimfast_async(
+    recipient="my-topic",
+    who="sender1",
+    what="report",
+    content=b"hello world",
+    options=KafkaCarrierOptions(
+        metadata_use_inline=False,
+        key="partition-key",
+    ),
+)
+
+# Consuming (async iterator, manages consumer lifecycle)
+async for message in carrier.consume("my-topic"):
+    print(message.who, message.what, message.content)
+```
+
+### Carrier Factory
+
+Use `get_carrier()` to create carriers from settings:
+
+```python
+from rpsd_transport import get_carrier, TransportSettings
+
+# From environment variables (TRANSPORT__CARRIER=kafka, etc.)
+carrier = get_carrier()
+
+# Or with explicit settings
+settings = TransportSettings(carrier="kafka")
+carrier = get_carrier(settings)
 ```
 
 ### Compression Support
@@ -277,8 +353,15 @@ async def fetch_temp_data(temp_id: str):
 - [ ] Manual integration helpers
 - [ ] Example application
 
-### Phase 4: PubSub Carrier (TODO)
-- [ ] `PubSubCarrier` implementation
+### Phase 4: PubSub Carrier
+- [x] `PubSubCarrier` abstract base class
+- [x] `KafkaPubSubCarrier` implementation (aiokafka)
+- [x] `KafkaCarrierOptions` with partition and key support
+- [x] `CarrierOptions` base model (Pydantic)
+- [x] `get_carrier()` factory function
+- [x] `KafkaSettings` in `TransportSettings`
+- [ ] Redis PubSub carrier (future)
+- [ ] RabbitMQ PubSub carrier (future)
 
 ## Configuration
 
@@ -288,7 +371,12 @@ Uses pydantic-settings for configuration:
 from rpsd_transport import TransportSettings
 
 settings = TransportSettings()
-# Environment variables: TRANSPORT__API_KEY
+# Environment variables:
+# TRANSPORT__API_KEY=your-secret-key
+# TRANSPORT__CARRIER=http|kafka
+# TRANSPORT__KAFKA__BOOTSTRAP_SERVERS=localhost:9092
+# TRANSPORT__KAFKA__GROUP_ID=my-group
+# TRANSPORT__KAFKA__CLIENT_ID=my-client
 ```
 
 ## Development

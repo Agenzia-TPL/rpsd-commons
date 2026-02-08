@@ -14,7 +14,7 @@ import respx
 from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
 
-from rpsd_transport.carriers.http import HTTPCarrier
+from rpsd_transport.carriers.http import HTTPCarrier, HTTPCarrierOptions
 from rpsd_transport.carriers.utils import (
     exception_to_json_response,
     message_to_json_response,
@@ -54,39 +54,35 @@ class TestSlimfastIntegration:
     """Test slim/fast message round-trips."""
 
     def test_slimfast_inline_roundtrip(self, test_client, sending_carrier):
-        """Test sending and receiving slim/fast message with inline metadata."""
-        # Prepare test data
+        """Test send/receive slim/fast with inline metadata."""
         content = b"Test content for slim/fast inline message"
         who = "test-sender"
         what = "test-data"
 
-        # Use respx to mock the HTTP client inside sending_carrier
         with respx.mock:
-            # Mock the send request - capture what would be sent
             route = respx.post("http://testserver/receive").mock(
                 return_value=httpx.Response(
                     200,
-                    json={"status": "received", "internal_url": None},
+                    json={
+                        "status": "received",
+                        "internal_url": None,
+                    },
                 )
             )
 
-            # Send the message
             response = sending_carrier.send_slimfast(
                 recipient="http://testserver/receive",
                 who=who,
                 what=what,
                 content=content,
                 content_type="text/plain",
-                metadata_use_inline=True,
             )
 
             assert response["status"] == "received"
 
-            # Get the actual request that was made
             assert route.called
             request = route.calls.last.request
 
-            # Now actually send that request to our test app to verify receive works
             actual_response = test_client.post(
                 "/receive",
                 content=request.content,
@@ -98,7 +94,7 @@ class TestSlimfastIntegration:
             assert data["status"] == "received"
 
     def test_slimfast_outline_with_headers(self, test_client, sending_carrier):
-        """Test sending and receiving slim/fast with outline metadata (headers)."""
+        """Test send/receive slim/fast with outline metadata."""
         content = b"Test content for outline headers"
         who = "test-sender"
         what = "test-data"
@@ -107,28 +103,30 @@ class TestSlimfastIntegration:
             route = respx.post("http://testserver/receive").mock(
                 return_value=httpx.Response(
                     200,
-                    json={"status": "received", "internal_url": None},
+                    json={
+                        "status": "received",
+                        "internal_url": None,
+                    },
                 )
             )
 
-            # Send with outline metadata using headers
             response = sending_carrier.send_slimfast(
                 recipient="http://testserver/receive",
                 who=who,
                 what=what,
                 content=content,
                 content_type="text/plain",
-                metadata_use_inline=False,
-                metadata_use_headers=True,
-                content_use_body=True,
+                options=HTTPCarrierOptions(
+                    metadata_use_inline=False,
+                    metadata_use_headers=True,
+                    content_use_body=True,
+                ),
             )
 
             assert response["status"] == "received"
 
-            # Get the actual request
             request = route.calls.last.request
 
-            # Verify receive can parse it
             actual_response = test_client.post(
                 "/receive",
                 content=request.content,
@@ -140,7 +138,7 @@ class TestSlimfastIntegration:
             assert data["status"] == "received"
 
     def test_slimfast_outline_with_query_params(self, test_client, sending_carrier):
-        """Test sending and receiving slim/fast with outline metadata (query)."""
+        """Test send/receive slim/fast with outline query params."""
         content = b"Test content for outline query params"
         who = "test-sender"
         what = "test-data"
@@ -149,29 +147,30 @@ class TestSlimfastIntegration:
             route = respx.post("http://testserver/receive").mock(
                 return_value=httpx.Response(
                     200,
-                    json={"status": "received", "internal_url": None},
+                    json={
+                        "status": "received",
+                        "internal_url": None,
+                    },
                 )
             )
 
-            # Send with outline metadata using query params
             response = sending_carrier.send_slimfast(
                 recipient="http://testserver/receive",
                 who=who,
                 what=what,
                 content=content,
                 content_type="text/plain",
-                metadata_use_inline=False,
-                metadata_use_headers=False,
-                content_use_body=True,
+                options=HTTPCarrierOptions(
+                    metadata_use_inline=False,
+                    metadata_use_headers=False,
+                    content_use_body=True,
+                ),
             )
 
             assert response["status"] == "received"
 
-            # Get the actual request
             request = route.calls.last.request
 
-            # Verify receive can parse it
-            # Note: respx request objects have the full URL with query params
             actual_response = test_client.post(
                 request.url.path + "?" + request.url.query.decode(),
                 content=request.content,
@@ -183,7 +182,7 @@ class TestSlimfastIntegration:
             assert data["status"] == "received"
 
     def test_slimfast_outline_with_multipart(self, test_client, sending_carrier):
-        """Test sending and receiving slim/fast with multipart form data."""
+        """Test send/receive slim/fast with multipart form data."""
         content = b"Test content for multipart"
         who = "test-sender"
         what = "test-data"
@@ -192,11 +191,13 @@ class TestSlimfastIntegration:
             route = respx.post("http://testserver/receive").mock(
                 return_value=httpx.Response(
                     200,
-                    json={"status": "received", "internal_url": None},
+                    json={
+                        "status": "received",
+                        "internal_url": None,
+                    },
                 )
             )
 
-            # Send with multipart (outline metadata, content not in body)
             response = sending_carrier.send_slimfast(
                 recipient="http://testserver/receive",
                 who=who,
@@ -204,17 +205,17 @@ class TestSlimfastIntegration:
                 content=content,
                 content_type="text/plain",
                 filename="test.txt",
-                metadata_use_inline=False,
-                metadata_use_headers=True,
-                content_use_body=False,
+                options=HTTPCarrierOptions(
+                    metadata_use_inline=False,
+                    metadata_use_headers=True,
+                    content_use_body=False,
+                ),
             )
 
             assert response["status"] == "received"
 
-            # Get the actual request
             request = route.calls.last.request
 
-            # Verify receive can parse it
             actual_response = test_client.post(
                 "/receive",
                 content=request.content,
@@ -230,7 +231,7 @@ class TestFatheavyIntegration:
     """Test fat/heavy message round-trips."""
 
     def test_fatheavy_inline_with_where(self, test_client, sending_carrier):
-        """Test sending and receiving fat/heavy message with where URL."""
+        """Test send/receive fat/heavy message with where URL."""
         who = "test-sender"
         what = "test-data"
         where = "https://example.com/external/content.xml"
@@ -239,26 +240,25 @@ class TestFatheavyIntegration:
             route = respx.post("http://testserver/receive").mock(
                 return_value=httpx.Response(
                     200,
-                    json={"status": "received", "internal_url": None},
+                    json={
+                        "status": "received",
+                        "internal_url": None,
+                    },
                 )
             )
 
-            # Send heavy message with where URL (no content upload)
             response = sending_carrier.send_fatheavy(
                 recipient="http://testserver/receive",
                 who=who,
                 what=what,
                 content=None,
                 where=where,
-                metadata_use_inline=True,
             )
 
             assert response["status"] == "received"
 
-            # Get the actual request
             request = route.calls.last.request
 
-            # Verify receive can parse it
             actual_response = test_client.post(
                 "/receive",
                 content=request.content,
@@ -270,7 +270,7 @@ class TestFatheavyIntegration:
             assert data["status"] == "received"
 
     def test_fatheavy_outline_with_headers(self, test_client, sending_carrier):
-        """Test sending and receiving fat/heavy with outline metadata."""
+        """Test send/receive fat/heavy with outline metadata."""
         who = "test-sender"
         what = "test-data"
         where = "https://example.com/external/data.json"
@@ -279,27 +279,29 @@ class TestFatheavyIntegration:
             route = respx.post("http://testserver/receive").mock(
                 return_value=httpx.Response(
                     200,
-                    json={"status": "received", "internal_url": None},
+                    json={
+                        "status": "received",
+                        "internal_url": None,
+                    },
                 )
             )
 
-            # Send heavy message with outline metadata
             response = sending_carrier.send_fatheavy(
                 recipient="http://testserver/receive",
                 who=who,
                 what=what,
                 content=None,
                 where=where,
-                metadata_use_inline=False,
-                metadata_use_headers=True,
+                options=HTTPCarrierOptions(
+                    metadata_use_inline=False,
+                    metadata_use_headers=True,
+                ),
             )
 
             assert response["status"] == "received"
 
-            # Get the actual request
             request = route.calls.last.request
 
-            # Verify receive can parse it
             actual_response = test_client.post(
                 "/receive",
                 content=request.content,
@@ -315,20 +317,14 @@ class TestEndToEndWithStorage:
     """Test end-to-end scenarios with storage integration via hook."""
 
     def test_roundtrip_with_storage_hook(self, test_client):
-        """
-        Test complete round-trip with storage integration using received() hook.
-
-        This demonstrates how an application would implement storage integration.
-        """
+        """Test complete round-trip with storage integration."""
         from rpsd_transport.models import TransportMessage
 
-        # Track what was saved
         saved_messages = []
 
-        # Create custom carrier with storage integration hook
         class StorageHTTPCarrier(HTTPCarrier):
             def received(self, message: TransportMessage) -> None:
-                """Hook to track received messages (simulating storage)."""
+                """Hook to track received messages."""
                 saved_messages.append(
                     {
                         "who": message.who,
@@ -337,11 +333,10 @@ class TestEndToEndWithStorage:
                             len(message.content) if message.content else 0
                         ),
                         "is_heavy": message.is_fatheavy,
-                        "where": message.where if message.is_fatheavy else None,
+                        "where": (message.where if message.is_fatheavy else None),
                     }
                 )
 
-        # Create app with storage-enabled carrier
         app = FastAPI()
         carrier = StorageHTTPCarrier()
 
@@ -392,10 +387,9 @@ class TestEndToEndWithStorage:
         assert saved_messages[1]["where"] == "https://example.com/file.xml"
 
     def test_received_hook_can_reject_messages(self, test_client):
-        """Test that received() hook can reject messages by raising exceptions."""
+        """Test that received() hook can reject messages."""
         from rpsd_transport.models import TransportMessage
 
-        # Create carrier that validates entities
         class ValidatingCarrier(HTTPCarrier):
             def received(self, message: TransportMessage) -> None:
                 """Hook that validates who is allowed."""
@@ -403,7 +397,6 @@ class TestEndToEndWithStorage:
                 if message.who not in allowed_entities:
                     raise ValueError(f"Unauthorized entity: {message.who}")
 
-        # Create app with validating carrier
         app = FastAPI()
         carrier = ValidatingCarrier()
 
@@ -421,7 +414,10 @@ class TestEndToEndWithStorage:
         response = client.post(
             "/receive",
             json={
-                "metadata": {"who": "trusted-sender", "what": "data"},
+                "metadata": {
+                    "who": "trusted-sender",
+                    "what": "data",
+                },
                 "content": base64.b64encode(b"test").decode(),
             },
             headers={"content-type": "application/json"},
@@ -432,7 +428,10 @@ class TestEndToEndWithStorage:
         response = client.post(
             "/receive",
             json={
-                "metadata": {"who": "untrusted-sender", "what": "data"},
+                "metadata": {
+                    "who": "untrusted-sender",
+                    "what": "data",
+                },
                 "content": base64.b64encode(b"test").decode(),
             },
             headers={"content-type": "application/json"},
