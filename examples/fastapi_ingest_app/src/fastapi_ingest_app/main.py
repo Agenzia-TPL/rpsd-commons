@@ -1,9 +1,9 @@
 """
-FastAPI application demonstrating HTTPCarrier and storage providers.
+FastAPI application demonstrating HTTPCarrier with IngestProcessor.
 
 This example shows how to:
 - Use HTTPCarrier.receive() to parse incoming messages
-- Implement received() hook to save content to storage
+- Use IngestProcessor to save content to storage
 - Support both inline (JSON) and outline (headers/query) metadata formats
 - Validate API keys
 - Configure storage providers (FS or S3) via settings
@@ -15,14 +15,15 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
 from fastapi_ingest_app.auth import validate_api_key
-from fastapi_ingest_app.carrier import StorageHTTPCarrier
 from fastapi_ingest_app.settings import AppSettings
 from rpsd_storage import get_storage_provider
+from rpsd_transport.carriers.http import HTTPCarrier
 from rpsd_transport.exceptions import (
     InvalidMetadataError,
     MissingMetadataError,
     TransportError,
 )
+from rpsd_transport.processors.ingest import IngestProcessor
 
 # Configure logging
 logging.basicConfig(
@@ -34,12 +35,13 @@ logger = logging.getLogger(__name__)
 # Initialize settings and dependencies
 settings = AppSettings()
 storage_provider = get_storage_provider(settings.storage)
-carrier = StorageHTTPCarrier(storage_provider=storage_provider, timeout=30.0)
+carrier = HTTPCarrier(timeout=30.0)
+processor = IngestProcessor(storage=storage_provider)
 
 # Create FastAPI app
 app = FastAPI(
     title="RPSD Ingest Example",
-    description="Example FastAPI app using HTTPCarrier and storage providers",
+    description=("Example FastAPI app using HTTPCarrier and IngestProcessor"),
     version="1.0.0",
 )
 
@@ -47,7 +49,7 @@ app = FastAPI(
 @app.post("/ingest")
 async def ingest_data(request: Request):
     """
-    Receive and store data using HTTPCarrier and storage providers.
+    Receive and store data using HTTPCarrier and IngestProcessor.
 
     Supports both metadata formats:
     - Inline: JSON body with metadata and content fields
@@ -68,45 +70,49 @@ async def ingest_data(request: Request):
         # Validate API key
         validate_api_key(request, settings.transport.api_key)
 
-        # Use carrier to receive and parse message
-        # Note: received() hook automatically saves content to storage
+        # Receive and parse message via carrier
         message = await carrier.receive(request)
 
-        # Verify that content was saved (should always be true after receive)
-        if carrier.last_saved_metadata is None:
-            raise TransportError("Failed to save content to storage")
+        # Process: resolve heavy content + save to storage
+        result = processor.process(message)
 
         # Build response with storage URL
         response_data = {
             "success": True,
             "message": "Content received and stored",
-            "storage_url": carrier.last_saved_url,
+            "storage_url": result.storage_url,
             "metadata": {
                 "who": message.who,
                 "what": message.what,
-                "object_id": carrier.last_saved_metadata.object_id,
                 "content_type": message.metadata.content_type,
-                "content_length": carrier.last_saved_metadata.content_length,
             },
         }
 
+        if result.storage_metadata is not None:
+            response_data["metadata"]["object_id"] = result.storage_metadata.object_id
+            response_data["metadata"]["content_length"] = (
+                result.storage_metadata.content_length
+            )
+
         logger.info(
-            f"Successfully processed message: who={message.who}, "
-            f"what={message.what}, url={carrier.last_saved_url}"
+            "Successfully processed message: who=%s, what=%s, url=%s",
+            message.who,
+            message.what,
+            result.storage_url,
         )
 
         return JSONResponse(status_code=201, content=response_data)
 
     except PermissionError as e:
-        logger.warning(f"Authentication failed: {e}")
+        logger.warning("Authentication failed: %s", e)
         return JSONResponse(status_code=401, content={"error": str(e)})
 
     except (MissingMetadataError, InvalidMetadataError) as e:
-        logger.warning(f"Invalid metadata: {e}")
+        logger.warning("Invalid metadata: %s", e)
         return JSONResponse(status_code=400, content={"error": str(e)})
 
     except TransportError as e:
-        logger.error(f"Transport error: {e}")
+        logger.error("Transport error: %s", e)
         return JSONResponse(status_code=400, content={"error": str(e)})
 
     except Exception as e:

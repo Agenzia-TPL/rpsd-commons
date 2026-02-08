@@ -274,3 +274,23 @@ Key design decisions:
 - receive() on PubSubCarrier is sync (just parsing, no I/O). For advanced use when caller manages own consumer.
 - get_carrier() factory function mirrors rpsd-storage's get_storage_provider() pattern.
 - aiokafka is an optional dependency: uv add rpsd-transport[kafka].
+
+## Processors
+
+### IngestProcessor
+
+**Problem**: The receive → resolve → save → forward pipeline is a common pattern when integrating carriers with storage. Currently, each carrier type requires its own subclass to add storage integration (e.g., StorageHTTPCarrier), duplicating logic across carrier types.
+
+**Proposed Solution**: Create an `IngestProcessor` class in `rpsd_transport.processors.ingest` that handles the pipeline via composition, working with any carrier type. It will:
+1. Resolve content (fetch from `where` URL for fat/heavy messages)
+2. Optionally save to a `StorageProvider`
+3. Optionally forward to a second `BaseCarrier`
+
+Key design decisions:
+- Composition over inheritance: IngestProcessor wraps StorageProvider and optional forward BaseCarrier, not extending any carrier.
+- Dual sync/async API: `process()` and `process_async()`, mirroring KafkaPubSubCarrier's pattern.
+- Configurable forward mode: `"fatheavy"` (sends with where=storage_url) or `"slimfast"` (re-embeds content inline).
+- Both storage and forward are optional.
+- Settings-driven via `IngestSettings` nested under `TransportSettings`.
+
+**Expected outcome**: Elimination of carrier-specific storage subclasses. Applications use plain carriers + IngestProcessor for the receive-save-forward pattern.

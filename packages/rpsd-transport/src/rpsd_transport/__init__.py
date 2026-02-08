@@ -36,7 +36,13 @@ from rpsd_transport.models import (
     SuccessResponse,
     TransportMessage,
 )
-from rpsd_transport.settings import KafkaSettings, TransportSettings
+from rpsd_transport.processors.ingest import IngestProcessor, IngestResult
+from rpsd_transport.settings import (
+    ForwardSettings,
+    IngestSettings,
+    KafkaSettings,
+    TransportSettings,
+)
 
 
 def get_carrier(
@@ -85,9 +91,14 @@ __all__ = [
     # Base classes
     "BaseCarrier",
     "CarrierOptions",
+    # Processors
+    "IngestProcessor",
+    "IngestResult",
     # Settings
     "TransportSettings",
     "KafkaSettings",
+    "IngestSettings",
+    "ForwardSettings",
     # Core models
     "MessageMetadata",
     "TransportMessage",
