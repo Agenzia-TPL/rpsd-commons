@@ -7,10 +7,14 @@ Requires the 'kafka' optional dependency:
 
 import logging
 from collections.abc import AsyncIterator
+from typing import TYPE_CHECKING
 
 from rpsd_transport.carriers.base import CarrierOptions
 from rpsd_transport.carriers.pubsub.base import PubSubCarrier
 from rpsd_transport.models import TransportMessage
+
+if TYPE_CHECKING:
+    from aiokafka import AIOKafkaProducer
 
 logger = logging.getLogger(__name__)
 
@@ -89,7 +93,7 @@ class KafkaPubSubCarrier(PubSubCarrier):
         self.bootstrap_servers = bootstrap_servers
         self.group_id = group_id
         self.client_id = client_id
-        self._producer = None
+        self._producer: AIOKafkaProducer | None = None
 
     async def start(self) -> None:
         """Start the Kafka producer.
@@ -432,7 +436,7 @@ class KafkaPubSubCarrier(PubSubCarrier):
             topic,
             bootstrap_servers=self.bootstrap_servers,
             group_id=self.group_id,
-            client_id=self.client_id,
+            client_id=self.client_id if self.client_id else "aiokafka-consumer",
         )
 
         await consumer.start()
@@ -442,6 +446,10 @@ class KafkaPubSubCarrier(PubSubCarrier):
                 headers = None
                 if msg.headers:
                     headers = {k: v.decode("utf-8") for k, v in msg.headers}
+
+                # Kafka message value is bytes (or None for tombstones)
+                if msg.value is None:
+                    continue  # Skip tombstone messages
 
                 message = self.receive(msg.value, headers)
                 yield message

@@ -8,13 +8,13 @@ authors = [
 ]
 requires-python = ">=3.13"
 dependencies = [
+    # Tell uv these dependencies come from workspace, not PyPI
     "rpsd-transport",
     "rpsd-storage",
     "rpsd-settings",
 ]
 
 [tool.uv.sources]
-# Tell uv these dependencies come from workspace, not PyPI
 rpsd-transport = { workspace = true }
 rpsd-storage = { workspace = true }
 rpsd-settings = { workspace = true }
