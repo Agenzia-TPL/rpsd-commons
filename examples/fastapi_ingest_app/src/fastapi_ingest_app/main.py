@@ -73,19 +73,23 @@ app = FastAPI(
 @app.on_event("startup")
 async def startup_event():
     """Initialize forward carrier on startup."""
-    if forward_carrier and hasattr(forward_carrier, "start"):
-        logger.info("Starting forward carrier...")
-        await forward_carrier.start()
-        logger.info("Forward carrier started successfully")
+    if forward_carrier:
+        start_method = getattr(forward_carrier, "start", None)
+        if start_method is not None:
+            logger.info("Starting forward carrier...")
+            await start_method()
+            logger.info("Forward carrier started successfully")
 
 
 @app.on_event("shutdown")
 async def shutdown_event():
     """Cleanup forward carrier on shutdown."""
-    if forward_carrier and hasattr(forward_carrier, "stop"):
-        logger.info("Stopping forward carrier...")
-        await forward_carrier.stop()
-        logger.info("Forward carrier stopped successfully")
+    if forward_carrier:
+        stop_method = getattr(forward_carrier, "stop", None)
+        if stop_method is not None:
+            logger.info("Stopping forward carrier...")
+            await stop_method()
+            logger.info("Forward carrier stopped successfully")
 
 
 @app.post("/ingest")
@@ -173,11 +177,12 @@ async def ingest_data(request: Request):
 @app.get("/health")
 async def health_check():
     """Health check endpoint."""
+    forward_recipient = settings.forward.recipient if settings.forward.carrier else None
     return {
         "status": "healthy",
         "storage_provider": settings.storage.provider,
         "forward_carrier": settings.forward.carrier,
-        "forward_recipient": settings.forward.recipient if settings.forward.carrier else None,
+        "forward_recipient": forward_recipient,
     }
 
 
@@ -188,7 +193,10 @@ def run():
     logger.info("Starting RPSD Ingest Example application")
     logger.info(f"Storage provider: {settings.storage.provider}")
     if settings.forward.carrier:
-        logger.info(f"Forward carrier: {settings.forward.carrier} -> {settings.forward.recipient}")
+        logger.info(
+            f"Forward carrier: {settings.forward.carrier} -> "
+            f"{settings.forward.recipient}"
+        )
     else:
         logger.info("Forward carrier: disabled")
 
