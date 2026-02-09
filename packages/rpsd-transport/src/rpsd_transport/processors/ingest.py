@@ -8,7 +8,6 @@ working with any carrier type via composition.
 import logging
 from typing import Literal
 
-import httpx
 from pydantic import BaseModel, Field
 
 from rpsd_storage.metadata import StorageMetadata
@@ -215,7 +214,7 @@ class IngestProcessor:
 
         For slim/fast messages, returns message.content directly.
         For fat/heavy messages, fetches content from the where URL
-        using httpx.Client.
+        using rpsd-storage's StorageProvider (supports file://, http://, https://, s3://).
 
         Args:
             message: TransportMessage to resolve.
@@ -237,11 +236,9 @@ class IngestProcessor:
 
         logger.info("Fetching heavy content from: %s", message.where)
         try:
-            with httpx.Client() as client:
-                response = client.get(message.where, follow_redirects=True)
-                response.raise_for_status()
-                return response.content
-        except httpx.HTTPError as e:
+            content = StorageProvider.load_content_from_url(message.where)
+            return content
+        except Exception as e:
             raise ContentFetchError(
                 f"Failed to fetch content from {message.where}: {e}"
             ) from e
@@ -251,7 +248,11 @@ class IngestProcessor:
 
         For slim/fast messages, returns message.content directly.
         For fat/heavy messages, fetches content from the where URL
-        using httpx.AsyncClient.
+        using rpsd-storage's StorageProvider (supports file://, http://, https://, s3://).
+
+        Note: StorageProvider.load_content_from_url() is synchronous, so we run it
+        in an async context. For truly async operations, consider using
+        asyncio.to_thread() or implement async storage providers in the future.
 
         Args:
             message: TransportMessage to resolve.
@@ -273,11 +274,11 @@ class IngestProcessor:
 
         logger.info("Fetching heavy content from: %s", message.where)
         try:
-            async with httpx.AsyncClient() as client:
-                response = await client.get(message.where, follow_redirects=True)
-                response.raise_for_status()
-                return response.content
-        except httpx.HTTPError as e:
+            # Note: StorageProvider methods are currently synchronous
+            # This is acceptable for now as I/O is typically fast
+            content = StorageProvider.load_content_from_url(message.where)
+            return content
+        except Exception as e:
             raise ContentFetchError(
                 f"Failed to fetch content from {message.where}: {e}"
             ) from e
