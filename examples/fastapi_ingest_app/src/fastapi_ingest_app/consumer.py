@@ -10,6 +10,7 @@ This script shows how to:
 
 import asyncio
 import logging
+from urllib.parse import urlparse
 
 import httpx
 
@@ -32,9 +33,16 @@ async def main():
         logger.error("Forward carrier not configured. Set APP__FORWARD__CARRIER=kafka")
         return
 
+    if not settings.forward.recipient:
+        logger.error("Forward recipient not configured. Set APP__FORWARD__RECIPIENT=<topic-name>")
+        return
+
+    # Type-safe assignment
+    topic = settings.forward.recipient
+
     logger.info("Starting Kafka consumer...")
     logger.info("Bootstrap servers: %s", settings.forward.kafka.bootstrap_servers)
-    logger.info("Topic: %s", settings.forward.recipient)
+    logger.info("Topic: %s", topic)
 
     # Create Kafka carrier
     carrier = KafkaPubSubCarrier(
@@ -49,7 +57,7 @@ async def main():
             logger.info("Consuming messages (press Ctrl+C to stop)...")
             message_count = 0
 
-            async for message in carrier.consume(settings.forward.recipient):
+            async for message in carrier.consume(topic):
                 message_count += 1
                 logger.info("=" * 60)
                 logger.info("Message #%d received", message_count)
@@ -62,15 +70,32 @@ async def main():
                     logger.info("  Storage URL: %s", message.where)
                     logger.info("  Message type: fatheavy (content by reference)")
 
-                    # Optionally fetch content from storage URL
+                    # Fetch content from storage URL
                     try:
-                        response = await http_client.get(message.where)
-                        response.raise_for_status()
-                        content = response.content
-                        logger.info(
-                            "  Content length (fetched): %d bytes",
-                            len(content),
-                        )
+                        parsed_url = urlparse(message.where)
+
+                        if parsed_url.scheme == "file":
+                            # Read from local filesystem
+                            file_path = parsed_url.path
+                            with open(file_path, "rb") as f:
+                                content = f.read()
+                            logger.info(
+                                "  Content length (read from file): %d bytes",
+                                len(content),
+                            )
+                        elif parsed_url.scheme in ("http", "https"):
+                            # Fetch via HTTP
+                            response = await http_client.get(message.where)
+                            response.raise_for_status()
+                            content = response.content
+                            logger.info(
+                                "  Content length (fetched via HTTP): %d bytes",
+                                len(content),
+                            )
+                        else:
+                            logger.warning(
+                                "  Unsupported URL scheme: %s", parsed_url.scheme
+                            )
                     except Exception as e:
                         logger.warning("  Failed to fetch content: %s", e)
 

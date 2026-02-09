@@ -33,7 +33,8 @@ echo -e "${YELLOW}2. Waiting for Kafka to be ready...${NC}"
 MAX_WAIT=60
 WAIT_COUNT=0
 while [ $WAIT_COUNT -lt $MAX_WAIT ]; do
-    if docker exec rpsd-kafka kafka-broker-api-versions.sh --bootstrap-server localhost:9092 &> /dev/null; then
+    HEALTH_STATUS=$(docker inspect --format='{{.State.Health.Status}}' rpsd-kafka 2>/dev/null || echo "unknown")
+    if [ "$HEALTH_STATUS" = "healthy" ]; then
         echo -e "${GREEN}✓ Kafka is ready!${NC}"
         break
     fi
@@ -52,16 +53,18 @@ echo ""
 echo -e "${YELLOW}3. Creating default topics...${NC}"
 
 # Create enriched-events topic
-docker exec rpsd-kafka kafka-topics.sh \
+# Note: Auto-create is enabled, so topics will be created on first use
+# This step pre-creates topics with specific configuration
+docker exec rpsd-kafka /opt/kafka/bin/kafka-topics.sh \
     --bootstrap-server localhost:9092 \
     --create \
     --if-not-exists \
     --topic enriched-events \
     --partitions 3 \
     --replication-factor 1 \
-    --config retention.ms=604800000 && \
+    --config retention.ms=604800000 2>/dev/null && \
     echo -e "${GREEN}✓ Created topic: enriched-events${NC}" || \
-    echo -e "${YELLOW}  Topic enriched-events already exists${NC}"
+    echo -e "${YELLOW}  Topic will be auto-created on first use${NC}"
 
 echo ""
 echo -e "${GREEN}=== Kafka Infrastructure Started Successfully ===${NC}"
@@ -74,10 +77,9 @@ echo ""
 echo -e "  ${GREEN}Kafka UI:${NC}         ${GREEN}http://localhost:8080${NC}"
 echo -e "  ${GREEN}Schema Registry:${NC}  ${GREEN}http://localhost:8081${NC}"
 echo ""
-echo -e "${YELLOW}Available Topics:${NC}"
-docker exec rpsd-kafka kafka-topics.sh --bootstrap-server localhost:9092 --list | while read -r topic; do
-    echo -e "  - $topic"
-done
+echo -e "${YELLOW}Topics:${NC}"
+echo -e "  View topics in Kafka UI: ${GREEN}http://localhost:8080${NC}"
+echo -e "  (Topics are auto-created on first publish)"
 echo ""
 echo -e "${YELLOW}To stop Kafka:${NC} ./kafka-stop.sh"
 echo ""
