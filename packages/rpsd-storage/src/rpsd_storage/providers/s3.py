@@ -80,7 +80,7 @@ class S3StorageProvider(StorageProvider):
             save_stamp=timestamp,
             schema_version=1,
             source_url=source_url or "",
-            custom_metadata=custom_metadata or {},
+            **({"custom_metadata": custom_metadata} if custom_metadata else {}),
         )
 
         # S3 metadata must be strings

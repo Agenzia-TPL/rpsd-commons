@@ -196,7 +196,6 @@ class HTTPStorageProvider(StorageProvider):
             save_stamp=timestamp,
             schema_version=1,
             source_url=url,  # For HTTP, source_url is the same as url
-            custom_metadata={},
             etag=response.headers.get("etag"),  # HTTP ETag if present
             status_code=response.status_code,
             headers=dict(response.headers),

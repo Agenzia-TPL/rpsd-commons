@@ -33,7 +33,8 @@ class StorageMetadata(BaseModel):
     schema_version: int = Field(..., description="The version of the metadata schema.")
     source_url: str = Field(..., description="Origin URL of the content.")
     custom_metadata: dict[str, Any] = Field(
-        ..., description="Additional metadata (empty dict if none)."
+        default_factory=dict,
+        description="Additional metadata (empty dict if none).",
     )
 
     # Optional provider-specific fields
