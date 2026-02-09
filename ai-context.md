@@ -17,6 +17,7 @@ See `ai-project.md` for project description and details.
 ## Development Environment
 - **Containerization:** Docker + devcontainers
 - **Package Management:** uv (not pip/poetry/conda)
+- **Docker is NOT installed:** inside the devcontainer, do NOT try to use it!
 
 ## Coding Standards
 - Follow PEP 8 for Python code style
