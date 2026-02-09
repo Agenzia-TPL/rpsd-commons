@@ -5,6 +5,7 @@ Handles the common receive -> resolve -> save -> forward pipeline,
 working with any carrier type via composition.
 """
 
+import asyncio
 import logging
 from typing import Literal
 
@@ -16,9 +17,16 @@ from rpsd_transport.carriers.base import BaseCarrier, CarrierOptions
 from rpsd_transport.exceptions import (
     ContentFetchError,
     StorageError,
+    TransformError,
     TransportError,
 )
 from rpsd_transport.models import TransportMessage
+from rpsd_transport.transformers import (
+    AsyncMessageTransformer,
+    AsyncMessageTransformFn,
+    MessageTransformer,
+    MessageTransformFn,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -57,12 +65,15 @@ class IngestProcessor:
 
     The processing pipeline:
     1. Resolve content (fetch from where URL for fat/heavy messages)
-    2. Optionally save to a StorageProvider
-    3. Optionally forward to a second BaseCarrier
+    2. Apply pre_save_transform (if configured)
+    3. Optionally save to a StorageProvider
+    4. Apply pre_forward_transform (if configured)
+    5. Optionally forward to a second BaseCarrier
 
     All steps are optional except content resolution, which always
     runs. Storage and forward are only performed when their
-    respective dependencies are provided.
+    respective dependencies are provided. Transformers allow
+    modifying messages before storage and/or forwarding.
 
     Example -- receive and save:
         ```python
@@ -83,6 +94,19 @@ class IngestProcessor:
         result = processor.process(message)
         ```
 
+    Example -- with metadata enrichment:
+        ```python
+        from rpsd_transport.transformers import with_custom_metadata
+
+        def enrich(meta: dict, content: bytes) -> dict:
+            return {**meta, "timestamp": "...", "hash": "..."}
+
+        processor = IngestProcessor(
+            storage=storage_provider,
+            pre_save_transform=with_custom_metadata(enrich),
+        )
+        ```
+
     Args:
         storage: Optional StorageProvider for saving content.
         forward_carrier: Optional BaseCarrier for forwarding.
@@ -92,6 +116,8 @@ class IngestProcessor:
         forward_mode: How to forward after save. "fatheavy"
             (default) sends with where=storage_url. "slimfast"
             re-embeds resolved content inline.
+        pre_save_transform: Optional transformer applied before save.
+        pre_forward_transform: Optional transformer applied before forward.
     """
 
     def __init__(
@@ -101,6 +127,20 @@ class IngestProcessor:
         forward_recipient: str | None = None,
         forward_options: CarrierOptions | None = None,
         forward_mode: Literal["fatheavy", "slimfast"] = "fatheavy",
+        pre_save_transform: (
+            MessageTransformer
+            | AsyncMessageTransformer
+            | MessageTransformFn
+            | AsyncMessageTransformFn
+            | None
+        ) = None,
+        pre_forward_transform: (
+            MessageTransformer
+            | AsyncMessageTransformer
+            | MessageTransformFn
+            | AsyncMessageTransformFn
+            | None
+        ) = None,
     ):
         """Initialize the ingest processor.
 
@@ -116,6 +156,15 @@ class IngestProcessor:
             forward_mode: Forward strategy after storage save.
                 "fatheavy" sends with where=storage_url.
                 "slimfast" sends with content inline.
+            pre_save_transform: Optional transformer applied after
+                content resolution, before saving to storage. Receives
+                the original message and resolved content. Returns a
+                NEW TransportMessage (immutable).
+            pre_forward_transform: Optional transformer applied after
+                storage save (if configured), before forwarding.
+                Receives the message (possibly already transformed
+                by pre_save_transform) and resolved content. Returns
+                a NEW TransportMessage (immutable).
 
         Raises:
             ValueError: If forward_carrier is provided without
@@ -131,12 +180,113 @@ class IngestProcessor:
         self.forward_recipient = forward_recipient
         self.forward_options = forward_options
         self.forward_mode = forward_mode
+        self.pre_save_transform = pre_save_transform
+        self.pre_forward_transform = pre_forward_transform
+
+    def _apply_transform(
+        self,
+        message: TransportMessage,
+        content: bytes,
+        transformer: (
+            MessageTransformer
+            | AsyncMessageTransformer
+            | MessageTransformFn
+            | AsyncMessageTransformFn
+            | None
+        ),
+    ) -> TransportMessage:
+        """Apply a transformer synchronously.
+
+        Args:
+            message: TransportMessage to transform.
+            content: Resolved content bytes.
+            transformer: Transformer to apply (can be None).
+
+        Returns:
+            Transformed TransportMessage, or original if no transformer.
+
+        Raises:
+            TransformError: If transformation fails.
+        """
+        if transformer is None:
+            return message
+
+        try:
+            # Check if it's a callable function
+            if callable(transformer) and not hasattr(transformer, "transform"):
+                # Simple function transformer
+                return transformer(message, content)
+            else:
+                # Protocol-based transformer
+                return transformer.transform(message, content)
+        except Exception as e:
+            raise TransformError(f"Message transformation failed: {e}") from e
+
+    async def _apply_transform_async(
+        self,
+        message: TransportMessage,
+        content: bytes,
+        transformer: (
+            MessageTransformer
+            | AsyncMessageTransformer
+            | MessageTransformFn
+            | AsyncMessageTransformFn
+            | None
+        ),
+    ) -> TransportMessage:
+        """Apply a transformer asynchronously.
+
+        Supports both sync and async transformers. Sync transformers
+        are run in a thread pool using asyncio.to_thread().
+
+        Args:
+            message: TransportMessage to transform.
+            content: Resolved content bytes.
+            transformer: Transformer to apply (can be None).
+
+        Returns:
+            Transformed TransportMessage, or original if no transformer.
+
+        Raises:
+            TransformError: If transformation fails.
+        """
+        if transformer is None:
+            return message
+
+        try:
+            # Check if it's a callable function
+            if callable(transformer) and not hasattr(transformer, "transform"):
+                # Simple callable transformer
+                if asyncio.iscoroutinefunction(transformer):
+                    # Async function
+                    return await transformer(message, content)
+                else:
+                    # Sync function, run in thread pool
+                    return await asyncio.to_thread(transformer, message, content)
+            else:
+                # Protocol-based transformer
+                transform_method = transformer.transform
+                if asyncio.iscoroutinefunction(transform_method):
+                    # Async transform method
+                    return await transform_method(message, content)
+                else:
+                    # Sync transform method, run in thread pool
+                    return await asyncio.to_thread(transform_method, message, content)
+        except Exception as e:
+            raise TransformError(f"Message transformation failed: {e}") from e
 
     def process(self, message: TransportMessage) -> IngestResult:
         """Process a received message (sync version).
 
         Uses httpx.Client for heavy content resolution.
         Uses sync send methods on forward carrier.
+
+        Pipeline:
+        1. Resolve content (fetch if fat/heavy)
+        2. Apply pre_save_transform (if configured)
+        3. Save to storage (if configured) - uses transformed message
+        4. Apply pre_forward_transform (if configured)
+        5. Forward (if configured) - uses transformed message
 
         Args:
             message: Parsed TransportMessage from any carrier.
@@ -147,23 +297,36 @@ class IngestProcessor:
         Raises:
             ContentFetchError: If heavy content cannot be fetched.
             StorageError: If storage save fails.
+            TransformError: If transformation fails.
         """
         # 1. Resolve content
         content = self._resolve_content(message)
 
-        # 2. Optionally save to storage
+        # 2. Apply pre_save_transform
+        message_for_save = self._apply_transform(
+            message, content, self.pre_save_transform
+        )
+
+        # 3. Optionally save to storage
         storage_url = None
         storage_metadata = None
         if self.storage is not None:
-            storage_url, storage_metadata = self._save_to_storage(message, content)
+            storage_url, storage_metadata = self._save_to_storage(
+                message_for_save, content
+            )
 
-        # 3. Optionally forward
+        # 4. Apply pre_forward_transform
+        message_for_forward = self._apply_transform(
+            message_for_save, content, self.pre_forward_transform
+        )
+
+        # 5. Optionally forward
         forwarded = False
         if self.forward_carrier is not None:
-            forwarded = self._forward_message(message, content, storage_url)
+            forwarded = self._forward_message(message_for_forward, content, storage_url)
 
         return IngestResult(
-            message=message,
+            message=message,  # Return original message
             content=content,
             storage_url=storage_url,
             storage_metadata=storage_metadata,
@@ -177,6 +340,13 @@ class IngestProcessor:
         Uses async send methods on forward carrier when available,
         falling back to sync send methods otherwise.
 
+        Pipeline:
+        1. Resolve content (fetch if fat/heavy)
+        2. Apply pre_save_transform (if configured)
+        3. Save to storage (if configured) - uses transformed message
+        4. Apply pre_forward_transform (if configured)
+        5. Forward (if configured) - uses transformed message
+
         Args:
             message: Parsed TransportMessage from any carrier.
 
@@ -186,23 +356,38 @@ class IngestProcessor:
         Raises:
             ContentFetchError: If heavy content cannot be fetched.
             StorageError: If storage save fails.
+            TransformError: If transformation fails.
         """
         # 1. Resolve content
         content = await self._resolve_content_async(message)
 
-        # 2. Optionally save to storage (sync — StorageProvider is sync)
+        # 2. Apply pre_save_transform
+        message_for_save = await self._apply_transform_async(
+            message, content, self.pre_save_transform
+        )
+
+        # 3. Optionally save to storage (sync — StorageProvider is sync)
         storage_url = None
         storage_metadata = None
         if self.storage is not None:
-            storage_url, storage_metadata = self._save_to_storage(message, content)
+            storage_url, storage_metadata = self._save_to_storage(
+                message_for_save, content
+            )
 
-        # 3. Optionally forward
+        # 4. Apply pre_forward_transform
+        message_for_forward = await self._apply_transform_async(
+            message_for_save, content, self.pre_forward_transform
+        )
+
+        # 5. Optionally forward
         forwarded = False
         if self.forward_carrier is not None:
-            forwarded = await self._forward_message_async(message, content, storage_url)
+            forwarded = await self._forward_message_async(
+                message_for_forward, content, storage_url
+            )
 
         return IngestResult(
-            message=message,
+            message=message,  # Return original message
             content=content,
             storage_url=storage_url,
             storage_metadata=storage_metadata,

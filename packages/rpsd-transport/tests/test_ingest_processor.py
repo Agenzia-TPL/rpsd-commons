@@ -565,3 +565,271 @@ class TestProcessAsync:
         assert result.forwarded is True
         # The sync method should have been called via to_thread
         carrier.send_slimfast.assert_called_once()
+
+
+# =============================================================================
+# Transformation Tests
+# =============================================================================
+
+
+class TestTransformations:
+    """Tests for message transformations."""
+
+    def test_pre_save_transform_enriches_metadata(self, slim_message, mock_storage):
+        """Test that pre_save_transform modifies message before storage."""
+
+        def enrich_metadata(msg: TransportMessage, content: bytes) -> TransportMessage:
+            return msg.model_copy(
+                update={
+                    "metadata": msg.metadata.model_copy(
+                        update={
+                            "custom_metadata": {
+                                **msg.metadata.custom_metadata,
+                                "enriched": "true",
+                                "size": len(content),
+                            }
+                        }
+                    )
+                }
+            )
+
+        processor = IngestProcessor(
+            storage=mock_storage, pre_save_transform=enrich_metadata
+        )
+        processor.process(slim_message)
+
+        # Verify storage received the enriched message
+        mock_storage.save.assert_called_once()
+        call_kwargs = mock_storage.save.call_args[1]
+        assert call_kwargs["custom_metadata"]["enriched"] == "true"
+        assert call_kwargs["custom_metadata"]["size"] == len(slim_message.content)
+
+    def test_pre_save_transform_with_helper(self, slim_message, mock_storage):
+        """Test pre_save_transform with with_custom_metadata helper."""
+        from rpsd_transport.transformers import with_custom_metadata
+
+        def add_timestamp(meta: dict, content: bytes) -> dict:
+            return {**meta, "timestamp": "2024-01-01T00:00:00Z"}
+
+        processor = IngestProcessor(
+            storage=mock_storage, pre_save_transform=with_custom_metadata(add_timestamp)
+        )
+        processor.process(slim_message)
+
+        # Verify custom_metadata was enriched
+        mock_storage.save.assert_called_once()
+        call_kwargs = mock_storage.save.call_args[1]
+        assert call_kwargs["custom_metadata"]["timestamp"] == "2024-01-01T00:00:00Z"
+
+    def test_pre_forward_transform_modifies_forward_message(self, slim_message):
+        """Test that pre_forward_transform modifies message before forwarding."""
+        carrier = MagicMock(spec=BaseCarrier)
+        carrier.send_slimfast = MagicMock(return_value={"status": "sent"})
+
+        def modify_who(msg: TransportMessage, content: bytes) -> TransportMessage:
+            return msg.model_copy(
+                update={
+                    "metadata": msg.metadata.model_copy(update={"who": "modified-user"})
+                }
+            )
+
+        processor = IngestProcessor(
+            forward_carrier=carrier,
+            forward_recipient="output-topic",
+            pre_forward_transform=modify_who,
+        )
+        processor.process(slim_message)
+
+        # Verify forward carrier received modified message
+        carrier.send_slimfast.assert_called_once()
+        call_kwargs = carrier.send_slimfast.call_args[1]
+        assert call_kwargs["who"] == "modified-user"
+
+    def test_different_transforms_for_save_and_forward(
+        self, slim_message, mock_storage
+    ):
+        """Test using different transformers for save vs forward."""
+        carrier = MagicMock(spec=BaseCarrier)
+        carrier.send_slimfast = MagicMock(return_value={"status": "sent"})
+
+        def save_transform(msg: TransportMessage, content: bytes) -> TransportMessage:
+            return msg.model_copy(
+                update={
+                    "metadata": msg.metadata.model_copy(
+                        update={
+                            "custom_metadata": {
+                                **msg.metadata.custom_metadata,
+                                "saved": "true",
+                            }
+                        }
+                    )
+                }
+            )
+
+        def forward_transform(
+            msg: TransportMessage, content: bytes
+        ) -> TransportMessage:
+            return msg.model_copy(
+                update={
+                    "metadata": msg.metadata.model_copy(
+                        update={
+                            "custom_metadata": {
+                                **msg.metadata.custom_metadata,
+                                "forwarded": "true",
+                            }
+                        }
+                    )
+                }
+            )
+
+        processor = IngestProcessor(
+            storage=mock_storage,
+            forward_carrier=carrier,
+            forward_recipient="output-topic",
+            forward_mode="slimfast",  # Use slimfast to test send_slimfast
+            pre_save_transform=save_transform,
+            pre_forward_transform=forward_transform,
+        )
+        result = processor.process(slim_message)
+
+        # Verify storage received save transform
+        storage_kwargs = mock_storage.save.call_args[1]
+        assert storage_kwargs["custom_metadata"]["saved"] == "true"
+        assert "forwarded" not in storage_kwargs["custom_metadata"]
+
+        # Verify forward carrier was called (transforms were applied in sequence)
+        carrier.send_slimfast.assert_called_once()
+        assert result.forwarded is True
+
+    def test_transform_error_aborts_pipeline(self, slim_message, mock_storage):
+        """Test that transformer exceptions abort the pipeline."""
+        from rpsd_transport.exceptions import TransformError
+
+        def failing_transform(
+            msg: TransportMessage, content: bytes
+        ) -> TransportMessage:
+            raise ValueError("Transform failed")
+
+        processor = IngestProcessor(
+            storage=mock_storage, pre_save_transform=failing_transform
+        )
+
+        with pytest.raises(TransformError) as exc_info:
+            processor.process(slim_message)
+
+        assert "Transform failed" in str(exc_info.value)
+        # Verify storage was not called
+        mock_storage.save.assert_not_called()
+
+    def test_transform_preserves_original_message_in_result(self, slim_message):
+        """Test that IngestResult contains original message, not transformed."""
+
+        def modify_who(msg: TransportMessage, content: bytes) -> TransportMessage:
+            return msg.model_copy(
+                update={"metadata": msg.metadata.model_copy(update={"who": "modified"})}
+            )
+
+        processor = IngestProcessor(pre_save_transform=modify_who)
+        result = processor.process(slim_message)
+
+        # Result should contain original message
+        assert result.message.who == "test-entity"
+        assert result.message.who != "modified"
+
+    @pytest.mark.anyio
+    async def test_async_transform_with_process_async(self, slim_message, mock_storage):
+        """Test async transformer with process_async."""
+
+        class AsyncTransformer:
+            async def transform(
+                self, msg: TransportMessage, content: bytes
+            ) -> TransportMessage:
+                return msg.model_copy(
+                    update={
+                        "metadata": msg.metadata.model_copy(
+                            update={
+                                "custom_metadata": {
+                                    **msg.metadata.custom_metadata,
+                                    "async": "true",
+                                }
+                            }
+                        )
+                    }
+                )
+
+        processor = IngestProcessor(
+            storage=mock_storage, pre_save_transform=AsyncTransformer()
+        )
+        await processor.process_async(slim_message)
+
+        # Verify async transform was applied
+        mock_storage.save.assert_called_once()
+        call_kwargs = mock_storage.save.call_args[1]
+        assert call_kwargs["custom_metadata"]["async"] == "true"
+
+    @pytest.mark.anyio
+    async def test_sync_transform_with_process_async(self, slim_message, mock_storage):
+        """Test sync transformer works with process_async (via thread pool)."""
+
+        def sync_transform(msg: TransportMessage, content: bytes) -> TransportMessage:
+            return msg.model_copy(
+                update={
+                    "metadata": msg.metadata.model_copy(
+                        update={
+                            "custom_metadata": {
+                                **msg.metadata.custom_metadata,
+                                "sync": "true",
+                            }
+                        }
+                    )
+                }
+            )
+
+        processor = IngestProcessor(
+            storage=mock_storage, pre_save_transform=sync_transform
+        )
+        await processor.process_async(slim_message)
+
+        # Verify sync transform was applied via thread pool
+        mock_storage.save.assert_called_once()
+        call_kwargs = mock_storage.save.call_args[1]
+        assert call_kwargs["custom_metadata"]["sync"] == "true"
+
+    def test_no_transform_backward_compatibility(self, slim_message, mock_storage):
+        """Test that processor works without transformers (backward compat)."""
+        processor = IngestProcessor(storage=mock_storage)
+        result = processor.process(slim_message)
+
+        # Should work as before
+        assert result.storage_url is not None
+        mock_storage.save.assert_called_once()
+
+    def test_transform_receives_resolved_content(self, mock_storage, respx_mock):
+        """Test that transformer receives resolved content for heavy messages."""
+        heavy_message = TransportMessage(
+            metadata=MessageMetadata(
+                who="test-entity",
+                what="test-content",
+                where="https://storage.example.com/files/abc123",
+            )
+        )
+
+        received_content = None
+
+        def capture_content(msg: TransportMessage, content: bytes) -> TransportMessage:
+            nonlocal received_content
+            received_content = content
+            return msg
+
+        # Mock the heavy content fetch
+        respx_mock.get("https://storage.example.com/files/abc123").mock(
+            return_value=httpx.Response(200, content=b"heavy content")
+        )
+
+        processor = IngestProcessor(
+            storage=mock_storage, pre_save_transform=capture_content
+        )
+        processor.process(heavy_message)
+
+        # Verify transformer received the fetched content
+        assert received_content == b"heavy content"

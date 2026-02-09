@@ -43,6 +43,12 @@ class StorageError(TransportError):
     pass
 
 
+class TransformError(TransportError):
+    """Raised when message transformation fails."""
+
+    pass
+
+
 class InvalidMetadataError(TransportError):
     """Raised when metadata values are invalid (e.g., bad characters)."""
 

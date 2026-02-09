@@ -8,9 +8,13 @@ This example shows how to:
 - Support both inline (JSON) and outline (headers/query) metadata formats
 - Validate API keys
 - Configure storage providers (FS or S3) via settings
+- Use transformers to enrich message metadata
 """
 
+import hashlib
 import logging
+from datetime import datetime, timezone
+from typing import Any
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
@@ -27,6 +31,7 @@ from rpsd_transport.exceptions import (
 )
 from rpsd_transport.processors.ingest import IngestProcessor
 from rpsd_transport.settings import TransportSettings
+from rpsd_transport.transformers import with_custom_metadata
 
 # Configure logging
 logging.basicConfig(
@@ -54,12 +59,30 @@ if settings.forward.carrier:
         settings.forward.recipient,
     )
 
-# Create processor with optional forwarding
+
+# Define metadata enricher for adding processing information
+def enrich_ingest_metadata(meta: dict[str, Any], content: bytes) -> dict[str, Any]:
+    """Enrich metadata with processing details.
+
+    Adds timestamp, app version, content hash, and size to custom_metadata.
+    """
+    return {
+        **meta,
+        "ingested_at": datetime.now(timezone.utc).isoformat(),
+        "ingested_by": "fastapi-ingest-app",
+        "app_version": "1.0.0",
+        "content_sha256": hashlib.sha256(content).hexdigest(),
+        "content_size": len(content),
+    }
+
+
+# Create processor with optional forwarding and metadata enrichment
 processor = IngestProcessor(
     storage=storage_provider,
     forward_carrier=forward_carrier,
     forward_recipient=settings.forward.recipient,
     forward_mode=settings.forward.mode,
+    pre_save_transform=with_custom_metadata(enrich_ingest_metadata),
 )
 
 # Create FastAPI app
