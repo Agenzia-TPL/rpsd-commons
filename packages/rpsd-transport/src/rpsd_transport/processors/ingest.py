@@ -300,6 +300,7 @@ class IngestProcessor:
         Raises:
             StorageError: If storage save fails.
         """
+        assert self.storage is not None, "Storage provider must be configured"
         logger.info(
             "Saving content to storage: who=%s, what=%s",
             message.who,
@@ -408,6 +409,8 @@ class IngestProcessor:
         Raises:
             TransportError: If forwarding fails.
         """
+        assert self.forward_carrier is not None, "Forward carrier required"
+        assert self.forward_recipient is not None, "Forward recipient required"
         send_as_fatheavy = self._should_send_fatheavy(message, storage_url)
 
         if send_as_fatheavy:
@@ -449,13 +452,16 @@ class IngestProcessor:
         Raises:
             TransportError: If forwarding fails.
         """
+        assert self.forward_carrier is not None, "Forward carrier required"
+        assert self.forward_recipient is not None, "Forward recipient required"
         send_as_fatheavy = self._should_send_fatheavy(message, storage_url)
         carrier = self.forward_carrier
 
         if send_as_fatheavy:
             where = storage_url or message.where
-            if hasattr(carrier, "send_fatheavy_async"):
-                await carrier.send_fatheavy_async(
+            send_async = getattr(carrier, "send_fatheavy_async", None)
+            if send_async is not None:
+                await send_async(
                     recipient=self.forward_recipient,
                     who=message.who,
                     what=message.what,
@@ -479,8 +485,9 @@ class IngestProcessor:
         else:
             if content is None:
                 raise TransportError("Cannot forward as slimfast: no content available")
-            if hasattr(carrier, "send_slimfast_async"):
-                await carrier.send_slimfast_async(
+            send_async = getattr(carrier, "send_slimfast_async", None)
+            if send_async is not None:
+                await send_async(
                     recipient=self.forward_recipient,
                     who=message.who,
                     what=message.what,
