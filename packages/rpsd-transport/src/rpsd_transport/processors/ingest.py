@@ -7,6 +7,7 @@ working with any carrier type via composition.
 
 import asyncio
 import logging
+from collections.abc import Awaitable
 from typing import Literal
 
 from pydantic import BaseModel, Field
@@ -215,10 +216,20 @@ class IngestProcessor:
             # Check if it's a callable function
             if callable(transformer) and not hasattr(transformer, "transform"):
                 # Simple function transformer
-                return transformer(message, content)
+                result = transformer(message, content)
             else:
                 # Protocol-based transformer
-                return transformer.transform(message, content)
+                result = transformer.transform(message, content)
+
+            # Narrow out Awaitable for sync path
+            if isinstance(result, Awaitable):
+                raise TypeError(
+                    "Async transformer used in sync context. "
+                    "Use process_async() for async transformers."
+                )
+            return result
+        except (TypeError, TransformError):
+            raise
         except Exception as e:
             raise TransformError(f"Message transformation failed: {e}") from e
 
@@ -262,7 +273,10 @@ class IngestProcessor:
                     return await transformer(message, content)
                 else:
                     # Sync function, run in thread pool
-                    return await asyncio.to_thread(transformer, message, content)
+                    result = await asyncio.to_thread(transformer, message, content)
+                    if isinstance(result, Awaitable):
+                        return await result
+                    return result
             else:
                 # Protocol-based transformer
                 transform_method = transformer.transform
@@ -271,7 +285,10 @@ class IngestProcessor:
                     return await transform_method(message, content)
                 else:
                     # Sync transform method, run in thread pool
-                    return await asyncio.to_thread(transform_method, message, content)
+                    result = await asyncio.to_thread(transform_method, message, content)
+                    if isinstance(result, Awaitable):
+                        return await result
+                    return result
         except Exception as e:
             raise TransformError(f"Message transformation failed: {e}") from e
 
