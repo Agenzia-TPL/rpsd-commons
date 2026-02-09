@@ -13,7 +13,7 @@ This example shows how to:
 
 import hashlib
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import FastAPI, Request
@@ -68,11 +68,20 @@ def enrich_ingest_metadata(meta: dict[str, Any], content: bytes) -> dict[str, An
     """
     return {
         **meta,
-        "ingested_at": datetime.now(timezone.utc).isoformat(),
+        "ingested_at": datetime.now(UTC).isoformat(),
         "ingested_by": "fastapi-ingest-app",
         "app_version": "1.0.0",
         "content_sha256": hashlib.sha256(content).hexdigest(),
         "content_size": len(content),
+    }
+
+
+# Define metadata enricher for adding processing information before forwarding
+def enrich_forward_metadata(meta: dict[str, Any], content: bytes) -> dict[str, Any]:
+    """Enrich metadata with fixed details."""
+    return {
+        **meta,
+        "pre_forward": True,
     }
 
 
@@ -83,6 +92,7 @@ processor = IngestProcessor(
     forward_recipient=settings.forward.recipient,
     forward_mode=settings.forward.mode,
     pre_save_transform=with_custom_metadata(enrich_ingest_metadata),
+    pre_forward_transform=with_custom_metadata(enrich_forward_metadata),
 )
 
 # Create FastAPI app

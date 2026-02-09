@@ -627,6 +627,7 @@ class IngestProcessor:
                 filename=message.metadata.filename,
                 options=self.forward_options,
                 where=where,
+                custom_metadata=message.metadata.custom_metadata or None,
             )
         else:
             if content is None:
@@ -639,6 +640,7 @@ class IngestProcessor:
                 content_type=message.metadata.content_type,
                 filename=message.metadata.filename,
                 options=self.forward_options,
+                custom_metadata=message.metadata.custom_metadata or None,
             )
 
     async def _do_forward_async(
@@ -672,6 +674,7 @@ class IngestProcessor:
                 filename=message.metadata.filename,
                 options=self.forward_options,
                 where=where,
+                custom_metadata=message.metadata.custom_metadata or None,
             )
         else:
             if content is None:
@@ -684,6 +687,7 @@ class IngestProcessor:
                 content_type=message.metadata.content_type,
                 filename=message.metadata.filename,
                 options=self.forward_options,
+                custom_metadata=message.metadata.custom_metadata or None,
             )
 
     def _should_send_fatheavy(

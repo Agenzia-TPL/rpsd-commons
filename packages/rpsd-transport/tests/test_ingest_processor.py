@@ -217,6 +217,7 @@ class TestProcessSync:
             content_type="application/json",
             filename="data.json",
             options=None,
+            custom_metadata=None,
         )
 
     @respx.mock
@@ -245,6 +246,7 @@ class TestProcessSync:
             filename="data.xml",
             options=None,
             where="https://storage.example.com/files/abc123",
+            custom_metadata=None,
         )
 
     def test_save_and_forward_fatheavy_mode(
