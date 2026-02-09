@@ -446,8 +446,10 @@ class IngestProcessor:
     ) -> None:
         """Execute the forward send (async).
 
-        Uses *_async methods when available on the carrier,
-        falls back to sync methods otherwise.
+        Uses async send methods. All carriers support async via
+        BaseCarrier's default implementation (thread pool). Carriers
+        with native async (e.g., KafkaPubSubCarrier) override for
+        better performance.
 
         Raises:
             TransportError: If forwarding fails.
@@ -455,57 +457,31 @@ class IngestProcessor:
         assert self.forward_carrier is not None, "Forward carrier required"
         assert self.forward_recipient is not None, "Forward recipient required"
         send_as_fatheavy = self._should_send_fatheavy(message, storage_url)
-        carrier = self.forward_carrier
 
         if send_as_fatheavy:
             where = storage_url or message.where
-            send_async = getattr(carrier, "send_fatheavy_async", None)
-            if send_async is not None:
-                await send_async(
-                    recipient=self.forward_recipient,
-                    who=message.who,
-                    what=message.what,
-                    content=None,
-                    content_type=message.metadata.content_type,
-                    filename=message.metadata.filename,
-                    options=self.forward_options,
-                    where=where,
-                )
-            else:
-                carrier.send_fatheavy(
-                    recipient=self.forward_recipient,
-                    who=message.who,
-                    what=message.what,
-                    content=None,
-                    content_type=message.metadata.content_type,
-                    filename=message.metadata.filename,
-                    options=self.forward_options,
-                    where=where,
-                )
+            await self.forward_carrier.send_fatheavy_async(
+                recipient=self.forward_recipient,
+                who=message.who,
+                what=message.what,
+                content=None,
+                content_type=message.metadata.content_type,
+                filename=message.metadata.filename,
+                options=self.forward_options,
+                where=where,
+            )
         else:
             if content is None:
                 raise TransportError("Cannot forward as slimfast: no content available")
-            send_async = getattr(carrier, "send_slimfast_async", None)
-            if send_async is not None:
-                await send_async(
-                    recipient=self.forward_recipient,
-                    who=message.who,
-                    what=message.what,
-                    content=content,
-                    content_type=message.metadata.content_type,
-                    filename=message.metadata.filename,
-                    options=self.forward_options,
-                )
-            else:
-                carrier.send_slimfast(
-                    recipient=self.forward_recipient,
-                    who=message.who,
-                    what=message.what,
-                    content=content,
-                    content_type=message.metadata.content_type,
-                    filename=message.metadata.filename,
-                    options=self.forward_options,
-                )
+            await self.forward_carrier.send_slimfast_async(
+                recipient=self.forward_recipient,
+                who=message.who,
+                what=message.what,
+                content=content,
+                content_type=message.metadata.content_type,
+                filename=message.metadata.filename,
+                options=self.forward_options,
+            )
 
     def _should_send_fatheavy(
         self,

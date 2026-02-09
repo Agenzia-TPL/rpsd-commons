@@ -115,6 +115,109 @@ class BaseCarrier(ABC):
         """
         pass
 
+    async def send_slimfast_async(
+        self,
+        recipient: str,
+        who: str,
+        what: str,
+        content: bytes,
+        content_type: str = "application/octet-stream",
+        filename: str | None = None,
+        options: CarrierOptions | None = None,
+    ) -> dict:
+        """Send data inline (fast/slim mode) - async version.
+
+        Default implementation runs the sync send_slimfast in a
+        thread pool. Carriers with native async support (e.g.,
+        KafkaPubSubCarrier) should override this for better
+        performance.
+
+        Args:
+            recipient: Target identifier (URL for HTTP, topic
+                for PubSub, etc.)
+            who: Entity identifier
+            what: Content type/category
+            content: Data to send
+            content_type: MIME type of the data
+            filename: Optional original filename
+            options: Carrier-specific options. Each carrier type
+                defines its own options subclass with defaults.
+
+        Returns:
+            dict: Response from recipient
+
+        Raises:
+            Exception: If sending fails
+        """
+        import asyncio
+
+        return await asyncio.to_thread(
+            self.send_slimfast,
+            recipient=recipient,
+            who=who,
+            what=what,
+            content=content,
+            content_type=content_type,
+            filename=filename,
+            options=options,
+        )
+
+    async def send_fatheavy_async(
+        self,
+        recipient: str,
+        who: str,
+        what: str,
+        content: bytes | None,
+        content_type: str = "application/octet-stream",
+        filename: str | None = None,
+        options: CarrierOptions | None = None,
+        where: str | None = None,
+        expose_ttl: int = 3600,
+    ) -> dict:
+        """Send data by reference (heavy/fat mode) - async version.
+
+        Default implementation runs the sync send_fatheavy in a
+        thread pool. Carriers with native async support (e.g.,
+        KafkaPubSubCarrier) should override this for better
+        performance.
+
+        Either content or where must be provided.
+
+        Args:
+            recipient: Target identifier (URL for HTTP, topic
+                for PubSub, etc.)
+            who: Entity identifier
+            what: Content type/category
+            content: New data to save and expose or None
+            content_type: MIME type of the data
+            filename: Optional original filename
+            options: Carrier-specific options. Each carrier type
+                defines its own options subclass with defaults.
+            where: URL where content is available
+            expose_ttl: Time-to-live for exposed URL in seconds
+
+        Returns:
+            dict: Response from recipient
+
+        Raises:
+            ValueError: If neither content nor where is provided
+            Exception: If sending fails
+        """
+        import asyncio
+
+        return await asyncio.to_thread(
+            self.send_fatheavy,
+            recipient=recipient,
+            who=who,
+            what=what,
+            content=content,
+            content_type=content_type,
+            filename=filename,
+            options=options,
+            where=where,
+            expose_ttl=expose_ttl,
+        )
+
     def received(self, message: TransportMessage) -> None:
         """Hook called after receiving and parsing a message.
 

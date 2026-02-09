@@ -408,7 +408,7 @@ class TestProcessAsync:
         result = await processor.process_async(slim_message)
 
         assert result.forwarded is True
-        mock_forward_carrier.send_slimfast.assert_called_once()
+        mock_forward_carrier.send_slimfast_async.assert_called_once()
 
     @pytest.mark.anyio
     @respx.mock
@@ -425,7 +425,7 @@ class TestProcessAsync:
         result = await processor.process_async(heavy_message)
 
         assert result.forwarded is True
-        mock_forward_carrier.send_fatheavy.assert_called_once()
+        mock_forward_carrier.send_fatheavy_async.assert_called_once()
 
     @pytest.mark.anyio
     async def test_save_and_forward_fatheavy(
@@ -442,7 +442,7 @@ class TestProcessAsync:
 
         assert result.storage_url is not None
         assert result.forwarded is True
-        mock_forward_carrier.send_fatheavy.assert_called_once()
+        mock_forward_carrier.send_fatheavy_async.assert_called_once()
 
     @pytest.mark.anyio
     async def test_save_and_forward_slimfast(
@@ -459,7 +459,7 @@ class TestProcessAsync:
 
         assert result.storage_url is not None
         assert result.forwarded is True
-        mock_forward_carrier.send_slimfast.assert_called_once()
+        mock_forward_carrier.send_slimfast_async.assert_called_once()
 
     @pytest.mark.anyio
     async def test_storage_failure_raises(self, slim_message, mock_storage):
@@ -475,7 +475,9 @@ class TestProcessAsync:
         self, slim_message, mock_forward_carrier
     ):
         """Test async forward failure returns forwarded=False."""
-        mock_forward_carrier.send_slimfast.side_effect = Exception("connection refused")
+        mock_forward_carrier.send_slimfast_async.side_effect = Exception(
+            "connection refused"
+        )
 
         processor = IngestProcessor(
             forward_carrier=mock_forward_carrier,
@@ -518,19 +520,24 @@ class TestProcessAsync:
         carrier.send_slimfast.assert_not_called()
 
     @pytest.mark.anyio
-    async def test_falls_back_to_sync_send(self, slim_message, mock_forward_carrier):
-        """Test fallback to sync send when no async method.
+    async def test_default_async_uses_thread_pool(self, slim_message):
+        """Test that BaseCarrier's default async implementation works.
 
-        mock_forward_carrier uses spec=BaseCarrier, so it
-        does NOT have send_slimfast_async.
+        The default implementation uses asyncio.to_thread to run
+        the sync method in a thread pool.
         """
-        assert not hasattr(mock_forward_carrier, "send_slimfast_async")
+        from rpsd_transport.carriers.http import HTTPCarrier
+
+        carrier = HTTPCarrier()
+        # Mock the sync send method
+        carrier.send_slimfast = MagicMock(return_value={"status": "sent"})
 
         processor = IngestProcessor(
-            forward_carrier=mock_forward_carrier,
-            forward_recipient="output-topic",
+            forward_carrier=carrier,
+            forward_recipient="http://example.com/ingest",
         )
         result = await processor.process_async(slim_message)
 
         assert result.forwarded is True
-        mock_forward_carrier.send_slimfast.assert_called_once()
+        # The sync method should have been called via to_thread
+        carrier.send_slimfast.assert_called_once()
