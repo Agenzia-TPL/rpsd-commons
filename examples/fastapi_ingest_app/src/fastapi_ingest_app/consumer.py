@@ -5,16 +5,15 @@ This script shows how to:
 - Connect to Kafka broker using KafkaPubSubCarrier
 - Consume messages from enriched-events topic
 - Process both slimfast (inline) and fatheavy (reference) messages
-- Fetch content from storage URLs when needed
+- Use rpsd-storage to fetch content from any URL scheme (file://, http://, https://, s3://)
+- Display rich metadata from storage providers
 """
 
 import asyncio
 import logging
-from urllib.parse import urlparse
-
-import httpx
 
 from fastapi_ingest_app.settings import AppSettings
+from rpsd_storage.providers.base import StorageProvider
 from rpsd_transport.carriers.pubsub.kafka import KafkaPubSubCarrier
 
 # Configure logging
@@ -34,7 +33,9 @@ async def main():
         return
 
     if not settings.forward.recipient:
-        logger.error("Forward recipient not configured. Set APP__FORWARD__RECIPIENT=<topic-name>")
+        logger.error(
+            "Forward recipient not configured. Set APP__FORWARD__RECIPIENT=<topic-name>"
+        )
         return
 
     # Type-safe assignment
@@ -51,72 +52,65 @@ async def main():
         client_id="demo-consumer-client",
     )
 
-    # HTTP client for fetching fatheavy content
-    async with httpx.AsyncClient(timeout=30.0) as http_client:
-        try:
-            logger.info("Consuming messages (press Ctrl+C to stop)...")
-            message_count = 0
+    try:
+        logger.info("Consuming messages (press Ctrl+C to stop)...")
+        message_count = 0
 
-            async for message in carrier.consume(topic):
-                message_count += 1
-                logger.info("=" * 60)
-                logger.info("Message #%d received", message_count)
-                logger.info("  Who: %s", message.who)
-                logger.info("  What: %s", message.what)
-                logger.info("  Content-Type: %s", message.metadata.content_type)
+        async for message in carrier.consume(topic):
+            message_count += 1
+            logger.info("=" * 60)
+            logger.info("Message #%d received", message_count)
+            logger.info("  Who: %s", message.who)
+            logger.info("  What: %s", message.what)
+            logger.info("  Content-Type: %s", message.metadata.content_type)
 
-                # Check if message is fatheavy (content by reference)
-                if message.where:
-                    logger.info("  Storage URL: %s", message.where)
-                    logger.info("  Message type: fatheavy (content by reference)")
+            # Check if message is fatheavy (content by reference)
+            if message.where:
+                logger.info("  Storage URL: %s", message.where)
+                logger.info("  Message type: fatheavy (content by reference)")
 
-                    # Fetch content from storage URL
-                    try:
-                        parsed_url = urlparse(message.where)
+                # Fetch content from storage URL using rpsd-storage
+                try:
+                    content, metadata = StorageProvider.load_from_url(message.where)
 
-                        if parsed_url.scheme == "file":
-                            # Read from local filesystem
-                            file_path = parsed_url.path
-                            with open(file_path, "rb") as f:
-                                content = f.read()
-                            logger.info(
-                                "  Content length (read from file): %d bytes",
-                                len(content),
-                            )
-                        elif parsed_url.scheme in ("http", "https"):
-                            # Fetch via HTTP
-                            response = await http_client.get(message.where)
-                            response.raise_for_status()
-                            content = response.content
-                            logger.info(
-                                "  Content length (fetched via HTTP): %d bytes",
-                                len(content),
-                            )
-                        else:
-                            logger.warning(
-                                "  Unsupported URL scheme: %s", parsed_url.scheme
-                            )
-                    except Exception as e:
-                        logger.warning("  Failed to fetch content: %s", e)
+                    logger.info("  Content retrieved successfully:")
+                    logger.info("    Provider: %s", metadata.provider)
+                    logger.info("    Content length: %d bytes", metadata.content_length)
+                    logger.info("    Content type: %s", metadata.content_type)
+                    logger.info("    Original filename: %s", metadata.original_filename)
+                    logger.info("    Hash (MD5): %s", metadata.hash)
 
-                # Check if message is slimfast (content inline)
-                elif message.content:
-                    logger.info("  Message type: slimfast (content inline)")
-                    logger.info("  Content length: %d bytes", len(message.content))
+                    # Log provider-specific metadata if available
+                    if metadata.status_code is not None:
+                        logger.info("    HTTP status: %d", metadata.status_code)
+                    if metadata.etag is not None:
+                        logger.info("    S3 ETag: %s", metadata.etag)
 
-                else:
-                    logger.warning("  Message has neither content nor storage URL!")
+                except FileNotFoundError as e:
+                    logger.warning("  Content not found: %s", e)
+                except ValueError as e:
+                    logger.warning("  Unsupported URL scheme: %s", e)
+                except Exception as e:
+                    logger.warning("  Failed to fetch content: %s", e)
 
-                logger.info("=" * 60)
+            # Check if message is slimfast (content inline)
+            elif message.content:
+                logger.info("  Message type: slimfast (content inline)")
+                logger.info("  Content length: %d bytes", len(message.content))
 
-        except KeyboardInterrupt:
-            logger.info("\nShutting down consumer...")
-        except Exception as e:
-            logger.exception("Error consuming messages: %s", e)
-        finally:
-            if hasattr(carrier, "stop"):
-                await carrier.stop()
-            logger.info("Consumer stopped. Processed %d messages.", message_count)
+            else:
+                logger.warning("  Message has neither content nor storage URL!")
+
+            logger.info("=" * 60)
+
+    except KeyboardInterrupt:
+        logger.info("\nShutting down consumer...")
+    except Exception as e:
+        logger.exception("Error consuming messages: %s", e)
+    finally:
+        if hasattr(carrier, "stop"):
+            await carrier.stop()
+        logger.info("Consumer stopped. Processed %d messages.", message_count)
 
 
 if __name__ == "__main__":
