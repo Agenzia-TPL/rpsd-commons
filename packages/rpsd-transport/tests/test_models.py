@@ -165,6 +165,48 @@ class TestMessageMetadata:
 
         assert metadata.content_type == "application/xml"
 
+    def test_custom_metadata_default_empty_dict(self):
+        """Test custom_metadata defaults to empty dict."""
+        metadata = MessageMetadata(
+            who="user123",
+            what="document",
+        )
+
+        assert metadata.custom_metadata == {}
+
+    def test_custom_metadata_preserved(self):
+        """Test custom_metadata is preserved."""
+        custom = {
+            "pipeline_stage": "processing",
+            "priority": "high",
+            "tags": ["urgent", "customer-data"],
+        }
+        metadata = MessageMetadata(
+            who="user123",
+            what="document",
+            custom_metadata=custom,
+        )
+
+        assert metadata.custom_metadata == custom
+
+    def test_custom_metadata_nested(self):
+        """Test custom_metadata supports nested structures."""
+        custom = {
+            "workflow": {
+                "stage": "validation",
+                "step": 3,
+                "config": {"retry": True, "timeout": 30},
+            }
+        }
+        metadata = MessageMetadata(
+            who="user123",
+            what="document",
+            custom_metadata=custom,
+        )
+
+        assert metadata.custom_metadata["workflow"]["stage"] == "validation"
+        assert metadata.custom_metadata["workflow"]["step"] == 3
+
 
 class TestTransportMessage:
     """Tests for TransportMessage model."""

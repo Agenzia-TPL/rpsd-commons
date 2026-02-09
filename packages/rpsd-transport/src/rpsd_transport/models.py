@@ -8,7 +8,7 @@ Supports both inline and outline metadata organization:
 
 import re
 import warnings
-from typing import Literal
+from typing import Any, Literal
 from urllib.parse import urlparse
 
 from pydantic import BaseModel, Field, field_validator
@@ -35,6 +35,10 @@ class MessageMetadata(BaseModel):
         default="application/octet-stream", description="MIME type of the content"
     )
     filename: str | None = Field(default=None, description="Original filename")
+    custom_metadata: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Additional metadata (empty dict if none).",
+    )
 
     @property
     def is_slimfast(self) -> bool:

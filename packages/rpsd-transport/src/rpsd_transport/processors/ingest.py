@@ -314,6 +314,7 @@ class IngestProcessor:
                 what=message.what,
                 content_type=message.metadata.content_type,
                 source_url=(message.where if message.is_fatheavy else None),
+                custom_metadata=message.metadata.custom_metadata,
             )
             logger.info("Content saved successfully: %s", url)
             return url, metadata

@@ -265,6 +265,9 @@ def build_outline_headers(
 
     Uses current header naming convention (X-RPSD-*).
 
+    Note: custom_metadata is not supported in outline mode.
+    Use inline mode (JSON body) if you need custom_metadata.
+
     Args:
         who: Entity identifier
         what: Content type/category
@@ -289,6 +292,9 @@ def build_outline_query_params(
 ) -> dict[str, str]:
     """
     Build query parameters for outline metadata.
+
+    Note: custom_metadata is not supported in outline mode.
+    Use inline mode (JSON body) if you need custom_metadata.
 
     Args:
         who: Entity identifier

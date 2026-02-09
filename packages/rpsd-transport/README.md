@@ -67,7 +67,8 @@ metadata = MessageMetadata(
     who="user123",
     what="document",
     content_type="application/json",
-    filename="data.json"
+    filename="data.json",
+    custom_metadata={"workflow_id": "wf-123", "priority": "high"}
 )
 message = TransportMessage(metadata=metadata, content=b"small payload")
 print(message.is_slimfast)  # True
@@ -92,11 +93,68 @@ For inline metadata, use JSON with nested structure:
   "metadata": {
     "who": "user123",
     "what": "document",
-    "content_type": "application/xml"
+    "content_type": "application/xml",
+    "custom_metadata": {
+      "workflow_id": "wf-123",
+      "source": "external_api"
+    }
   },
   "content": "SGVsbG8gV29ybGQh"
 }
 ```
+
+#### Custom Metadata
+
+`MessageMetadata` supports a `custom_metadata` field for application-specific metadata that flows through the entire pipeline:
+
+```python
+metadata = MessageMetadata(
+    who="data-pipeline",
+    what="export-data",
+    custom_metadata={
+        "workflow_id": "wf-12345",
+        "retry_count": 2,
+        "tags": ["urgent", "customer"],
+        "nested": {"key": "value"}
+    }
+)
+```
+
+**Important**: `custom_metadata` is only supported in **inline mode** (JSON body). When using outline mode (headers/query params), custom_metadata will default to an empty dict. If you need custom metadata, use inline mode:
+
+```python
+options = HTTPCarrierOptions(metadata_use_inline=True)
+carrier.send_slimfast(..., custom_metadata={"key": "value"}, options=options)
+```
+
+Custom metadata is automatically passed through to storage when using `IngestProcessor`:
+
+```python
+# Custom metadata in transport message
+message = TransportMessage(
+    metadata=MessageMetadata(
+        who="user",
+        what="doc",
+        custom_metadata={"workflow_id": "wf-123"}
+    ),
+    content=b"data"
+)
+
+# Flows through IngestProcessor to storage
+processor = IngestProcessor(storage=storage_provider)
+result = processor.process(message)
+
+# Later: load and access custom metadata
+content, metadata = storage_provider.load(result.storage_url)
+print(metadata.custom_metadata)  # {"workflow_id": "wf-123"}
+```
+
+**Use cases for custom_metadata:**
+- Workflow tracking (workflow IDs, stage information)
+- Priority flags and routing hints
+- Tagging and categorization
+- Application-specific annotations
+- Debugging and tracing context
 
 The `content` field should contain base64-encoded binary data for slim/fast messages.
 

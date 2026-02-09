@@ -11,6 +11,7 @@ import json
 import logging
 from abc import ABC, abstractmethod
 from collections.abc import AsyncIterator
+from typing import Any
 
 from rpsd_transport.carriers.base import BaseCarrier
 from rpsd_transport.models import (
@@ -222,6 +223,7 @@ class PubSubCarrier(BaseCarrier, ABC):
         content_type: str,
         filename: str | None = None,
         where: str | None = None,
+        custom_metadata: dict[str, Any] | None = None,
     ) -> bytes:
         """Build inline JSON payload for publishing.
 
@@ -236,6 +238,8 @@ class PubSubCarrier(BaseCarrier, ABC):
             metadata["filename"] = filename
         if where:
             metadata["where"] = where
+        if custom_metadata:
+            metadata["custom_metadata"] = custom_metadata
 
         payload: dict = {"metadata": metadata}
 
@@ -257,6 +261,9 @@ class PubSubCarrier(BaseCarrier, ABC):
         """Build outline headers dict for publishing.
 
         Returns headers dict for broker message headers.
+
+        Note: custom_metadata is not supported in outline mode.
+        Use inline mode (JSON body) if you need custom_metadata.
         """
         headers: dict[str, str] = {
             "rpsd-who": who,

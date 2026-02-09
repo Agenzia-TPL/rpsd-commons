@@ -7,7 +7,7 @@ Requires the 'kafka' optional dependency:
 
 import logging
 from collections.abc import AsyncIterator
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from rpsd_transport.carriers.base import CarrierOptions
 from rpsd_transport.carriers.pubsub.base import PubSubCarrier
@@ -123,6 +123,7 @@ class KafkaPubSubCarrier(PubSubCarrier):
         content: bytes,
         content_type: str = "application/octet-stream",
         filename: str | None = None,
+        custom_metadata: dict[str, Any] | None = None,
         options: KafkaCarrierOptions | None = None,
     ) -> dict:
         """Publish a slim/fast message to a Kafka topic.
@@ -138,6 +139,7 @@ class KafkaPubSubCarrier(PubSubCarrier):
             content: Data to send
             content_type: MIME type of the data
             filename: Optional original filename
+            custom_metadata: Optional additional metadata
             options: Kafka-specific options (partition, key)
 
         Returns:
@@ -162,6 +164,7 @@ class KafkaPubSubCarrier(PubSubCarrier):
                 content=content,
                 content_type=content_type,
                 filename=filename,
+                custom_metadata=custom_metadata,
                 options=options,
             )
         )
@@ -174,6 +177,7 @@ class KafkaPubSubCarrier(PubSubCarrier):
         content: bytes,
         content_type: str = "application/octet-stream",
         filename: str | None = None,
+        custom_metadata: dict[str, Any] | None = None,
         options: KafkaCarrierOptions | None = None,
     ) -> dict:
         """Publish a slim/fast message to a Kafka topic (async).
@@ -185,6 +189,7 @@ class KafkaPubSubCarrier(PubSubCarrier):
             content: Data to send
             content_type: MIME type of the data
             filename: Optional original filename
+            custom_metadata: Optional additional metadata
             options: Kafka-specific options (partition, key)
 
         Returns:
@@ -208,6 +213,7 @@ class KafkaPubSubCarrier(PubSubCarrier):
                 content=content,
                 content_type=content_type,
                 filename=filename,
+                custom_metadata=custom_metadata,
             )
             kafka_headers = None
         else:
@@ -257,6 +263,7 @@ class KafkaPubSubCarrier(PubSubCarrier):
         content: bytes | None,
         content_type: str = "application/octet-stream",
         filename: str | None = None,
+        custom_metadata: dict[str, Any] | None = None,
         options: KafkaCarrierOptions | None = None,
         where: str | None = None,
         expose_ttl: int = 3600,
@@ -274,6 +281,7 @@ class KafkaPubSubCarrier(PubSubCarrier):
             content: New data to save or None
             content_type: MIME type of the data
             filename: Optional original filename
+            custom_metadata: Optional additional metadata
             options: Kafka-specific options (partition, key)
             where: URL where content is available
             expose_ttl: Time-to-live for exposed URL
@@ -301,6 +309,7 @@ class KafkaPubSubCarrier(PubSubCarrier):
                 content=content,
                 content_type=content_type,
                 filename=filename,
+                custom_metadata=custom_metadata,
                 options=options,
                 where=where,
                 expose_ttl=expose_ttl,
@@ -315,6 +324,7 @@ class KafkaPubSubCarrier(PubSubCarrier):
         content: bytes | None,
         content_type: str = "application/octet-stream",
         filename: str | None = None,
+        custom_metadata: dict[str, Any] | None = None,
         options: KafkaCarrierOptions | None = None,
         where: str | None = None,
         expose_ttl: int = 3600,
@@ -328,6 +338,7 @@ class KafkaPubSubCarrier(PubSubCarrier):
             content: New data to save or None
             content_type: MIME type of the data
             filename: Optional original filename
+            custom_metadata: Optional additional metadata
             options: Kafka-specific options (partition, key)
             where: URL where content is available
             expose_ttl: Time-to-live for exposed URL
@@ -366,6 +377,7 @@ class KafkaPubSubCarrier(PubSubCarrier):
                 content_type=content_type,
                 filename=filename,
                 where=where,
+                custom_metadata=custom_metadata,
             )
             kafka_headers = None
         else:

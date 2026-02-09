@@ -172,6 +172,7 @@ class TestProcessSync:
             what="test-content",
             content_type="application/json",
             source_url=None,
+            custom_metadata={},
         )
 
     @respx.mock
@@ -194,6 +195,7 @@ class TestProcessSync:
             what="test-content",
             content_type="application/xml",
             source_url="https://storage.example.com/files/abc123",
+            custom_metadata={},
         )
 
     def test_slim_message_forward_no_storage(self, slim_message, mock_forward_carrier):
@@ -363,6 +365,28 @@ class TestProcessSync:
         processor = IngestProcessor()
         with pytest.raises(ContentFetchError):
             processor.process(heavy_message)
+
+    def test_slim_message_passes_custom_metadata_to_storage(self, mock_storage):
+        """Test that custom_metadata is passed to storage.save()."""
+        custom = {"workflow_id": "wf-123", "priority": "high"}
+        message = TransportMessage(
+            metadata=MessageMetadata(
+                who="test-entity",
+                what="test-content",
+                content_type="application/json",
+                filename="data.json",
+                custom_metadata=custom,
+            ),
+            content=b'{"key": "value"}',
+        )
+
+        processor = IngestProcessor(storage=mock_storage)
+        result = processor.process(message)
+
+        assert result.storage_url is not None
+        mock_storage.save.assert_called_once()
+        call_kwargs = mock_storage.save.call_args.kwargs
+        assert call_kwargs["custom_metadata"] == custom
 
 
 # =============================================================================

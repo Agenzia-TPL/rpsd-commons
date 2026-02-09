@@ -9,6 +9,7 @@ Supports both inline and outline metadata organization:
 import base64
 import json
 import logging
+from typing import Any
 
 import httpx
 from fastapi import Request
@@ -84,6 +85,7 @@ class HTTPCarrier(BaseCarrier):
         content: bytes,
         content_type: str = "application/octet-stream",
         filename: str | None = None,
+        custom_metadata: dict[str, Any] | None = None,
         options: HTTPCarrierOptions | None = None,
     ) -> dict:
         """Send data inline via HTTP POST (fast/slim mode).
@@ -95,6 +97,7 @@ class HTTPCarrier(BaseCarrier):
             content: Data to send
             content_type: MIME type of the data
             filename: Optional original filename
+            custom_metadata: Optional additional metadata
             options: HTTP-specific send options. Defaults to
                 HTTPCarrierOptions() (inline metadata).
 
@@ -120,6 +123,8 @@ class HTTPCarrier(BaseCarrier):
                 }
                 if filename:
                     payload["metadata"]["filename"] = filename
+                if custom_metadata:
+                    payload["metadata"]["custom_metadata"] = custom_metadata
 
                 response = self._http_client.post(
                     recipient,
@@ -178,6 +183,7 @@ class HTTPCarrier(BaseCarrier):
         content: bytes | None,
         content_type: str = "application/octet-stream",
         filename: str | None = None,
+        custom_metadata: dict[str, Any] | None = None,
         options: HTTPCarrierOptions | None = None,
         where: str | None = None,
         expose_ttl: int = 3600,
@@ -192,6 +198,7 @@ class HTTPCarrier(BaseCarrier):
                 'where'
             content_type: MIME type of the data
             filename: Optional original filename
+            custom_metadata: Optional additional metadata
             options: HTTP-specific send options. Defaults to
                 HTTPCarrierOptions() (inline metadata).
             where: URL where content is available (required
@@ -238,6 +245,8 @@ class HTTPCarrier(BaseCarrier):
                 }
                 if filename:
                     payload["metadata"]["filename"] = filename
+                if custom_metadata:
+                    payload["metadata"]["custom_metadata"] = custom_metadata
 
                 response = self._http_client.post(
                     recipient,

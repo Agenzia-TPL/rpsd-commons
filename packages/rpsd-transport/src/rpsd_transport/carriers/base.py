@@ -3,6 +3,7 @@ Base carrier abstract class for transport implementations.
 """
 
 from abc import ABC, abstractmethod
+from typing import Any
 
 from pydantic import BaseModel
 
@@ -53,6 +54,7 @@ class BaseCarrier(ABC):
         content: bytes,
         content_type: str = "application/octet-stream",
         filename: str | None = None,
+        custom_metadata: dict[str, Any] | None = None,
         options: CarrierOptions | None = None,
     ) -> dict:
         """Send data inline (fast/slim mode).
@@ -65,6 +67,7 @@ class BaseCarrier(ABC):
             content: Data to send
             content_type: MIME type of the data
             filename: Optional original filename
+            custom_metadata: Optional additional metadata
             options: Carrier-specific options. Each carrier type
                 defines its own options subclass with defaults.
 
@@ -85,6 +88,7 @@ class BaseCarrier(ABC):
         content: bytes | None,
         content_type: str = "application/octet-stream",
         filename: str | None = None,
+        custom_metadata: dict[str, Any] | None = None,
         options: CarrierOptions | None = None,
         where: str | None = None,
         expose_ttl: int = 3600,
@@ -101,6 +105,7 @@ class BaseCarrier(ABC):
             content: New data to save and expose or None
             content_type: MIME type of the data
             filename: Optional original filename
+            custom_metadata: Optional additional metadata
             options: Carrier-specific options. Each carrier type
                 defines its own options subclass with defaults.
             where: URL where content is available
@@ -123,6 +128,7 @@ class BaseCarrier(ABC):
         content: bytes,
         content_type: str = "application/octet-stream",
         filename: str | None = None,
+        custom_metadata: dict[str, Any] | None = None,
         options: CarrierOptions | None = None,
     ) -> dict:
         """Send data inline (fast/slim mode) - async version.
@@ -140,6 +146,7 @@ class BaseCarrier(ABC):
             content: Data to send
             content_type: MIME type of the data
             filename: Optional original filename
+            custom_metadata: Optional additional metadata
             options: Carrier-specific options. Each carrier type
                 defines its own options subclass with defaults.
 
@@ -159,6 +166,7 @@ class BaseCarrier(ABC):
             content=content,
             content_type=content_type,
             filename=filename,
+            custom_metadata=custom_metadata,
             options=options,
         )
 
@@ -170,6 +178,7 @@ class BaseCarrier(ABC):
         content: bytes | None,
         content_type: str = "application/octet-stream",
         filename: str | None = None,
+        custom_metadata: dict[str, Any] | None = None,
         options: CarrierOptions | None = None,
         where: str | None = None,
         expose_ttl: int = 3600,
@@ -191,6 +200,7 @@ class BaseCarrier(ABC):
             content: New data to save and expose or None
             content_type: MIME type of the data
             filename: Optional original filename
+            custom_metadata: Optional additional metadata
             options: Carrier-specific options. Each carrier type
                 defines its own options subclass with defaults.
             where: URL where content is available
@@ -213,6 +223,7 @@ class BaseCarrier(ABC):
             content=content,
             content_type=content_type,
             filename=filename,
+            custom_metadata=custom_metadata,
             options=options,
             where=where,
             expose_ttl=expose_ttl,
