@@ -108,8 +108,7 @@ async def main():
     except Exception as e:
         logger.exception("Error consuming messages: %s", e)
     finally:
-        if hasattr(carrier, "stop"):
-            await carrier.stop()
+        await carrier.stop()
         logger.info("Consumer stopped. Processed %d messages.", message_count)
 
 
