@@ -13,6 +13,8 @@ This example shows how to:
 
 import hashlib
 import logging
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from typing import Any
 
@@ -95,34 +97,31 @@ processor = IngestProcessor(
     pre_forward_transform=with_custom_metadata(enrich_forward_metadata),
 )
 
-# Create FastAPI app
-app = FastAPI(
-    title="RPSD Ingest Example",
-    description=("Example FastAPI app using HTTPCarrier and IngestProcessor"),
-    version="1.0.0",
-)
-
-
-@app.on_event("startup")
-async def startup_event():
-    """Initialize forward carrier on startup."""
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    """Manage forward carrier startup and shutdown."""
     if forward_carrier:
         start_method = getattr(forward_carrier, "start", None)
         if start_method is not None:
             logger.info("Starting forward carrier...")
             await start_method()
             logger.info("Forward carrier started successfully")
-
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    """Cleanup forward carrier on shutdown."""
+    yield
     if forward_carrier:
         stop_method = getattr(forward_carrier, "stop", None)
         if stop_method is not None:
             logger.info("Stopping forward carrier...")
             await stop_method()
             logger.info("Forward carrier stopped successfully")
+
+
+# Create FastAPI app
+app = FastAPI(
+    title="RPSD Ingest Example",
+    description="Example FastAPI app using HTTPCarrier and IngestProcessor",
+    version="1.0.0",
+    lifespan=lifespan,
+)
 
 
 @app.post("/ingest")
