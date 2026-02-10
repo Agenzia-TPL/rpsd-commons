@@ -18,7 +18,7 @@ from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from typing import Any
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 
 from fastapi_ingest_app.auth import validate_api_key
@@ -97,6 +97,7 @@ processor = IngestProcessor(
     pre_forward_transform=with_custom_metadata(enrich_forward_metadata),
 )
 
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Manage forward carrier startup and shutdown."""
@@ -122,6 +123,30 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan,
 )
+
+
+@app.exception_handler(HTTPException)
+async def http_exception_handler(
+    request: Request,
+    exc: HTTPException,
+) -> JSONResponse:
+    """Handle HTTP exceptions with a standard error response.
+
+    Customize the response body shape by modifying this handler.
+    """
+    # To return a custom error body shape, replace the return
+    # below with something like:
+    # return JSONResponse(
+    #     status_code=exc.status_code,
+    #     content={
+    #         "error": exc.detail,
+    #         "message": str(exc.detail),
+    #     },
+    # )
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"detail": exc.detail},
+    )
 
 
 @app.post("/ingest")
@@ -185,25 +210,19 @@ async def ingest_data(request: Request):
 
     except PermissionError as e:
         logger.warning("Authentication failed: %s", e)
-        return JSONResponse(status_code=401, content={"error": str(e)})
+        raise HTTPException(status_code=401, detail=str(e))
 
     except (MissingMetadataError, InvalidMetadataError) as e:
         logger.warning("Invalid metadata: %s", e)
-        return JSONResponse(status_code=400, content={"error": str(e)})
+        raise HTTPException(status_code=400, detail=str(e))
 
     except TransportError as e:
         logger.error("Transport error: %s", e)
-        return JSONResponse(status_code=400, content={"error": str(e)})
+        raise HTTPException(status_code=400, detail=str(e))
 
     except Exception as e:
         logger.exception("Unexpected error processing request")
-        return JSONResponse(
-            status_code=500,
-            content={
-                "error": "Internal server error",
-                "message": str(e),
-            },
-        )
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/health")
