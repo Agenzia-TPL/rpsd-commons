@@ -35,11 +35,14 @@ logger = logging.getLogger(__name__)
 class IngestResult(BaseModel):
     """Result of processing an ingested message.
 
-    Contains the original message, resolved content, and
+    Contains the reconciled message, resolved content, and
     outcomes of optional save and forward steps.
 
     Attributes:
-        message: Original parsed TransportMessage.
+        message: Reconciled TransportMessage. For fat/heavy
+            messages, metadata fields (e.g. content_type) are
+            updated from the fetched content. For slim/fast
+            messages, this is the original message unchanged.
         content: Resolved content bytes (fetched from where URL
             for fat/heavy messages, or original content for
             slim/fast messages).
@@ -47,6 +50,9 @@ class IngestResult(BaseModel):
             configured and save succeeded. None otherwise.
         storage_metadata: Metadata from storage save. None if
             storage was not configured or save did not occur.
+        fetch_metadata: Metadata from fetching the fat/heavy
+            content URL. None for slim/fast messages or if no
+            fetch occurred. Excluded from serialization.
         forwarded: True if message was successfully forwarded
             to a second carrier. False otherwise.
     """
@@ -55,6 +61,7 @@ class IngestResult(BaseModel):
     content: bytes | None = None
     storage_url: str | None = None
     storage_metadata: StorageMetadata | None = Field(default=None, exclude=True)
+    fetch_metadata: StorageMetadata | None = Field(default=None, exclude=True)
     forwarded: bool = False
 
 
@@ -66,15 +73,19 @@ class IngestProcessor:
 
     The processing pipeline:
     1. Resolve content (fetch from where URL for fat/heavy messages)
-    2. Apply pre_save_transform (if configured)
-    3. Optionally save to a StorageProvider
-    4. Apply pre_forward_transform (if configured)
-    5. Optionally forward to a second BaseCarrier
+    2. Reconcile metadata (update content_type, filename from fetch)
+    3. Apply pre_save_transform (if configured)
+    4. Optionally save to a StorageProvider
+    5. Apply pre_forward_transform (if configured)
+    6. Optionally forward to a second BaseCarrier
 
-    All steps are optional except content resolution, which always
-    runs. Storage and forward are only performed when their
-    respective dependencies are provided. Transformers allow
-    modifying messages before storage and/or forwarding.
+    All steps are optional except content resolution and metadata
+    reconciliation, which always run. For fat/heavy messages, the
+    reconciliation step updates the message's content_type (and
+    optionally filename) from the fetched content's actual metadata.
+    Storage and forward are only performed when their respective
+    dependencies are provided. Transformers allow modifying messages
+    before storage and/or forwarding.
 
     Example -- receive and save:
         ```python
@@ -300,10 +311,11 @@ class IngestProcessor:
 
         Pipeline:
         1. Resolve content (fetch if fat/heavy)
-        2. Apply pre_save_transform (if configured)
-        3. Save to storage (if configured) - uses transformed message
-        4. Apply pre_forward_transform (if configured)
-        5. Forward (if configured) - uses transformed message
+        2. Reconcile metadata from fetched content
+        3. Apply pre_save_transform (if configured)
+        4. Save to storage (if configured) - uses transformed message
+        5. Apply pre_forward_transform (if configured)
+        6. Forward (if configured) - uses transformed message
 
         Args:
             message: Parsed TransportMessage from any carrier.
@@ -317,14 +329,17 @@ class IngestProcessor:
             TransformError: If transformation fails.
         """
         # 1. Resolve content
-        content = self._resolve_content(message)
+        content, fetch_metadata = self._resolve_content(message)
 
-        # 2. Apply pre_save_transform
+        # 2. Reconcile metadata from fetched content
+        reconciled = self._reconcile_metadata(message, fetch_metadata)
+
+        # 3. Apply pre_save_transform
         message_for_save = self._apply_transform(
-            message, content, self.pre_save_transform
+            reconciled, content, self.pre_save_transform
         )
 
-        # 3. Optionally save to storage
+        # 4. Optionally save to storage
         storage_url = None
         storage_metadata = None
         if self.storage is not None:
@@ -332,21 +347,22 @@ class IngestProcessor:
                 message_for_save, content
             )
 
-        # 4. Apply pre_forward_transform
+        # 5. Apply pre_forward_transform
         message_for_forward = self._apply_transform(
             message_for_save, content, self.pre_forward_transform
         )
 
-        # 5. Optionally forward
+        # 6. Optionally forward
         forwarded = False
         if self.forward_carrier is not None:
             forwarded = self._forward_message(message_for_forward, content, storage_url)
 
         return IngestResult(
-            message=message,  # Return original message
+            message=reconciled,
             content=content,
             storage_url=storage_url,
             storage_metadata=storage_metadata,
+            fetch_metadata=fetch_metadata,
             forwarded=forwarded,
         )
 
@@ -359,10 +375,11 @@ class IngestProcessor:
 
         Pipeline:
         1. Resolve content (fetch if fat/heavy)
-        2. Apply pre_save_transform (if configured)
-        3. Save to storage (if configured) - uses transformed message
-        4. Apply pre_forward_transform (if configured)
-        5. Forward (if configured) - uses transformed message
+        2. Reconcile metadata from fetched content
+        3. Apply pre_save_transform (if configured)
+        4. Save to storage (if configured) - uses transformed message
+        5. Apply pre_forward_transform (if configured)
+        6. Forward (if configured) - uses transformed message
 
         Args:
             message: Parsed TransportMessage from any carrier.
@@ -376,14 +393,17 @@ class IngestProcessor:
             TransformError: If transformation fails.
         """
         # 1. Resolve content
-        content = await self._resolve_content_async(message)
+        content, fetch_metadata = await self._resolve_content_async(message)
 
-        # 2. Apply pre_save_transform
+        # 2. Reconcile metadata from fetched content
+        reconciled = self._reconcile_metadata(message, fetch_metadata)
+
+        # 3. Apply pre_save_transform
         message_for_save = await self._apply_transform_async(
-            message, content, self.pre_save_transform
+            reconciled, content, self.pre_save_transform
         )
 
-        # 3. Optionally save to storage (sync — StorageProvider is sync)
+        # 4. Optionally save to storage (sync — StorageProvider is sync)
         storage_url = None
         storage_metadata = None
         if self.storage is not None:
@@ -391,12 +411,12 @@ class IngestProcessor:
                 message_for_save, content
             )
 
-        # 4. Apply pre_forward_transform
+        # 5. Apply pre_forward_transform
         message_for_forward = await self._apply_transform_async(
             message_for_save, content, self.pre_forward_transform
         )
 
-        # 5. Optionally forward
+        # 6. Optionally forward
         forwarded = False
         if self.forward_carrier is not None:
             forwarded = await self._forward_message_async(
@@ -404,25 +424,30 @@ class IngestProcessor:
             )
 
         return IngestResult(
-            message=message,  # Return original message
+            message=reconciled,
             content=content,
             storage_url=storage_url,
             storage_metadata=storage_metadata,
+            fetch_metadata=fetch_metadata,
             forwarded=forwarded,
         )
 
-    def _resolve_content(self, message: TransportMessage) -> bytes:
+    def _resolve_content(
+        self, message: TransportMessage
+    ) -> tuple[bytes, StorageMetadata | None]:
         """Resolve message content synchronously.
 
         For slim/fast messages, returns message.content directly.
-        For fat/heavy messages, fetches content from the where URL
-        using rpsd-storage's StorageProvider (supports file://, http://, https://, s3://).
+        For fat/heavy messages, fetches content and metadata from
+        the where URL using rpsd-storage's StorageProvider
+        (supports file://, http://, https://, s3://).
 
         Args:
             message: TransportMessage to resolve.
 
         Returns:
-            Resolved content bytes.
+            Tuple of (content_bytes, fetch_metadata). fetch_metadata
+            is None for slim/fast messages.
 
         Raises:
             ContentFetchError: If heavy content fetch fails.
@@ -431,36 +456,41 @@ class IngestProcessor:
         if message.is_slimfast:
             if message.content is None:
                 raise ValueError("Slim/fast message has no content")
-            return message.content
+            return message.content, None
 
         if message.where is None:
             raise ValueError("Fat/heavy message missing 'where' URL")
 
         logger.info("Fetching heavy content from: %s", message.where)
         try:
-            content = StorageProvider.load_content_from_url(message.where)
-            return content
+            content, fetch_metadata = StorageProvider.load_from_url(message.where)
+            return content, fetch_metadata
         except Exception as e:
             raise ContentFetchError(
                 f"Failed to fetch content from {message.where}: {e}"
             ) from e
 
-    async def _resolve_content_async(self, message: TransportMessage) -> bytes:
+    async def _resolve_content_async(
+        self, message: TransportMessage
+    ) -> tuple[bytes, StorageMetadata | None]:
         """Resolve message content asynchronously.
 
         For slim/fast messages, returns message.content directly.
-        For fat/heavy messages, fetches content from the where URL
-        using rpsd-storage's StorageProvider (supports file://, http://, https://, s3://).
+        For fat/heavy messages, fetches content and metadata from
+        the where URL using rpsd-storage's StorageProvider
+        (supports file://, http://, https://, s3://).
 
-        Note: StorageProvider.load_content_from_url() is synchronous, so we run it
-        in an async context. For truly async operations, consider using
-        asyncio.to_thread() or implement async storage providers in the future.
+        Note: StorageProvider.load_from_url() is synchronous, so
+        we run it in an async context. For truly async operations,
+        consider using asyncio.to_thread() or implement async
+        storage providers in the future.
 
         Args:
             message: TransportMessage to resolve.
 
         Returns:
-            Resolved content bytes.
+            Tuple of (content_bytes, fetch_metadata). fetch_metadata
+            is None for slim/fast messages.
 
         Raises:
             ContentFetchError: If heavy content fetch fails.
@@ -469,7 +499,7 @@ class IngestProcessor:
         if message.is_slimfast:
             if message.content is None:
                 raise ValueError("Slim/fast message has no content")
-            return message.content
+            return message.content, None
 
         if message.where is None:
             raise ValueError("Fat/heavy message missing 'where' URL")
@@ -478,12 +508,61 @@ class IngestProcessor:
         try:
             # Note: StorageProvider methods are currently synchronous
             # This is acceptable for now as I/O is typically fast
-            content = StorageProvider.load_content_from_url(message.where)
-            return content
+            content, fetch_metadata = StorageProvider.load_from_url(message.where)
+            return content, fetch_metadata
         except Exception as e:
             raise ContentFetchError(
                 f"Failed to fetch content from {message.where}: {e}"
             ) from e
+
+    def _reconcile_metadata(
+        self,
+        message: TransportMessage,
+        fetch_metadata: StorageMetadata | None,
+    ) -> TransportMessage:
+        """Reconcile message metadata with fetched content metadata.
+
+        After resolving fat/heavy content, updates the message's
+        metadata with authoritative fields from the fetched
+        StorageMetadata. For slim/fast messages (fetch_metadata is
+        None), returns the original message unchanged.
+
+        Fields updated from fetched content:
+        - content_type: always replaced with actual MIME type
+        - filename: replaced only if original is None and the
+          fetch provides a meaningful filename
+
+        Fields preserved from original message:
+        - who, what, where, custom_metadata
+
+        Subclasses may override this method to customize which
+        fields are reconciled.
+
+        Args:
+            message: Original TransportMessage.
+            fetch_metadata: StorageMetadata from content fetch,
+                or None for slim/fast messages.
+
+        Returns:
+            New TransportMessage with reconciled metadata, or
+            original message if fetch_metadata is None.
+        """
+        if fetch_metadata is None:
+            return message
+
+        updates: dict = {
+            "content_type": fetch_metadata.content_type,
+        }
+
+        if (
+            message.metadata.filename is None
+            and fetch_metadata.original_filename != "unknown"
+        ):
+            updates["filename"] = fetch_metadata.original_filename
+
+        return message.model_copy(
+            update={"metadata": message.metadata.model_copy(update=updates)}
+        )
 
     def _save_to_storage(
         self,

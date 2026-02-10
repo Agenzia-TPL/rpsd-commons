@@ -179,7 +179,11 @@ class TestProcessSync:
     def test_heavy_message_with_storage(self, heavy_message, mock_storage):
         """Test processing heavy message: fetch + save."""
         respx.get("https://storage.example.com/files/abc123").mock(
-            return_value=httpx.Response(200, content=b"<xml>data</xml>")
+            return_value=httpx.Response(
+                200,
+                content=b"<xml>data</xml>",
+                headers={"content-type": "application/xml"},
+            )
         )
 
         processor = IngestProcessor(storage=mock_storage)
@@ -187,6 +191,8 @@ class TestProcessSync:
 
         assert result.content == b"<xml>data</xml>"
         assert result.storage_url is not None
+        assert result.fetch_metadata is not None
+        assert result.fetch_metadata.content_type == "application/xml"
 
         mock_storage.save.assert_called_once_with(
             content=b"<xml>data</xml>",
@@ -226,7 +232,11 @@ class TestProcessSync:
     ):
         """Test forwarding heavy message without storage."""
         respx.get("https://storage.example.com/files/abc123").mock(
-            return_value=httpx.Response(200, content=b"<xml>data</xml>")
+            return_value=httpx.Response(
+                200,
+                content=b"<xml>data</xml>",
+                headers={"content-type": "application/xml"},
+            )
         )
 
         processor = IngestProcessor(
@@ -415,7 +425,11 @@ class TestProcessAsync:
     async def test_heavy_message_with_storage(self, heavy_message, mock_storage):
         """Test async processing heavy message: fetch + save."""
         respx.get("https://storage.example.com/files/abc123").mock(
-            return_value=httpx.Response(200, content=b"<xml>data</xml>")
+            return_value=httpx.Response(
+                200,
+                content=b"<xml>data</xml>",
+                headers={"content-type": "application/xml"},
+            )
         )
 
         processor = IngestProcessor(storage=mock_storage)
@@ -423,6 +437,7 @@ class TestProcessAsync:
 
         assert result.content == b"<xml>data</xml>"
         assert result.storage_url is not None
+        assert result.fetch_metadata is not None
 
     @pytest.mark.anyio
     async def test_slim_forward_no_storage(self, slim_message, mock_forward_carrier):
@@ -441,7 +456,11 @@ class TestProcessAsync:
     async def test_heavy_forward_no_storage(self, heavy_message, mock_forward_carrier):
         """Test async forwarding heavy message without storage."""
         respx.get("https://storage.example.com/files/abc123").mock(
-            return_value=httpx.Response(200, content=b"<xml>data</xml>")
+            return_value=httpx.Response(
+                200,
+                content=b"<xml>data</xml>",
+                headers={"content-type": "application/xml"},
+            )
         )
 
         processor = IngestProcessor(
@@ -825,7 +844,11 @@ class TestTransformations:
 
         # Mock the heavy content fetch
         respx_mock.get("https://storage.example.com/files/abc123").mock(
-            return_value=httpx.Response(200, content=b"heavy content")
+            return_value=httpx.Response(
+                200,
+                content=b"heavy content",
+                headers={"content-type": "application/octet-stream"},
+            )
         )
 
         processor = IngestProcessor(
@@ -835,3 +858,240 @@ class TestTransformations:
 
         # Verify transformer received the fetched content
         assert received_content == b"heavy content"
+
+
+# =============================================================================
+# Metadata Reconciliation Tests
+# =============================================================================
+
+
+class TestMetadataReconciliation:
+    """Tests for metadata reconciliation after fatheavy content fetch."""
+
+    def test_slim_message_no_reconciliation(self, slim_message):
+        """Test that slim messages are not affected by reconciliation."""
+        processor = IngestProcessor()
+        result = processor.process(slim_message)
+
+        # For slim messages, result.message should be the original
+        assert result.message is slim_message
+        assert result.message.metadata.content_type == "application/json"
+        assert result.fetch_metadata is None
+
+    @respx.mock
+    def test_content_type_updated_from_fetch(self):
+        """Test that content_type is updated from fetched content."""
+        message = TransportMessage(
+            metadata=MessageMetadata(
+                who="test-entity",
+                what="test-content",
+                where="https://example.com/data.pdf",
+                content_type="application/octet-stream",
+            )
+        )
+
+        respx.get("https://example.com/data.pdf").mock(
+            return_value=httpx.Response(
+                200,
+                content=b"pdf-content",
+                headers={"content-type": "application/pdf"},
+            )
+        )
+
+        processor = IngestProcessor()
+        result = processor.process(message)
+
+        assert result.message.metadata.content_type == "application/pdf"
+        assert result.fetch_metadata is not None
+        assert result.fetch_metadata.content_type == "application/pdf"
+
+    @respx.mock
+    def test_filename_updated_when_original_is_none(self):
+        """Test filename is set from fetch when original is None."""
+        message = TransportMessage(
+            metadata=MessageMetadata(
+                who="test-entity",
+                what="test-content",
+                where="https://example.com/report.pdf",
+                content_type="application/octet-stream",
+                filename=None,
+            )
+        )
+
+        respx.get("https://example.com/report.pdf").mock(
+            return_value=httpx.Response(
+                200,
+                content=b"pdf-content",
+                headers={
+                    "content-type": "application/pdf",
+                    "content-disposition": ('attachment; filename="report.pdf"'),
+                },
+            )
+        )
+
+        processor = IngestProcessor()
+        result = processor.process(message)
+
+        assert result.message.metadata.filename == "report.pdf"
+
+    @respx.mock
+    def test_filename_not_updated_when_original_is_set(self):
+        """Test filename is preserved when sender set it explicitly."""
+        message = TransportMessage(
+            metadata=MessageMetadata(
+                who="test-entity",
+                what="test-content",
+                where="https://example.com/data",
+                content_type="application/octet-stream",
+                filename="my-custom-name.pdf",
+            )
+        )
+
+        respx.get("https://example.com/data").mock(
+            return_value=httpx.Response(
+                200,
+                content=b"pdf-content",
+                headers={
+                    "content-type": "application/pdf",
+                    "content-disposition": ('attachment; filename="server-name.pdf"'),
+                },
+            )
+        )
+
+        processor = IngestProcessor()
+        result = processor.process(message)
+
+        # Sender's filename takes priority
+        assert result.message.metadata.filename == "my-custom-name.pdf"
+
+    @respx.mock
+    def test_who_what_where_preserved_from_original(self):
+        """Test who, what, where are always from original message."""
+        message = TransportMessage(
+            metadata=MessageMetadata(
+                who="sender-entity",
+                what="document",
+                where="https://example.com/file.xml",
+                content_type="application/octet-stream",
+                custom_metadata={"key": "value"},
+            )
+        )
+
+        respx.get("https://example.com/file.xml").mock(
+            return_value=httpx.Response(
+                200,
+                content=b"<xml/>",
+                headers={"content-type": "application/xml"},
+            )
+        )
+
+        processor = IngestProcessor()
+        result = processor.process(message)
+
+        # These must come from the original message
+        assert result.message.who == "sender-entity"
+        assert result.message.what == "document"
+        assert result.message.where == "https://example.com/file.xml"
+        assert result.message.metadata.custom_metadata == {
+            "key": "value",
+        }
+        # content_type must come from fetched content
+        assert result.message.metadata.content_type == "application/xml"
+
+    @respx.mock
+    def test_reconciled_content_type_flows_to_storage(self, mock_storage):
+        """Test that reconciled content_type is used in storage save."""
+        message = TransportMessage(
+            metadata=MessageMetadata(
+                who="test-entity",
+                what="test-content",
+                where="https://example.com/data.json",
+                content_type="application/octet-stream",
+                filename="data.json",
+            )
+        )
+
+        respx.get("https://example.com/data.json").mock(
+            return_value=httpx.Response(
+                200,
+                content=b'{"key": "value"}',
+                headers={"content-type": "application/json"},
+            )
+        )
+
+        processor = IngestProcessor(storage=mock_storage)
+        processor.process(message)
+
+        mock_storage.save.assert_called_once()
+        call_kwargs = mock_storage.save.call_args.kwargs
+        assert call_kwargs["content_type"] == "application/json"
+
+    @respx.mock
+    def test_reconciled_content_type_flows_to_forward(self):
+        """Test that reconciled content_type is used in forwarding."""
+        carrier = MagicMock(spec=BaseCarrier)
+        carrier.send_fatheavy.return_value = {"status": "sent"}
+
+        message = TransportMessage(
+            metadata=MessageMetadata(
+                who="test-entity",
+                what="test-content",
+                where="https://example.com/data.json",
+                content_type="application/octet-stream",
+                filename="data.json",
+            )
+        )
+
+        respx.get("https://example.com/data.json").mock(
+            return_value=httpx.Response(
+                200,
+                content=b'{"key": "value"}',
+                headers={"content-type": "application/json"},
+            )
+        )
+
+        processor = IngestProcessor(
+            forward_carrier=carrier,
+            forward_recipient="output-topic",
+        )
+        processor.process(message)
+
+        carrier.send_fatheavy.assert_called_once()
+        call_kwargs = carrier.send_fatheavy.call_args.kwargs
+        assert call_kwargs["content_type"] == "application/json"
+
+    @pytest.mark.anyio
+    @respx.mock
+    async def test_async_content_type_updated_from_fetch(self):
+        """Test async: content_type is updated from fetched content."""
+        message = TransportMessage(
+            metadata=MessageMetadata(
+                who="test-entity",
+                what="test-content",
+                where="https://example.com/data.pdf",
+                content_type="application/octet-stream",
+            )
+        )
+
+        respx.get("https://example.com/data.pdf").mock(
+            return_value=httpx.Response(
+                200,
+                content=b"pdf-content",
+                headers={"content-type": "application/pdf"},
+            )
+        )
+
+        processor = IngestProcessor()
+        result = await processor.process_async(message)
+
+        assert result.message.metadata.content_type == "application/pdf"
+        assert result.fetch_metadata is not None
+
+    @pytest.mark.anyio
+    async def test_async_slim_message_no_reconciliation(self, slim_message):
+        """Test async: slim messages are not affected."""
+        processor = IngestProcessor()
+        result = await processor.process_async(slim_message)
+
+        assert result.message is slim_message
+        assert result.fetch_metadata is None
