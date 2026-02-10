@@ -37,6 +37,11 @@ from rpsd_transport.models import (
     TransportMessage,
 )
 from rpsd_transport.processors.ingest import IngestProcessor, IngestResult
+from rpsd_transport.resolve import (
+    reconcile_metadata,
+    resolve_content,
+    resolve_content_async,
+)
 from rpsd_transport.settings import (
     ForwardSettings,
     IngestSettings,
@@ -94,6 +99,10 @@ __all__ = [
     # Processors
     "IngestProcessor",
     "IngestResult",
+    # Resolve utilities
+    "resolve_content",
+    "resolve_content_async",
+    "reconcile_metadata",
     # Settings
     "TransportSettings",
     "KafkaSettings",

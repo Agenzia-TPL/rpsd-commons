@@ -16,12 +16,16 @@ from rpsd_storage.metadata import StorageMetadata
 from rpsd_storage.providers.base import StorageProvider
 from rpsd_transport.carriers.base import BaseCarrier, CarrierOptions
 from rpsd_transport.exceptions import (
-    ContentFetchError,
     StorageError,
     TransformError,
     TransportError,
 )
 from rpsd_transport.models import TransportMessage
+from rpsd_transport.resolve import (
+    reconcile_metadata,
+    resolve_content,
+    resolve_content_async,
+)
 from rpsd_transport.transformers import (
     AsyncMessageTransformer,
     AsyncMessageTransformFn,
@@ -437,10 +441,7 @@ class IngestProcessor:
     ) -> tuple[bytes, StorageMetadata | None]:
         """Resolve message content synchronously.
 
-        For slim/fast messages, returns message.content directly.
-        For fat/heavy messages, fetches content and metadata from
-        the where URL using rpsd-storage's StorageProvider
-        (supports file://, http://, https://, s3://).
+        Delegates to rpsd_transport.resolve.resolve_content().
 
         Args:
             message: TransportMessage to resolve.
@@ -453,37 +454,14 @@ class IngestProcessor:
             ContentFetchError: If heavy content fetch fails.
             ValueError: If slim message has no content.
         """
-        if message.is_slimfast:
-            if message.content is None:
-                raise ValueError("Slim/fast message has no content")
-            return message.content, None
-
-        if message.where is None:
-            raise ValueError("Fat/heavy message missing 'where' URL")
-
-        logger.info("Fetching heavy content from: %s", message.where)
-        try:
-            content, fetch_metadata = StorageProvider.load_from_url(message.where)
-            return content, fetch_metadata
-        except Exception as e:
-            raise ContentFetchError(
-                f"Failed to fetch content from {message.where}: {e}"
-            ) from e
+        return resolve_content(message)
 
     async def _resolve_content_async(
         self, message: TransportMessage
     ) -> tuple[bytes, StorageMetadata | None]:
         """Resolve message content asynchronously.
 
-        For slim/fast messages, returns message.content directly.
-        For fat/heavy messages, fetches content and metadata from
-        the where URL using rpsd-storage's StorageProvider
-        (supports file://, http://, https://, s3://).
-
-        Note: StorageProvider.load_from_url() is synchronous, so
-        we run it in an async context. For truly async operations,
-        consider using asyncio.to_thread() or implement async
-        storage providers in the future.
+        Delegates to rpsd_transport.resolve.resolve_content_async().
 
         Args:
             message: TransportMessage to resolve.
@@ -496,24 +474,7 @@ class IngestProcessor:
             ContentFetchError: If heavy content fetch fails.
             ValueError: If slim message has no content.
         """
-        if message.is_slimfast:
-            if message.content is None:
-                raise ValueError("Slim/fast message has no content")
-            return message.content, None
-
-        if message.where is None:
-            raise ValueError("Fat/heavy message missing 'where' URL")
-
-        logger.info("Fetching heavy content from: %s", message.where)
-        try:
-            # Note: StorageProvider methods are currently synchronous
-            # This is acceptable for now as I/O is typically fast
-            content, fetch_metadata = StorageProvider.load_from_url(message.where)
-            return content, fetch_metadata
-        except Exception as e:
-            raise ContentFetchError(
-                f"Failed to fetch content from {message.where}: {e}"
-            ) from e
+        return await resolve_content_async(message)
 
     def _reconcile_metadata(
         self,
@@ -522,21 +483,7 @@ class IngestProcessor:
     ) -> TransportMessage:
         """Reconcile message metadata with fetched content metadata.
 
-        After resolving fat/heavy content, updates the message's
-        metadata with authoritative fields from the fetched
-        StorageMetadata. For slim/fast messages (fetch_metadata is
-        None), returns the original message unchanged.
-
-        Fields updated from fetched content:
-        - content_type: always replaced with actual MIME type
-        - filename: replaced only if original is None and the
-          fetch provides a meaningful filename
-
-        Fields preserved from original message:
-        - who, what, where, custom_metadata
-
-        Subclasses may override this method to customize which
-        fields are reconciled.
+        Delegates to rpsd_transport.resolve.reconcile_metadata().
 
         Args:
             message: Original TransportMessage.
@@ -547,22 +494,7 @@ class IngestProcessor:
             New TransportMessage with reconciled metadata, or
             original message if fetch_metadata is None.
         """
-        if fetch_metadata is None:
-            return message
-
-        updates: dict = {
-            "content_type": fetch_metadata.content_type,
-        }
-
-        if (
-            message.metadata.filename is None
-            and fetch_metadata.original_filename != "unknown"
-        ):
-            updates["filename"] = fetch_metadata.original_filename
-
-        return message.model_copy(
-            update={"metadata": message.metadata.model_copy(update=updates)}
-        )
+        return reconcile_metadata(message, fetch_metadata)
 
     def _save_to_storage(
         self,
