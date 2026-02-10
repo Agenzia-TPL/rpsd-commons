@@ -63,7 +63,7 @@ class PubSubCarrier(BaseCarrier, ABC):
                 process(message)
             ```
         """
-        yield  # pragma: no cover
+        ...  # pragma: no cover
 
     def receive(
         self,
