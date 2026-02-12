@@ -8,13 +8,34 @@ RED='\033[0;31m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
+# Parse carrier argument (default to kafka for backward compatibility)
+CARRIER="${1:-kafka}"
+
+# Validate carrier
+if [ "$CARRIER" != "kafka" ] && [ "$CARRIER" != "rabbitmq" ]; then
+    echo -e "${RED}Error: Invalid carrier '$CARRIER'${NC}"
+    echo ""
+    echo "Usage: $0 [kafka|rabbitmq]"
+    echo ""
+    echo "Examples:"
+    echo "  $0          # Use Kafka (default)"
+    echo "  $0 kafka    # Use Kafka explicitly"
+    echo "  $0 rabbitmq # Use RabbitMQ"
+    echo ""
+    exit 1
+fi
+
+# Convert carrier to uppercase for display
+CARRIER_UPPER=$(echo "$CARRIER" | tr '[:lower:]' '[:upper:]')
+
 echo -e "${BLUE}============================================${NC}"
 echo -e "${BLUE}   FastAPI Ingest App - End-to-End Demo${NC}"
+echo -e "${BLUE}   Message Broker: ${CARRIER_UPPER}${NC}"
 echo -e "${BLUE}============================================${NC}"
 echo ""
 echo "This demo tests the complete ingestion pipeline:"
-echo "  1. HTTP → Storage → Kafka forwarding"
-echo "  2. Kafka consumer with rpsd-storage integration"
+echo "  1. HTTP → Storage → ${CARRIER_UPPER} forwarding"
+echo "  2. ${CARRIER_UPPER} consumer with rpsd-storage integration"
 echo "  3. Content retrieval from multiple URL schemes"
 echo ""
 echo "Test scenarios:"
@@ -31,21 +52,30 @@ if [ ! -f "pyproject.toml" ] || [ ! -d "src/fastapi_ingest_app" ]; then
     exit 1
 fi
 
-# Check if Kafka is running (test connection to host.docker.internal:9092)
-echo -e "${YELLOW}Step 1: Checking Kafka availability...${NC}"
-if ! python3 -c "import socket; s = socket.socket(); s.settimeout(2); s.connect(('host.docker.internal', 9092)); s.close()" 2>/dev/null; then
-    echo -e "${RED}✗ Kafka is not running!${NC}"
+# Check if message broker is running
+echo -e "${YELLOW}Step 1: Checking ${CARRIER_UPPER} availability...${NC}"
+
+if [ "$CARRIER" == "kafka" ]; then
+    BROKER_PORT=9092
+    START_SCRIPT="kafka/start.sh"
+elif [ "$CARRIER" == "rabbitmq" ]; then
+    BROKER_PORT=5672
+    START_SCRIPT="rabbitmq/start.sh"
+fi
+
+if ! python3 -c "import socket; s = socket.socket(); s.settimeout(2); s.connect(('host.docker.internal', $BROKER_PORT)); s.close()" 2>/dev/null; then
+    echo -e "${RED}✗ ${CARRIER_UPPER} is not running!${NC}"
     echo ""
-    echo -e "${YELLOW}Please start Kafka from the host machine:${NC}"
+    echo -e "${YELLOW}Please start ${CARRIER_UPPER} from the host machine:${NC}"
     echo -e "  cd ../../host-scripts"
-    echo -e "  ./kafka-start.sh"
+    echo -e "  ./$START_SCRIPT"
     echo ""
-    echo -e "${YELLOW}Or run this demo without Kafka forwarding:${NC}"
+    echo -e "${YELLOW}Or run this demo without message broker forwarding:${NC}"
     echo -e "  Unset APP__FORWARD__CARRIER in your .env file"
     echo ""
     exit 1
 fi
-echo -e "${GREEN}✓ Kafka is running${NC}"
+echo -e "${GREEN}✓ ${CARRIER_UPPER} is running${NC}"
 echo ""
 
 # Load environment and ensure demo defaults
@@ -60,19 +90,32 @@ if [ -f ".env" ]; then
 fi
 
 # Set defaults for required demo variables (if not already set)
+# Common settings
 export APP__TRANSPORT__API_KEY="${APP__TRANSPORT__API_KEY:-demo-key-12345}"
 export APP__STORAGE__PROVIDER="${APP__STORAGE__PROVIDER:-fs}"
 export APP__STORAGE__FS__BASE_PATH="${APP__STORAGE__FS__BASE_PATH:-/tmp/rpsd-storage}"
-export APP__FORWARD__CARRIER="${APP__FORWARD__CARRIER:-kafka}"
+export APP__FORWARD__CARRIER="$CARRIER"
 export APP__FORWARD__RECIPIENT="${APP__FORWARD__RECIPIENT:-enriched-events}"
 export APP__FORWARD__MODE="${APP__FORWARD__MODE:-fatheavy}"
-export APP__FORWARD__KAFKA__BOOTSTRAP_SERVERS="${APP__FORWARD__KAFKA__BOOTSTRAP_SERVERS:-host.docker.internal:9092}"
+export APP__CONSUMER__CARRIER="$CARRIER"
+export APP__CONSUMER__TOPIC="${APP__CONSUMER__TOPIC:-enriched-events}"
+
+# Carrier-specific settings
+if [ "$CARRIER" == "kafka" ]; then
+    export APP__FORWARD__KAFKA__BOOTSTRAP_SERVERS="host.docker.internal:9092"
+    export APP__CONSUMER__KAFKA__BOOTSTRAP_SERVERS="host.docker.internal:9092"
+    export APP__CONSUMER__KAFKA__GROUP_ID="demo-consumer"
+elif [ "$CARRIER" == "rabbitmq" ]; then
+    export APP__FORWARD__RABBITMQ__URL="amqp://guest:guest@host.docker.internal/"
+    export APP__CONSUMER__RABBITMQ__URL="amqp://guest:guest@host.docker.internal/"
+fi
 
 # Backup existing .env and write complete config for demo
 if [ -f ".env" ]; then
     cp .env .env.backup
 fi
 
+# Write common configuration
 cat > .env <<EOF
 APP__TRANSPORT__API_KEY=${APP__TRANSPORT__API_KEY}
 APP__STORAGE__PROVIDER=${APP__STORAGE__PROVIDER}
@@ -80,8 +123,23 @@ APP__STORAGE__FS__BASE_PATH=${APP__STORAGE__FS__BASE_PATH}
 APP__FORWARD__CARRIER=${APP__FORWARD__CARRIER}
 APP__FORWARD__RECIPIENT=${APP__FORWARD__RECIPIENT}
 APP__FORWARD__MODE=${APP__FORWARD__MODE}
-APP__FORWARD__KAFKA__BOOTSTRAP_SERVERS=${APP__FORWARD__KAFKA__BOOTSTRAP_SERVERS}
+APP__CONSUMER__CARRIER=${APP__CONSUMER__CARRIER}
+APP__CONSUMER__TOPIC=${APP__CONSUMER__TOPIC}
 EOF
+
+# Append carrier-specific configuration
+if [ "$CARRIER" == "kafka" ]; then
+    cat >> .env <<EOF
+APP__FORWARD__KAFKA__BOOTSTRAP_SERVERS=${APP__FORWARD__KAFKA__BOOTSTRAP_SERVERS}
+APP__CONSUMER__KAFKA__BOOTSTRAP_SERVERS=${APP__CONSUMER__KAFKA__BOOTSTRAP_SERVERS}
+APP__CONSUMER__KAFKA__GROUP_ID=${APP__CONSUMER__KAFKA__GROUP_ID}
+EOF
+elif [ "$CARRIER" == "rabbitmq" ]; then
+    cat >> .env <<EOF
+APP__FORWARD__RABBITMQ__URL=${APP__FORWARD__RABBITMQ__URL}
+APP__CONSUMER__RABBITMQ__URL=${APP__CONSUMER__RABBITMQ__URL}
+EOF
+fi
 
 echo -e "${GREEN}✓ Demo configuration ready${NC}"
 echo ""
@@ -101,19 +159,19 @@ fi
 echo -e "${GREEN}✓ FastAPI running (PID: $FASTAPI_PID)${NC}"
 echo ""
 
-# Start Kafka consumer in background
-echo -e "${YELLOW}Step 4: Starting Kafka consumer...${NC}"
-uv run python -m fastapi_ingest_app.consumer > /tmp/kafka-consumer.log 2>&1 &
+# Start message broker consumer in background
+echo -e "${YELLOW}Step 4: Starting ${CARRIER_UPPER} consumer...${NC}"
+uv run python -m fastapi_ingest_app.consumer > /tmp/consumer.log 2>&1 &
 CONSUMER_PID=$!
 sleep 2
 
 if ! kill -0 $CONSUMER_PID 2>/dev/null; then
-    echo -e "${RED}✗ Kafka consumer failed to start${NC}"
-    cat /tmp/kafka-consumer.log
+    echo -e "${RED}✗ ${CARRIER_UPPER} consumer failed to start${NC}"
+    cat /tmp/consumer.log
     kill $FASTAPI_PID 2>/dev/null || true
     exit 1
 fi
-echo -e "${GREEN}✓ Kafka consumer running (PID: $CONSUMER_PID)${NC}"
+echo -e "${GREEN}✓ ${CARRIER_UPPER} consumer running (PID: $CONSUMER_PID)${NC}"
 echo ""
 
 # Send test requests
@@ -140,7 +198,7 @@ echo "$RESPONSE" | python3 -m json.tool
 STORAGE_URL_TEST1=$(echo "$RESPONSE" | python3 -c "import sys, json; print(json.load(sys.stdin).get('storage_url', ''))")
 FORWARDED=$(echo "$RESPONSE" | python3 -c "import sys, json; print(json.load(sys.stdin).get('forwarded', False))")
 if [ "$FORWARDED" = "True" ]; then
-    echo -e "${GREEN}✓ Message forwarded to Kafka${NC}"
+    echo -e "${GREEN}✓ Message forwarded to ${CARRIER_UPPER}${NC}"
 else
     echo -e "${YELLOW}⚠ Message not forwarded (forwarding may be disabled)${NC}"
 fi
@@ -162,7 +220,7 @@ RESPONSE=$(curl -s -X POST "http://localhost:8000/ingest" \
 echo "$RESPONSE" | python3 -m json.tool
 FORWARDED=$(echo "$RESPONSE" | python3 -c "import sys, json; print(json.load(sys.stdin).get('forwarded', False))")
 if [ "$FORWARDED" = "True" ]; then
-    echo -e "${GREEN}✓ Message forwarded to Kafka${NC}"
+    echo -e "${GREEN}✓ Message forwarded to ${CARRIER_UPPER}${NC}"
 else
     echo -e "${YELLOW}⚠ Message not forwarded (forwarding may be disabled)${NC}"
 fi
@@ -186,7 +244,7 @@ if [ -n "$STORAGE_URL_TEST1" ]; then
     echo "$RESPONSE" | python3 -m json.tool
     FORWARDED=$(echo "$RESPONSE" | python3 -c "import sys, json; print(json.load(sys.stdin).get('forwarded', False))")
     if [ "$FORWARDED" = "True" ]; then
-        echo -e "${GREEN}✓ Message forwarded to Kafka${NC}"
+        echo -e "${GREEN}✓ Message forwarded to ${CARRIER_UPPER}${NC}"
     else
         echo -e "${YELLOW}⚠ Message not forwarded (forwarding may be disabled)${NC}"
     fi
@@ -211,7 +269,7 @@ RESPONSE=$(curl -s -X POST "http://localhost:8000/ingest" \
 echo "$RESPONSE" | python3 -m json.tool
 FORWARDED=$(echo "$RESPONSE" | python3 -c "import sys, json; print(json.load(sys.stdin).get('forwarded', False))")
 if [ "$FORWARDED" = "True" ]; then
-    echo -e "${GREEN}✓ Message forwarded to Kafka${NC}"
+    echo -e "${GREEN}✓ Message forwarded to ${CARRIER_UPPER}${NC}"
 else
     echo -e "${YELLOW}⚠ Message not forwarded (forwarding may be disabled)${NC}"
 fi
@@ -233,7 +291,7 @@ RESPONSE=$(curl -s -X POST "http://localhost:8000/ingest" \
 echo "$RESPONSE" | python3 -m json.tool
 FORWARDED=$(echo "$RESPONSE" | python3 -c "import sys, json; print(json.load(sys.stdin).get('forwarded', False))")
 if [ "$FORWARDED" = "True" ]; then
-    echo -e "${GREEN}✓ Message forwarded to Kafka (consumer will handle error)${NC}"
+    echo -e "${GREEN}✓ Message forwarded to ${CARRIER_UPPER} (consumer will handle error)${NC}"
 else
     echo -e "${YELLOW}⚠ Message not forwarded (ingestion may have failed)${NC}"
 fi
@@ -255,7 +313,7 @@ RESPONSE=$(curl -s -X POST "http://localhost:8000/ingest" \
 echo "$RESPONSE" | python3 -m json.tool
 FORWARDED=$(echo "$RESPONSE" | python3 -c "import sys, json; print(json.load(sys.stdin).get('forwarded', False))")
 if [ "$FORWARDED" = "True" ]; then
-    echo -e "${GREEN}✓ Message forwarded to Kafka (consumer will handle error)${NC}"
+    echo -e "${GREEN}✓ Message forwarded to ${CARRIER_UPPER} (consumer will handle error)${NC}"
 else
     echo -e "${YELLOW}⚠ Message not forwarded (ingestion may have failed)${NC}"
 fi
@@ -276,10 +334,10 @@ echo -e "${BLUE}Consumer log (showing rpsd-storage metadata and error handling):
 echo "The consumer uses rpsd-storage to retrieve content and handles errors gracefully:"
 echo ""
 echo "Successful retrievals:"
-tail -60 /tmp/kafka-consumer.log 2>/dev/null | grep -A 6 "Content retrieved successfully" | head -30 || echo "  (No successful retrievals)"
+tail -60 /tmp/consumer.log 2>/dev/null | grep -A 6 "Content retrieved successfully" | head -30 || echo "  (No successful retrievals)"
 echo ""
 echo "Error handling:"
-tail -60 /tmp/kafka-consumer.log 2>/dev/null | grep -E "(Content not found|Failed to fetch|WARNING)" | tail -10 || echo "  (No errors encountered)"
+tail -60 /tmp/consumer.log 2>/dev/null | grep -E "(Content not found|Failed to fetch|WARNING)" | tail -10 || echo "  (No errors encountered)"
 echo ""
 
 echo -e "${BLUE}Summary of test scenarios:${NC}"
@@ -309,12 +367,19 @@ echo -e "${BLUE}============================================${NC}"
 echo ""
 echo -e "${GREEN}FastAPI App:${NC}      http://localhost:8000"
 echo -e "${GREEN}Health Check:${NC}     http://localhost:8000/health"
-echo -e "${GREEN}Kafka UI:${NC}         http://localhost:8080"
-echo -e "${GREEN}Schema Registry:${NC}  http://localhost:8081"
+echo ""
+
+if [ "$CARRIER" == "kafka" ]; then
+    echo -e "${GREEN}Kafka UI:${NC}         http://localhost:8080"
+    echo -e "${GREEN}Schema Registry:${NC}  http://localhost:8081"
+elif [ "$CARRIER" == "rabbitmq" ]; then
+    echo -e "${GREEN}RabbitMQ UI:${NC}      http://localhost:15672 (guest/guest)"
+fi
+
 echo ""
 echo -e "${YELLOW}Logs:${NC}"
 echo -e "  FastAPI:  tail -f /tmp/fastapi-ingest-app.log"
-echo -e "  Consumer: tail -f /tmp/kafka-consumer.log"
+echo -e "  Consumer: tail -f /tmp/consumer.log"
 echo ""
 echo -e "${YELLOW}Press Ctrl+C to stop demo and cleanup...${NC}"
 echo ""

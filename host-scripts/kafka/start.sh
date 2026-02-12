@@ -24,7 +24,7 @@ SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 cd "$SCRIPT_DIR"
 
 echo -e "${YELLOW}1. Starting Docker Compose services...${NC}"
-docker-compose up -d
+docker compose up -d
 
 echo ""
 echo -e "${YELLOW}2. Waiting for Kafka to be ready...${NC}"
@@ -45,7 +45,7 @@ done
 
 if [ $WAIT_COUNT -ge $MAX_WAIT ]; then
     echo -e "${RED}✗ Kafka failed to start within ${MAX_WAIT} seconds${NC}"
-    echo "Check logs with: docker-compose logs kafka"
+    echo "Check logs with: docker compose logs kafka"
     exit 1
 fi
 
@@ -81,5 +81,5 @@ echo -e "${YELLOW}Topics:${NC}"
 echo -e "  View topics in Kafka UI: ${GREEN}http://localhost:8080${NC}"
 echo -e "  (Topics are auto-created on first publish)"
 echo ""
-echo -e "${YELLOW}To stop Kafka:${NC} ./kafka-stop.sh"
+echo -e "${YELLOW}To stop Kafka:${NC} ./stop.sh"
 echo ""

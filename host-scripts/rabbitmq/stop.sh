@@ -7,7 +7,7 @@ YELLOW='\033[1;33m'
 RED='\033[0;31m'
 NC='\033[0m' # No Color
 
-echo -e "${YELLOW}=== Stopping Kafka Infrastructure ===${NC}"
+echo -e "${YELLOW}=== Stopping RabbitMQ Infrastructure ===${NC}"
 echo ""
 
 # Get the directory where this script is located
@@ -26,13 +26,13 @@ fi
 
 # Stop services
 echo -e "${YELLOW}Stopping Docker Compose services...${NC}"
-docker-compose down $CLEAN_FLAG
+docker compose down $CLEAN_FLAG
 
 if [ -n "$CLEAN_FLAG" ]; then
-    echo -e "${GREEN}✓ Kafka infrastructure stopped and data volumes removed${NC}"
+    echo -e "${GREEN}✓ RabbitMQ infrastructure stopped and data volumes removed${NC}"
 else
-    echo -e "${GREEN}✓ Kafka infrastructure stopped (data preserved)${NC}"
-    echo -e "${YELLOW}  To remove data volumes, use: ./kafka-stop.sh --clean${NC}"
+    echo -e "${GREEN}✓ RabbitMQ infrastructure stopped (data preserved)${NC}"
+    echo -e "${YELLOW}  To remove data volumes, use: ./stop.sh --clean${NC}"
 fi
 
 echo ""

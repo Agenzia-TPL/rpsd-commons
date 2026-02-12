@@ -53,6 +53,7 @@ if settings.forward.carrier:
     forward_settings = TransportSettings(
         carrier=settings.forward.carrier,
         kafka=settings.forward.kafka,
+        rabbitmq=settings.forward.rabbitmq,
     )
     forward_carrier = get_carrier(forward_settings)
     logger.info(

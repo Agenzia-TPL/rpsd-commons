@@ -1,17 +1,18 @@
 # FastAPI Ingest Example
 
-A comprehensive FastAPI application demonstrating HTTP ingestion with optional Kafka forwarding using `rpsd-transport` and `rpsd-storage`.
+A comprehensive FastAPI application demonstrating HTTP ingestion with optional message broker forwarding (Kafka or RabbitMQ) using `rpsd-transport` and `rpsd-storage`.
 
 ## Features
 
 - **HTTP Ingestion**: Uses `HTTPCarrier.receive()` for automatic message parsing
 - **IngestProcessor Integration**: Demonstrates the processor pattern for message processing
-- **Optional Kafka Forwarding**: Forward processed messages to Kafka after storage
+- **Optional Message Broker Forwarding**: Forward processed messages to Kafka or RabbitMQ after storage
 - **Storage Abstraction**: Supports both filesystem and S3 storage via configuration
 - **Dual Metadata Formats**: Handles both inline (JSON) and outline (headers/query) metadata
 - **API Key Authentication**: Bearer/Token authentication with configurable keys
-- **Async Lifecycle Management**: Proper startup/shutdown handling for Kafka connections
-- **Modality Support**: Demonstrates HTTP→Storage and HTTP→Storage→Kafka pipelines
+- **Async Lifecycle Management**: Proper startup/shutdown handling for broker connections
+- **Carrier Abstraction**: Single codebase works with multiple message brokers via factory pattern
+- **Modality Support**: Demonstrates HTTP→Storage and HTTP→Storage→Broker pipelines
 
 ## Architecture
 
@@ -27,7 +28,7 @@ Storage (S3/Filesystem)
 External System
 ```
 
-### Modality #3: HTTP → Storage → Kafka (Forward Enabled)
+### Modality #3: HTTP → Storage → Message Broker (Forward Enabled)
 
 ```
 External System
@@ -37,7 +38,8 @@ FastAPI App (HTTPCarrier)
     ├─→ Storage (S3/Filesystem)
     │     [Content saved]
     │
-    └─→ Kafka Topic (enriched-events)
+    └─→ Message Broker (Kafka or RabbitMQ)
+          Topic/Queue: enriched-events
           [Notification with storage URL]
           ↓
     Downstream Consumer
@@ -56,9 +58,9 @@ From the workspace root:
 uv sync
 ```
 
-This installs all workspace dependencies including `rpsd-transport[kafka]`, `rpsd-storage`, and FastAPI.
+This installs all workspace dependencies including `rpsd-transport[kafka,rabbitmq]`, `rpsd-storage`, and FastAPI.
 
-**Note**: The `[kafka]` extra includes `aiokafka` for Kafka support. This is a true optional dependency - you only need it if you want to enable Kafka forwarding.
+**Note**: The `[kafka,rabbitmq]` extras include `aiokafka` and `aio-pika` for message broker support. These are true optional dependencies - you only need them if you want to enable forwarding.
 
 ## Configuration
 
@@ -81,15 +83,47 @@ APP__TRANSPORT__API_KEY=your-secret-key-here
 APP__STORAGE__PROVIDER=fs
 APP__STORAGE__FS__BASE_PATH=/tmp/rpsd-storage
 
-# Optional: Kafka forwarding (uncomment to enable)
+# Optional: Message broker forwarding (FastAPI app publishes)
+# For Kafka:
 # APP__FORWARD__CARRIER=kafka
 # APP__FORWARD__RECIPIENT=enriched-events
 # APP__FORWARD__MODE=fatheavy
 # APP__FORWARD__KAFKA__BOOTSTRAP_SERVERS=host.docker.internal:9092
 # APP__FORWARD__KAFKA__CLIENT_ID=fastapi-forwarder
+#
+# For RabbitMQ:
+# APP__FORWARD__CARRIER=rabbitmq
+# APP__FORWARD__RECIPIENT=enriched-events
+# APP__FORWARD__MODE=fatheavy
+# APP__FORWARD__RABBITMQ__URL=amqp://guest:guest@host.docker.internal/
+
+# Optional: Message broker consumption (consumer.py script)
+# Separate settings demonstrate separation of concerns: publishing vs consuming
+# For Kafka:
+# APP__CONSUMER__CARRIER=kafka
+# APP__CONSUMER__TOPIC=enriched-events
+# APP__CONSUMER__KAFKA__BOOTSTRAP_SERVERS=host.docker.internal:9092
+# APP__CONSUMER__KAFKA__GROUP_ID=demo-consumer
+#
+# For RabbitMQ:
+# APP__CONSUMER__CARRIER=rabbitmq
+# APP__CONSUMER__TOPIC=enriched-events
+# APP__CONSUMER__RABBITMQ__URL=amqp://guest:guest@host.docker.internal/
 ```
 
 **Important**: The `.env` file must be in your current working directory when running the app.
+
+### Configuration Structure: Forward vs Consumer
+
+This example demonstrates **separation of concerns** between publishing and consuming:
+
+- **`APP__FORWARD__*`** - Used by the FastAPI application (`main.py`) for **publishing** messages after storage
+- **`APP__CONSUMER__*`** - Used by the consumer script (`consumer.py`) for **consuming** messages
+
+This separation is educational and shows best practices:
+- Real applications are typically either publishers OR consumers, not both
+- Each has different configuration needs (e.g., Kafka consumers require `group_id`, publishers don't)
+- Keeping settings separate makes the code clearer and easier to maintain
 
 ### Option 2: Environment Variables
 
@@ -101,19 +135,37 @@ export APP__STORAGE__PROVIDER=fs
 export APP__STORAGE__FS__BASE_PATH=/tmp/rpsd-storage
 ```
 
-### Connection Strings for Kafka
+### Connection Strings
 
-**From devcontainer** (inside Docker):
+**Kafka:**
+
+From devcontainer (inside Docker):
 ```bash
 APP__FORWARD__KAFKA__BOOTSTRAP_SERVERS=host.docker.internal:9092
 ```
 
-**From host machine** (outside Docker):
+From host machine (outside Docker):
 ```bash
 APP__FORWARD__KAFKA__BOOTSTRAP_SERVERS=localhost:9092
 ```
 
-## Kafka Setup (Optional)
+**RabbitMQ:**
+
+From devcontainer (inside Docker):
+```bash
+APP__FORWARD__RABBITMQ__URL=amqp://guest:guest@host.docker.internal/
+```
+
+From host machine (outside Docker):
+```bash
+APP__FORWARD__RABBITMQ__URL=amqp://guest:guest@localhost/
+```
+
+## Message Broker Setup (Optional)
+
+Choose either Kafka or RabbitMQ (or run both for experimentation).
+
+### Kafka Setup
 
 To use Kafka forwarding, you must start Kafka infrastructure on your host machine.
 
@@ -123,7 +175,7 @@ From your **host machine** (not from inside devcontainer):
 
 ```bash
 cd host-scripts
-./kafka-start.sh
+./kafka/start.sh
 ```
 
 This starts:
@@ -136,13 +188,13 @@ This starts:
 
 ```bash
 cd host-scripts
-./kafka-stop.sh
+./kafka/stop.sh
 ```
 
 To stop and remove all data:
 
 ```bash
-./kafka-stop.sh --clean
+./kafka/stop.sh --clean
 ```
 
 ### Access Kafka UI
@@ -152,6 +204,56 @@ Open http://localhost:8080 in your browser to:
 - View consumer groups
 - Monitor broker health
 - Create/delete topics
+
+### RabbitMQ Setup
+
+From your **host machine** (not from inside devcontainer):
+
+```bash
+cd host-scripts
+./rabbitmq/start.sh
+```
+
+This starts:
+- RabbitMQ broker (AMQP 0.9.1) on port 5672
+- Management UI on port 15672 (guest/guest)
+- Creates queues automatically on first publish
+
+### Stop RabbitMQ
+
+```bash
+cd host-scripts
+./rabbitmq/stop.sh
+```
+
+To stop and remove all data:
+
+```bash
+./rabbitmq/stop.sh --clean
+```
+
+### Access RabbitMQ Management UI
+
+Open http://localhost:15672 in your browser:
+- Username: `guest`
+- Password: `guest`
+- Browse queues, exchanges, and bindings
+- View message rates and statistics
+- Manage users and permissions
+
+## Choosing a Message Broker
+
+**Use Kafka when:**
+- You need high-throughput event streaming
+- Message replay is required
+- Multiple consumers need the same messages
+- You want log-based messaging
+
+**Use RabbitMQ when:**
+- You need task queues and job processing
+- You want request-reply patterns (RPC)
+- You need flexible routing via exchanges
+- You prefer simpler operational requirements
 
 ## Running the Application
 
@@ -176,39 +278,64 @@ uv run uvicorn fastapi_ingest_app.main:app --reload --host 0.0.0.0 --port 8000
 uv run --directory examples/fastapi_ingest_app fastapi-ingest-app
 ```
 
-## Running the Kafka Consumer
+## Running the Consumer
 
-To demonstrate receiving forwarded messages:
+To demonstrate receiving forwarded messages from either Kafka or RabbitMQ:
 
 ```bash
 cd examples/fastapi_ingest_app
-uv run kafka-consumer
+
+# Configure the carrier (set in .env or export)
+export APP__FORWARD__CARRIER=kafka  # or rabbitmq
+export APP__FORWARD__RECIPIENT=enriched-events
+
+# For Kafka
+export APP__FORWARD__KAFKA__BOOTSTRAP_SERVERS=host.docker.internal:9092
+
+# For RabbitMQ
+export APP__FORWARD__RABBITMQ__URL=amqp://guest:guest@host.docker.internal/
+
+# Run consumer (works with both carriers)
+uv run consumer
 ```
 
 This consumer will:
-- Connect to Kafka broker
-- Subscribe to `enriched-events` topic
-- Display received messages
+- Connect to the configured message broker (Kafka or RabbitMQ)
+- Subscribe to the specified topic/queue
+- Display received messages with metadata
 - Fetch content from storage URLs (for fatheavy messages)
+- Show rich metadata from storage providers
 
 ## Quick Demo
 
-Run the automated end-to-end demo:
+Run the automated end-to-end demo with your choice of message broker:
 
 ```bash
 cd examples/fastapi_ingest_app
+
+# Use Kafka (default)
 ./demo.sh
+# or explicitly:
+./demo.sh kafka
+
+# Use RabbitMQ
+./demo.sh rabbitmq
 ```
 
-This will:
-1. Check if Kafka is running
-2. Start FastAPI application
-3. Start Kafka consumer
-4. Send test requests (slimfast and fatheavy)
-5. Verify results in storage and Kafka
-6. Show access URLs and logs
+The demo script accepts an optional carrier argument (`kafka` or `rabbitmq`) and automatically:
+1. Checks if the specified message broker is running
+2. Configures environment variables for the selected carrier
+3. Starts FastAPI application
+4. Starts message broker consumer
+5. Sends test requests (slimfast and fatheavy)
+6. Verifies results in storage and the message broker
+7. Shows carrier-specific access URLs and logs
 
-Press Ctrl+C to stop the demo.
+**Before running the demo:**
+- For Kafka: Run `../../host-scripts/kafka/start.sh` from your host machine
+- For RabbitMQ: Run `../../host-scripts/rabbitmq/start.sh` from your host machine
+
+Press Ctrl+C to stop the demo. Your original `.env` file will be automatically restored.
 
 ## API Endpoints
 
@@ -420,7 +547,7 @@ APP__FORWARD__MODE=slimfast
 
 ```bash
 cd host-scripts
-./kafka-start.sh
+./kafka/start.sh
 ```
 
 ### "Connection refused" to host.docker.internal:9092

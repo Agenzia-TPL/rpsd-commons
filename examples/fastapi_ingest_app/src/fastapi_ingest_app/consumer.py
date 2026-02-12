@@ -1,9 +1,9 @@
 """
-Kafka consumer demonstrating how to consume forwarded messages.
+Message broker consumer demonstrating how to consume forwarded messages.
 
 This script shows how to:
-- Connect to Kafka broker using KafkaPubSubCarrier
-- Consume messages from enriched-events topic
+- Connect to message broker (Kafka or RabbitMQ) using carrier factory
+- Consume messages from configured topic/queue
 - Process both slimfast (inline) and fatheavy (reference) messages
 - Use rpsd-storage to fetch content from any URL scheme (file://, http://, https://, s3://)
 - Display rich metadata from storage providers
@@ -14,7 +14,8 @@ import logging
 
 from fastapi_ingest_app.settings import AppSettings
 from rpsd_storage.providers.base import StorageProvider
-from rpsd_transport.carriers.pubsub.kafka import KafkaPubSubCarrier
+from rpsd_transport import TransportSettings, get_carrier
+from rpsd_transport.carriers.pubsub.base import PubSubCarrier
 
 # Configure logging
 logging.basicConfig(
@@ -25,32 +26,62 @@ logger = logging.getLogger(__name__)
 
 
 async def main():
-    """Consume and process messages from Kafka."""
+    """Consume and process messages from configured message broker."""
     settings = AppSettings()
 
-    if not settings.forward.carrier:
-        logger.error("Forward carrier not configured. Set APP__FORWARD__CARRIER=kafka")
+    if not settings.consumer.carrier:
+        logger.error(
+            "Consumer carrier not configured. "
+            "Set APP__CONSUMER__CARRIER=kafka or APP__CONSUMER__CARRIER=rabbitmq"
+        )
         return
 
-    if not settings.forward.recipient:
+    if not settings.consumer.topic:
         logger.error(
-            "Forward recipient not configured. Set APP__FORWARD__RECIPIENT=<topic-name>"
+            "Consumer topic not configured. "
+            "Set APP__CONSUMER__TOPIC=<topic-or-queue-name>"
         )
         return
 
     # Type-safe assignment
-    topic = settings.forward.recipient
+    topic = settings.consumer.topic
 
-    logger.info("Starting Kafka consumer...")
-    logger.info("Bootstrap servers: %s", settings.forward.kafka.bootstrap_servers)
-    logger.info("Topic: %s", topic)
+    logger.info("Starting %s consumer...", settings.consumer.carrier.upper())
+    logger.info("Topic/Queue: %s", topic)
 
-    # Create Kafka carrier
-    carrier = KafkaPubSubCarrier(
-        bootstrap_servers=settings.forward.kafka.bootstrap_servers,
-        group_id="demo-consumer",
-        client_id="demo-consumer-client",
+    # Log carrier-specific connection info
+    if settings.consumer.carrier == "kafka":
+        logger.info(
+            "Kafka bootstrap servers: %s",
+            settings.consumer.kafka.bootstrap_servers,
+        )
+        logger.info("Consumer group: %s", settings.consumer.kafka.group_id or "None")
+        if not settings.consumer.kafka.group_id:
+            logger.error(
+                "Kafka group_id is required for consuming. "
+                "Set APP__CONSUMER__KAFKA__GROUP_ID=<group-name>"
+            )
+            return
+    elif settings.consumer.carrier == "rabbitmq":
+        logger.info("RabbitMQ URL: %s", settings.consumer.rabbitmq.url)
+        logger.info("Exchange: %s", settings.consumer.rabbitmq.exchange or "(default)")
+
+    # Create carrier using factory with consumer settings
+    transport_settings = TransportSettings(
+        carrier=settings.consumer.carrier,
+        kafka=settings.consumer.kafka,
+        rabbitmq=settings.consumer.rabbitmq,
     )
+    carrier = get_carrier(transport_settings)
+
+    # Ensure we have a PubSub carrier (not HTTP)
+    if not isinstance(carrier, PubSubCarrier):
+        logger.error(
+            "Carrier type '%s' does not support consumption. "
+            "Use 'kafka' or 'rabbitmq' carrier.",
+            settings.forward.carrier,
+        )
+        return
 
     try:
         logger.info("Consuming messages (press Ctrl+C to stop)...")

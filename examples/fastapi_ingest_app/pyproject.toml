@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Example FastAPI application using rpsd-transport and rpsd-storage"
 requires-python = ">=3.13"
 dependencies = [
-    "rpsd-transport[kafka]",
+    "rpsd-transport[kafka,rabbitmq]",
     "rpsd-storage",
     "fastapi>=0.100.0",
     "uvicorn[standard]>=0.24.0",
@@ -21,4 +21,4 @@ build-backend = "hatchling.build"
 
 [project.scripts]
 fastapi-ingest-app = "fastapi_ingest_app.main:run"
-kafka-consumer = "fastapi_ingest_app.consumer:main"
+consumer = "fastapi_ingest_app.consumer:main"
