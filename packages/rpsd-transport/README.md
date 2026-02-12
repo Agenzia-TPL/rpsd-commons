@@ -15,6 +15,7 @@ Transport is accomplished through **carriers** - pluggable implementations for d
 - **HTTPCarrier**: HTTP-based transport for external systems (REST APIs)
 - **PubSubCarrier**: Event Broker pub/sub messaging (internal only)
   - **KafkaPubSubCarrier**: Kafka-based PubSub transport
+  - **RabbitMQPubSubCarrier**: RabbitMQ-based PubSub transport
 
 #### Message Modes
 
@@ -277,6 +278,71 @@ async for message in carrier.consume("my-topic"):
     print(message.who, message.what, message.content)
 ```
 
+### RabbitMQPubSubCarrier API
+
+Requires the optional `rabbitmq` dependency: `uv add rpsd-transport[rabbitmq]`
+
+```python
+from rpsd_transport.carriers.pubsub.rabbitmq import (
+    RabbitMQPubSubCarrier,
+    RabbitMQCarrierOptions,
+)
+
+carrier = RabbitMQPubSubCarrier(
+    url="amqp://guest:guest@localhost/",
+    exchange="",            # empty = default exchange
+    exchange_type="direct",
+    queue_durable=True,
+    prefetch_count=10,
+)
+
+# Publishing (async)
+await carrier.start()
+await carrier.send_slimfast_async(
+    recipient="my-queue",
+    who="sender1",
+    what="report",
+    content=b"hello world",
+)
+await carrier.stop()
+
+# Publishing with custom routing key and priority
+await carrier.send_slimfast_async(
+    recipient="my-queue",
+    who="sender1",
+    what="report",
+    content=b"hello world",
+    options=RabbitMQCarrierOptions(
+        routing_key="custom.routing.key",
+        priority=5,
+    ),
+)
+
+# Consuming (async iterator with ack/nack)
+async for message in carrier.consume("my-queue"):
+    print(message.who, message.what, message.content)
+    await message.ack()   # acknowledge successful processing
+    # or: await message.nack(requeue=True) to re-queue
+```
+
+### Message Acknowledgment (ack/nack)
+
+Both RabbitMQ and Kafka consumers support message acknowledgment
+via `TransportMessage.ack()` and `TransportMessage.nack()`:
+
+```python
+async for message in carrier.consume("my-queue"):
+    try:
+        await process(message)
+        await message.ack()       # RabbitMQ: ack, Kafka: commit offset
+    except Exception:
+        await message.nack(requeue=True)  # re-deliver the message
+```
+
+- **RabbitMQ**: `ack()` acknowledges the AMQP message; `nack(requeue=True)` re-queues it.
+- **Kafka**: `ack()` commits the consumer offset; `nack(requeue=True)` seeks back to re-deliver.
+- If the carrier doesn't set ack/nack (e.g. HTTP), the methods are no-ops.
+
 ### Carrier Factory
 
 Use `get_carrier()` to create carriers from settings:
@@ -289,6 +355,10 @@ carrier = get_carrier()
 
 # Or with explicit settings
 settings = TransportSettings(carrier="kafka")
+carrier = get_carrier(settings)
+
+# RabbitMQ carrier from settings
+settings = TransportSettings(carrier="rabbitmq")
 carrier = get_carrier(settings)
 ```
 
@@ -413,13 +483,18 @@ async def fetch_temp_data(temp_id: str):
 
 ### Phase 4: PubSub Carrier
 - [x] `PubSubCarrier` abstract base class
-- [x] `KafkaPubSubCarrier` implementation (aiokafka)
-- [x] `KafkaCarrierOptions` with partition and key support
 - [x] `CarrierOptions` base model (Pydantic)
 - [x] `get_carrier()` factory function
+- [x] Message acknowledgment (`ack`/`nack`) on `TransportMessage`
+- [x] `KafkaPubSubCarrier` implementation (aiokafka)
+- [x] `KafkaCarrierOptions` with partition and key support
 - [x] `KafkaSettings` in `TransportSettings`
+- [x] Kafka manual offset commit (ack/nack)
+- [x] `RabbitMQPubSubCarrier` implementation (aio-pika)
+- [x] `RabbitMQCarrierOptions` with routing_key and priority
+- [x] `RabbitMQSettings` in `TransportSettings`
+- [x] RabbitMQ ack/nack support
 - [ ] Redis PubSub carrier (future)
-- [ ] RabbitMQ PubSub carrier (future)
 
 ## Configuration
 
@@ -431,10 +506,19 @@ from rpsd_transport import TransportSettings
 settings = TransportSettings()
 # Environment variables:
 # TRANSPORT__API_KEY=your-secret-key
-# TRANSPORT__CARRIER=http|kafka
+# TRANSPORT__CARRIER=http|kafka|rabbitmq
+#
+# Kafka settings:
 # TRANSPORT__KAFKA__BOOTSTRAP_SERVERS=localhost:9092
 # TRANSPORT__KAFKA__GROUP_ID=my-group
 # TRANSPORT__KAFKA__CLIENT_ID=my-client
+#
+# RabbitMQ settings:
+# TRANSPORT__RABBITMQ__URL=amqp://guest:guest@localhost/
+# TRANSPORT__RABBITMQ__EXCHANGE=
+# TRANSPORT__RABBITMQ__EXCHANGE_TYPE=direct
+# TRANSPORT__RABBITMQ__QUEUE_DURABLE=true
+# TRANSPORT__RABBITMQ__PREFETCH_COUNT=10
 ```
 
 ## Development

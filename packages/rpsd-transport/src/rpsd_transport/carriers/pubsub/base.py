@@ -63,6 +63,36 @@ class PubSubCarrier(BaseCarrier, ABC):
                 process(message)
             ```
         """
+        raise NotImplementedError
+        yield  # pragma: no cover
+
+    @abstractmethod
+    async def start(self) -> None:
+        """Start the PubSub carrier connection.
+
+        Initializes connections to the message broker (producer,
+        consumer, channels, etc.). Must be called before sending
+        or consuming messages.
+
+        Implementations should be idempotent (safe to call
+        multiple times).
+
+        Raises:
+            ConnectionError: If unable to connect to broker
+        """
+        ...  # pragma: no cover
+
+    @abstractmethod
+    async def stop(self) -> None:
+        """Stop the PubSub carrier connection.
+
+        Cleanly closes connections to the message broker.
+        Should be called when done with the carrier, typically
+        in a finally block or async context manager cleanup.
+
+        Implementations should be idempotent (safe to call
+        multiple times, safe to call without start).
+        """
         ...  # pragma: no cover
 
     def receive(

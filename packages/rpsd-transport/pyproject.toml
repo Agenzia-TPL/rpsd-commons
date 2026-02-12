@@ -19,6 +19,9 @@ dependencies = [
 kafka = [
     "aiokafka>=0.10.0",
 ]
+rabbitmq = [
+    "aio-pika>=9.0.0",
+]
 test = [
     "pytest>=8.0.0",
     "respx>=0.22.0",

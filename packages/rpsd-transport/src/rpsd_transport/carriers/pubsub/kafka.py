@@ -425,18 +425,19 @@ class KafkaPubSubCarrier(PubSubCarrier):
         """Consume messages from a Kafka topic.
 
         Creates and manages an aiokafka consumer internally.
-        Yields parsed TransportMessage instances.
+        Yields parsed TransportMessage instances with ack/nack
+        support via manual offset commit.
 
         Args:
             topic: Kafka topic to consume from
 
         Yields:
-            TransportMessage: Parsed messages
+            TransportMessage: Parsed messages with ack/nack set
 
         Raises:
             RuntimeError: If group_id was not set
         """
-        from aiokafka import AIOKafkaConsumer
+        from aiokafka import AIOKafkaConsumer, TopicPartition
 
         if self.group_id is None:
             raise RuntimeError(
@@ -448,7 +449,8 @@ class KafkaPubSubCarrier(PubSubCarrier):
             topic,
             bootstrap_servers=self.bootstrap_servers,
             group_id=self.group_id,
-            client_id=self.client_id if self.client_id else "aiokafka-consumer",
+            client_id=(self.client_id if self.client_id else "aiokafka-consumer"),
+            enable_auto_commit=False,
         )
 
         await consumer.start()
@@ -464,6 +466,27 @@ class KafkaPubSubCarrier(PubSubCarrier):
                     continue  # Skip tombstone messages
 
                 message = self.receive(msg.value, headers)
+
+                # Bind ack/nack for manual offset management
+                tp = TopicPartition(msg.topic, msg.partition)
+                offset = msg.offset
+
+                async def _ack(
+                    _tp=tp,
+                    _offset=offset,
+                ) -> None:
+                    await consumer.commit({_tp: _offset + 1})
+
+                async def _nack(
+                    requeue: bool = False,
+                    _tp=tp,
+                    _offset=offset,
+                ) -> None:
+                    if requeue:
+                        consumer.seek(_tp, _offset)
+
+                message._ack_fn = _ack
+                message._nack_fn = _nack
                 yield message
         finally:
             await consumer.stop()

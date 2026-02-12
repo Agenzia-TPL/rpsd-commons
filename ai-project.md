@@ -261,19 +261,23 @@ where => X-RPSD-WHERE
 Legacy header names are supported, but not incentivated and they may be deprecated at some time in the future.
 
 ### PubSub
-__DONE__ (Kafka carrier)
+__DONE__ (Kafka and RabbitMQ carriers)
 
 This carrier is based on the Publish & Subscribe functionality of some Event Broker and is available for the internal transport scope only.
 
-Architecture: Abstract PubSubCarrier base class (sub-ABC of BaseCarrier) + one implementing class per broker. Starting with Kafka, Redis and RabbitMQ to follow.
+Architecture: Abstract PubSubCarrier base class (sub-ABC of BaseCarrier) + one implementing class per broker.
 
 Key design decisions:
-- Two-level hierarchy: BaseCarrier -> PubSubCarrier -> KafkaPubSubCarrier. Justified because PubSub carriers share a distinct receive contract (raw bytes + headers) from HTTP (FastAPI Request).
-- CarrierOptions Pydantic model pattern: CarrierOptions -> HTTPCarrierOptions / KafkaCarrierOptions. Each carrier specializes options with carrier-specific fields.
+- Two-level hierarchy: BaseCarrier -> PubSubCarrier -> KafkaPubSubCarrier / RabbitMQPubSubCarrier. Justified because PubSub carriers share a distinct receive contract (raw bytes + headers) from HTTP (FastAPI Request).
+- CarrierOptions Pydantic model pattern: CarrierOptions -> HTTPCarrierOptions / KafkaCarrierOptions / RabbitMQCarrierOptions. Each carrier specializes options with carrier-specific fields.
 - Carrier manages consumer lifecycle via consume() async iterator (unlike HTTP where FastAPI handles the server).
 - receive() on PubSubCarrier is sync (just parsing, no I/O). For advanced use when caller manages own consumer.
 - get_carrier() factory function mirrors rpsd-storage's get_storage_provider() pattern.
 - aiokafka is an optional dependency: uv add rpsd-transport[kafka].
+- aio-pika is an optional dependency: uv add rpsd-transport[rabbitmq].
+- TransportMessage supports ack/nack via PrivateAttr callables. For Kafka, ack commits the offset (manual commit, auto-commit disabled). For RabbitMQ, ack/nack delegate to the underlying AMQP message. No-op for carriers that don't set them.
+- RabbitMQ carrier auto-declares exchanges and queues on startup/consume. Uses aio_pika.connect_robust for auto-reconnect. QoS prefetch_count is configurable via RabbitMQSettings.
+- The `topic` parameter in consume() maps to queue name for RabbitMQ, topic name for Kafka. Exchange/routing configuration lives in settings and constructor, not in the consume() signature.
 
 ## Processors
 

@@ -8,10 +8,11 @@ Supports both inline and outline metadata organization:
 
 import re
 import warnings
+from collections.abc import Awaitable, Callable
 from typing import Any, Literal
 from urllib.parse import urlparse
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, PrivateAttr, field_validator
 
 # Regex for valid identifier characters (alphanumeric, dashes, underscores)
 IDENTIFIER_PATTERN = re.compile(r"^[a-zA-Z0-9_-]+$")
@@ -92,6 +93,9 @@ class TransportMessage(BaseModel):
 
     This model represents a parsed/normalized message regardless of
     how it was received (inline or outline metadata organization).
+
+    PubSub carriers set _ack_fn / _nack_fn to allow consumers to
+    acknowledge or reject messages after processing.
     """
 
     metadata: MessageMetadata
@@ -99,6 +103,33 @@ class TransportMessage(BaseModel):
         default=None,
         description="Content bytes (for fast messages or after fetching heavy content)",
     )
+
+    _ack_fn: Callable[[], Awaitable[None]] | None = PrivateAttr(default=None)
+    _nack_fn: Callable[[bool], Awaitable[None]] | None = PrivateAttr(default=None)
+
+    async def ack(self) -> None:
+        """Acknowledge message processing success.
+
+        For RabbitMQ: acks the AMQP message.
+        For Kafka: commits the consumer offset.
+        No-op if the carrier doesn't set an ack function.
+        """
+        if self._ack_fn:
+            await self._ack_fn()
+
+    async def nack(self, requeue: bool = False) -> None:
+        """Reject message / signal processing failure.
+
+        For RabbitMQ: nacks the AMQP message.
+        For Kafka: seeks back to re-deliver the message.
+        No-op if the carrier doesn't set a nack function.
+
+        Args:
+            requeue: If True, the broker should re-queue the
+                message for redelivery.
+        """
+        if self._nack_fn:
+            await self._nack_fn(requeue)
 
     @property
     def is_slimfast(self) -> bool:

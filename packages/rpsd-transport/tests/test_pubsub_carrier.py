@@ -43,6 +43,14 @@ class StubPubSubCarrier(PubSubCarrier):
     async def consume(self, topic):
         yield  # pragma: no cover
 
+    async def start(self) -> None:
+        """No-op start for testing."""
+        pass
+
+    async def stop(self) -> None:
+        """No-op stop for testing."""
+        pass
+
 
 # =============================================================================
 # PubSubCarrier.receive() — inline metadata
@@ -660,6 +668,9 @@ class TestKafkaConsume:
         fake_msg = SimpleNamespace(
             value=json.dumps(payload).encode("utf-8"),
             headers=None,
+            topic="test-topic",
+            partition=0,
+            offset=42,
         )
 
         # Mock the consumer as an async iterator
@@ -703,6 +714,9 @@ class TestKafkaConsume:
                     b"application/octet-stream",
                 ),
             ],
+            topic="test-topic",
+            partition=0,
+            offset=10,
         )
 
         mock_consumer = AsyncMock()
@@ -750,6 +764,9 @@ class TestKafkaConsume:
         fake_msg = SimpleNamespace(
             value=b"not json",
             headers=None,  # No headers -> will fail outline
+            topic="test-topic",
+            partition=0,
+            offset=0,
         )
 
         mock_consumer = AsyncMock()
@@ -765,6 +782,94 @@ class TestKafkaConsume:
 
         # Consumer should still be stopped via finally block
         mock_consumer.stop.assert_awaited_once()
+
+    @pytest.mark.anyio
+    async def test_consume_uses_manual_commit(self):
+        """Consumer is created with enable_auto_commit=False."""
+        mock_aiokafka = MagicMock()
+
+        with patch.dict("sys.modules", {"aiokafka": mock_aiokafka}):
+            carrier = KafkaPubSubCarrier(
+                bootstrap_servers="localhost:9092",
+                group_id="test-group",
+            )
+
+        payload = {
+            "metadata": {
+                "who": "sender1",
+                "what": "report",
+            },
+            "content": base64.b64encode(b"data").decode("utf-8"),
+        }
+        fake_msg = SimpleNamespace(
+            value=json.dumps(payload).encode("utf-8"),
+            headers=None,
+            topic="test-topic",
+            partition=0,
+            offset=0,
+        )
+
+        mock_consumer = AsyncMock()
+        mock_consumer.start = AsyncMock()
+        mock_consumer.stop = AsyncMock()
+        mock_consumer.__aiter__ = MagicMock(return_value=self._async_iter([fake_msg]))
+        mock_aiokafka.AIOKafkaConsumer = MagicMock(return_value=mock_consumer)
+
+        with patch.dict("sys.modules", {"aiokafka": mock_aiokafka}):
+            async for _ in carrier.consume("test-topic"):
+                pass
+
+        # Verify enable_auto_commit=False was passed
+        call_kwargs = mock_aiokafka.AIOKafkaConsumer.call_args.kwargs
+        assert call_kwargs["enable_auto_commit"] is False
+
+    @pytest.mark.anyio
+    async def test_consume_sets_ack_nack(self):
+        """Consumed messages have ack/nack functions set."""
+        mock_aiokafka = MagicMock()
+
+        with patch.dict("sys.modules", {"aiokafka": mock_aiokafka}):
+            carrier = KafkaPubSubCarrier(
+                bootstrap_servers="localhost:9092",
+                group_id="test-group",
+            )
+
+        payload = {
+            "metadata": {
+                "who": "sender1",
+                "what": "report",
+            },
+            "content": base64.b64encode(b"data").decode("utf-8"),
+        }
+        fake_msg = SimpleNamespace(
+            value=json.dumps(payload).encode("utf-8"),
+            headers=None,
+            topic="test-topic",
+            partition=0,
+            offset=5,
+        )
+
+        mock_consumer = AsyncMock()
+        mock_consumer.start = AsyncMock()
+        mock_consumer.stop = AsyncMock()
+        mock_consumer.commit = AsyncMock()
+        mock_consumer.seek = MagicMock()
+        mock_consumer.__aiter__ = MagicMock(return_value=self._async_iter([fake_msg]))
+        mock_aiokafka.AIOKafkaConsumer = MagicMock(return_value=mock_consumer)
+
+        with patch.dict("sys.modules", {"aiokafka": mock_aiokafka}):
+            async for msg in carrier.consume("test-topic"):
+                # ack/nack should be set
+                assert msg._ack_fn is not None
+                assert msg._nack_fn is not None
+
+                # Test ack commits offset + 1
+                await msg.ack()
+                mock_consumer.commit.assert_awaited_once()
+
+                # Test nack with requeue seeks back
+                await msg.nack(requeue=True)
+                mock_consumer.seek.assert_called_once()
 
     @staticmethod
     async def _async_iter(items):

@@ -18,6 +18,24 @@ class KafkaSettings(BaseModel):
     client_id: str | None = None
 
 
+class RabbitMQSettings(BaseModel):
+    """RabbitMQ broker settings.
+
+    Environment variables (via TransportSettings):
+    - TRANSPORT__RABBITMQ__URL=amqp://guest:guest@localhost/
+    - TRANSPORT__RABBITMQ__EXCHANGE=
+    - TRANSPORT__RABBITMQ__EXCHANGE_TYPE=direct
+    - TRANSPORT__RABBITMQ__QUEUE_DURABLE=true
+    - TRANSPORT__RABBITMQ__PREFETCH_COUNT=10
+    """
+
+    url: str = "amqp://guest:guest@localhost/"
+    exchange: str = ""
+    exchange_type: str = "direct"
+    queue_durable: bool = True
+    prefetch_count: int = 10
+
+
 class ForwardSettings(BaseModel):
     """Forward carrier settings for IngestProcessor.
 
@@ -26,12 +44,14 @@ class ForwardSettings(BaseModel):
     - TRANSPORT__INGEST__FORWARD__RECIPIENT=output-topic
     - TRANSPORT__INGEST__FORWARD__MODE=fatheavy
     - TRANSPORT__INGEST__FORWARD__KAFKA__BOOTSTRAP_SERVERS=...
+    - TRANSPORT__INGEST__FORWARD__RABBITMQ__URL=...
     """
 
-    carrier: Literal["http", "kafka"] | None = None
+    carrier: Literal["http", "kafka", "rabbitmq"] | None = None
     recipient: str | None = None
     mode: Literal["fatheavy", "slimfast"] = "fatheavy"
     kafka: KafkaSettings = Field(default_factory=KafkaSettings)
+    rabbitmq: RabbitMQSettings = Field(default_factory=RabbitMQSettings)
 
 
 class IngestSettings(BaseModel):
@@ -53,15 +73,18 @@ class TransportSettings(BaseSettings):
     - TRANSPORT__API_KEY=your-secret-key
     - TRANSPORT__CARRIER=http
     - TRANSPORT__KAFKA__BOOTSTRAP_SERVERS=localhost:9092
+    - TRANSPORT__RABBITMQ__URL=amqp://guest:guest@localhost/
     - TRANSPORT__INGEST__FORWARD__CARRIER=kafka
     - TRANSPORT__INGEST__FORWARD__RECIPIENT=output-topic
     """
 
     model_config = SettingsConfigDict(
-        env_prefix="TRANSPORT__", env_nested_delimiter="__"
+        env_prefix="TRANSPORT__",
+        env_nested_delimiter="__",
     )
 
     api_key: str | None = None
-    carrier: Literal["http", "kafka"] = "http"
+    carrier: Literal["http", "kafka", "rabbitmq"] = "http"
     kafka: KafkaSettings = Field(default_factory=KafkaSettings)
+    rabbitmq: RabbitMQSettings = Field(default_factory=RabbitMQSettings)
     ingest: IngestSettings = Field(default_factory=IngestSettings)

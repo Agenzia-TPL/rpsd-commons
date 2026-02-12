@@ -13,3 +13,8 @@ __all__ = [
 #       KafkaPubSubCarrier,
 #       KafkaCarrierOptions,
 #   )
+#
+#   from rpsd_transport.carriers.pubsub.rabbitmq import (
+#       RabbitMQPubSubCarrier,
+#       RabbitMQCarrierOptions,
+#   )

@@ -46,6 +46,7 @@ from rpsd_transport.settings import (
     ForwardSettings,
     IngestSettings,
     KafkaSettings,
+    RabbitMQSettings,
     TransportSettings,
 )
 
@@ -87,6 +88,19 @@ def get_carrier(
             client_id=settings.kafka.client_id,
         )
 
+    if settings.carrier == "rabbitmq":
+        from rpsd_transport.carriers.pubsub.rabbitmq import (
+            RabbitMQPubSubCarrier,
+        )
+
+        return RabbitMQPubSubCarrier(
+            url=settings.rabbitmq.url,
+            exchange=settings.rabbitmq.exchange,
+            exchange_type=settings.rabbitmq.exchange_type,
+            queue_durable=settings.rabbitmq.queue_durable,
+            prefetch_count=settings.rabbitmq.prefetch_count,
+        )
+
     raise ValueError(f"Unknown carrier type: {settings.carrier}")
 
 
@@ -106,6 +120,7 @@ __all__ = [
     # Settings
     "TransportSettings",
     "KafkaSettings",
+    "RabbitMQSettings",
     "IngestSettings",
     "ForwardSettings",
     # Core models

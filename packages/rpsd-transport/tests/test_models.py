@@ -1,5 +1,7 @@
 """Tests for transport models."""
 
+from unittest.mock import AsyncMock
+
 import pytest
 from pydantic import ValidationError
 
@@ -8,6 +10,12 @@ from rpsd_transport.models import (
     MessageMetadata,
     TransportMessage,
 )
+
+
+@pytest.fixture
+def anyio_backend():
+    """Use asyncio backend only (trio not installed)."""
+    return "asyncio"
 
 
 class TestMessageMetadata:
@@ -261,6 +269,62 @@ class TestTransportMessage:
         message = TransportMessage(metadata=metadata, content=None)
 
         assert message.content is None
+
+
+class TestTransportMessageAckNack:
+    """Tests for TransportMessage ack/nack methods."""
+
+    @pytest.mark.anyio
+    async def test_ack_calls_fn(self):
+        """ack() calls the bound _ack_fn."""
+        metadata = MessageMetadata(who="user123", what="document")
+        message = TransportMessage(metadata=metadata, content=b"data")
+        mock_ack = AsyncMock()
+        message._ack_fn = mock_ack
+
+        await message.ack()
+
+        mock_ack.assert_awaited_once()
+
+    @pytest.mark.anyio
+    async def test_nack_calls_fn(self):
+        """nack() calls the bound _nack_fn with requeue."""
+        metadata = MessageMetadata(who="user123", what="document")
+        message = TransportMessage(metadata=metadata, content=b"data")
+        mock_nack = AsyncMock()
+        message._nack_fn = mock_nack
+
+        await message.nack(requeue=True)
+
+        mock_nack.assert_awaited_once_with(True)
+
+    @pytest.mark.anyio
+    async def test_ack_noop_when_none(self):
+        """ack() is a no-op when _ack_fn is not set."""
+        metadata = MessageMetadata(who="user123", what="document")
+        message = TransportMessage(metadata=metadata, content=b"data")
+        # _ack_fn defaults to None
+        await message.ack()  # Should not raise
+
+    @pytest.mark.anyio
+    async def test_nack_noop_when_none(self):
+        """nack() is a no-op when _nack_fn is not set."""
+        metadata = MessageMetadata(who="user123", what="document")
+        message = TransportMessage(metadata=metadata, content=b"data")
+        # _nack_fn defaults to None
+        await message.nack()  # Should not raise
+
+    @pytest.mark.anyio
+    async def test_nack_default_requeue_false(self):
+        """nack() defaults requeue to False."""
+        metadata = MessageMetadata(who="user123", what="document")
+        message = TransportMessage(metadata=metadata, content=b"data")
+        mock_nack = AsyncMock()
+        message._nack_fn = mock_nack
+
+        await message.nack()
+
+        mock_nack.assert_awaited_once_with(False)
 
 
 class TestInlineMessagePayload:
