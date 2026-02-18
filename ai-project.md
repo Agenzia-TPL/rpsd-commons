@@ -10,6 +10,7 @@ Library of commond code for the Rapsodia project.
 Organized into packages (uv workspace project):
 - rpsd-storage
 - rpsd-transport
+- rpsd-flow
 
 # Workspace root
 
@@ -48,6 +49,7 @@ Also add a static load_???() method that accept separate "who", "what" and "obje
 Update all documentation, tests and examples accordingly.
 
 ## Implement "http" provider
+__DONE__ (only load)
 
 In addition to the existing S3 and FS providers, we must implement an "http" provider.
 The load() method must use HTTP GET to retrieve the content from the specified URL.
@@ -110,6 +112,8 @@ Should we better create a boolean returning method, instead?
 Library code helping developers to implement receiving and sending content through one of the available trasport carriers, with focus on transporting content.
 
 ## Message modes
+__DONE__
+
 See also: packages/rpsd-transport/README.md
 
 There are two message modes:
@@ -127,6 +131,7 @@ In the end Slim/Fast and Fat/Heavy will be used interchengeably, with a good ini
 In both modes, message content can be compressed with zip or gzip.
 
 ## Transport scopes
+__DONE__
 
 There are two scope for transport:
 - external => content is received or sent to an "external system" (a system that can not share storage with the receving or sending system)
@@ -141,6 +146,7 @@ In case of an internal transport of Fat (aka Heavy) content, the "where" value m
 using the "load_from_url" staticmethod of StorageProvider in rpsd-storage.
 
 ## Content and metadata
+__DONE__
 
 Messages delivered through rpsd-transport, in addition to content, also contain metadata, that can be organized "inline" or "outline".
 Messages with "inline" metadata, have a body containing both content and metadata, while the body of messages with "outline" metadata,
@@ -167,6 +173,7 @@ For Fat/Heavy messages with inline metadata, the body of the message must be in 
 For Fat/Heavy messages with outline metadata, metadata values are transported by carrier specific methods.
 
 ## Carriers
+__DONE__
 
 Initially there'll be two "transport carriers", but more may come in the future:
 - HTTP
@@ -178,6 +185,7 @@ For outline metadata messages, metadata values must NOT be inside the message bo
 as described in carrier specific chapters.
 
 ### Sending
+__DONE__
 
 Here follows sending methods definitions:
 - send_slimfast => send content as a Slim/Fast message (must support both inline and outline metadata)
@@ -201,6 +209,7 @@ Additional send_fatheavy parameters:
 - expose_ttl => time-to-live for exposed URL in seconds (default 3600)
 
 ### Receiving
+__DONE__
 
 The receive method parses incoming messages and returns a TransportMessage object containing metadata and content (if fast message).
 It supports all 4 combinations: (slim/fast vs fat/heavy) × (inline vs outline metadata).
@@ -298,3 +307,76 @@ Key design decisions:
 - Settings-driven via `IngestSettings` nested under `TransportSettings`.
 
 **Expected outcome**: Elimination of carrier-specific storage subclasses. Applications use plain carriers + IngestProcessor for the receive-save-forward pattern.
+
+# rpsd-flow
+
+## Overview
+
+Library code helping developers to implement Prefect Flows and Tasks, by integrating them into the Rapsodia project.
+It will help defining Flows and Tasks capable of receiving and sending messages through rpsd-transport 
+and able to load and save content and metadata using rpsd-storage.
+
+## Flow definition
+
+Code for defining a Prefect **@flow** getting a **TransportMessage** as input.
+It includes support for common concerns, such as:
+- settings
+- logging
+- retry
+- timeouts
+- error management
+- result management
+- etc.
+
+## Flow serving
+
+Code for serving one or more Prefect Flows in their own process, using the Prefect **@flow.serve()** method, like in_:
+
+```python
+from prefect import flow
+
+@flow
+def demo_flow() -> None:
+    pass
+
+if __name__ == "__main__":
+    # Serve the flow - creates deployment and listens for work
+    demo_flow.serve(name="...", ..., ...)
+```
+
+## Flow execution
+
+Code for executing a named Prefect Flow passing it a **TransportMessage**, using the Prefect **run_deployment** method.
+
+## Task definition
+
+Code for defining a Prefect **@task** getting a **TransportMessage** as input.
+It includes support for common concerns, such as:
+- settings
+- logging
+- retry
+- timeouts
+- error management
+- result management
+- etc.
+
+## Command line Task definition
+
+Code for defining a Prefect **@task** getting a TransportMessage as input, that is able to run an arbitrary command line script using Python **subprocess**.
+It includes support for defining:
+- script arguments
+- script environment
+- stdin/stdout/stderr management
+- script return code management
+- etc.
+
+## Background Task
+
+Code for serving a Prefect Tasks in the Background inside its own own process, using the **prefect.task_worker.serve** method, like in:
+
+```python
+from prefect.task_worker import serve
+
+if __name__ == "__main__":
+    serve(slow_task, ..., ...)
+```
