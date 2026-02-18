@@ -1,0 +1,25 @@
+[project]
+name = "rpsd-flow"
+version = "0.1.0"
+description = "Prefect Flow and Task utilities (part of rpsd-commons)"
+readme = "README.md"
+authors = [
+    { name = "caipirginka" }
+]
+requires-python = ">=3.13"
+dependencies = [
+    "prefect>=3.0,<4.0",
+    "pydantic>=2.0.0",
+    "pydantic-settings>=2.0.0",
+    "rpsd-storage",
+    "rpsd-transport",
+]
+
+[tool.uv.sources]
+# Internal workspace dependencies
+rpsd-storage = { workspace = true }
+rpsd-transport = { workspace = true }
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

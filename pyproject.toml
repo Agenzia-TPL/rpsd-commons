@@ -11,12 +11,14 @@ dependencies = [
     # Tell uv these dependencies come from workspace, not PyPI
     "rpsd-transport",
     "rpsd-storage",
+    "rpsd-flow",
     "rpsd-settings",
 ]
 
 [tool.uv.sources]
 rpsd-transport = { workspace = true }
 rpsd-storage = { workspace = true }
+rpsd-flow = { workspace = true }
 rpsd-settings = { workspace = true }
 
 [tool.uv.workspace]
