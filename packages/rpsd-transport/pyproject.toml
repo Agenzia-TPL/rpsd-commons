@@ -4,7 +4,7 @@ version = "0.2.0"
 description = "Data transport utilities (part of rpsd-commons)"
 readme = "README.md"
 authors = [
-    { name = "caipirginka", email = "github@oicom.com" }
+    { name = "caipirginka" }
 ]
 requires-python = ">=3.13"
 dependencies = [

@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Storage utilities (part of rpsd-commons)"
 readme = "README.md"
 authors = [
-    { name = "caipirginka", email = "github@oicom.com" }
+    { name = "caipirginka" }
 ]
 requires-python = ">=3.13"
 dependencies = [
