@@ -14,7 +14,7 @@ from rpsd_transport.models import TransportMessage
 def run_flow(
     deployment_name: str,
     message: TransportMessage,
-    timeout: float | None = None,
+    timeout: float | None = 0,
 ) -> Any:
     """
     Trigger a named Prefect flow deployment with a ``TransportMessage``.
@@ -32,10 +32,16 @@ def run_flow(
         deployment_name: Deployment identifier in the form
             ``"flow-name/deployment-name"`` as shown in the Prefect UI.
         message: The ``TransportMessage`` to pass to the flow run.
-        timeout: Seconds to wait for the flow run to complete. If
-            ``None``, the function returns immediately after triggering
-            the run (fire-and-forget). If provided, it blocks until
-            the run finishes or the timeout is reached.
+        timeout: Controls how long to wait for the flow run to finish.
+
+            - ``0`` *(default)* — fire-and-forget: submits the run via
+              a single HTTP POST to the Prefect API and returns
+              immediately, before the flow even starts executing.
+            - ``None`` — waits indefinitely until the flow run reaches
+              a terminal state (blocks the caller for the full flow
+              duration).
+            - Positive ``float`` — waits up to that many seconds, then
+              returns the ``FlowRun`` regardless of its state.
 
     Returns:
         A Prefect ``FlowRun`` object representing the triggered run.
@@ -51,14 +57,21 @@ def run_flow(
 
         message = TransportMessage(who="sender", what="document", ...)
 
-        # Fire and forget (non-blocking):
+        # Fire-and-forget — returns as soon as Prefect accepts the run:
         run_flow("ingest-flow/ingest-deployment", message)
 
-        # Wait up to 60 seconds for completion:
+        # Wait up to 60 seconds for the flow to complete:
         flow_run = run_flow(
             "ingest-flow/ingest-deployment",
             message,
             timeout=60.0,
+        )
+
+        # Block until the flow finishes (no timeout):
+        flow_run = run_flow(
+            "ingest-flow/ingest-deployment",
+            message,
+            timeout=None,
         )
     """
     from prefect.deployments import run_deployment
@@ -73,7 +86,7 @@ def run_flow(
 async def run_flow_async(
     deployment_name: str,
     message: TransportMessage,
-    timeout: float | None = None,
+    timeout: float | None = 0,
 ) -> Any:
     """
     Async version of ``run_flow``.
@@ -90,10 +103,16 @@ async def run_flow_async(
         deployment_name: Deployment identifier in the form
             ``"flow-name/deployment-name"`` as shown in the Prefect UI.
         message: The ``TransportMessage`` to pass to the flow run.
-        timeout: Seconds to wait for the flow run to complete. If
-            ``None``, the function returns immediately after triggering
-            the run (fire-and-forget). If provided, it blocks until
-            the run finishes or the timeout is reached.
+        timeout: Controls how long to wait for the flow run to finish.
+
+            - ``0`` *(default)* — fire-and-forget: submits the run via
+              a single HTTP POST to the Prefect API and returns
+              immediately, before the flow even starts executing.
+            - ``None`` — waits indefinitely until the flow run reaches
+              a terminal state (blocks the caller for the full flow
+              duration).
+            - Positive ``float`` — waits up to that many seconds, then
+              returns the ``FlowRun`` regardless of its state.
 
     Returns:
         A Prefect ``FlowRun`` object representing the triggered run.
@@ -109,14 +128,21 @@ async def run_flow_async(
 
         message = TransportMessage(who="sender", what="document", ...)
 
-        # Fire and forget (non-blocking):
+        # Fire-and-forget — returns as soon as Prefect accepts the run:
         await run_flow_async("ingest-flow/ingest-deployment", message)
 
-        # Wait up to 60 seconds for completion:
+        # Wait up to 60 seconds for the flow to complete:
         flow_run = await run_flow_async(
             "ingest-flow/ingest-deployment",
             message,
             timeout=60.0,
+        )
+
+        # Block until the flow finishes (no timeout):
+        flow_run = await run_flow_async(
+            "ingest-flow/ingest-deployment",
+            message,
+            timeout=None,
         )
     """
     from prefect.deployments import run_deployment
