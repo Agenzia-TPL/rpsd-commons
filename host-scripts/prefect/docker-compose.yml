@@ -1,0 +1,79 @@
+services:
+  postgres:
+    image: postgres:17
+    container_name: rpsd-prefect-postgres
+    environment:
+      POSTGRES_USER: prefect
+      POSTGRES_PASSWORD: prefect
+      POSTGRES_DB: prefect
+    volumes:
+      - prefect-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U prefect"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - prefect-network
+
+  redis:
+    image: redis:8-alpine
+    container_name: rpsd-prefect-redis
+    volumes:
+      - prefect-redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - prefect-network
+
+  prefect:
+    image: prefecthq/prefect:3-latest
+    container_name: rpsd-prefect
+    command: prefect server start --host 0.0.0.0
+    environment:
+      PREFECT_SERVER_API_HOST: 0.0.0.0
+      PREFECT_SERVER_API_PORT: 4200
+      PREFECT_API_DATABASE_CONNECTION_URL: postgresql+asyncpg://prefect:prefect@postgres:5432/prefect
+      PREFECT_API_URL: http://localhost:4200/api
+      # Redis messaging (for .delay() / background tasks)
+      PREFECT_MESSAGING_BROKER: "prefect_redis.messaging"
+      PREFECT_MESSAGING_CACHE: "prefect_redis.messaging"
+      PREFECT_REDIS_MESSAGING_HOST: "redis"
+      PREFECT_REDIS_MESSAGING_PORT: "6379"
+      PREFECT_REDIS_MESSAGING_DB: "0"
+      # Task scheduling
+      PREFECT_TASK_SCHEDULING_DEFAULT_STORAGE_BLOCK: "redis-storage"
+      # Result persistence (stored in PostgreSQL)
+      PREFECT_RESULTS_PERSIST_BY_DEFAULT: "true"
+    ports:
+      - "4200:4200"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:4200/api/health', timeout=2).read()"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 15s
+    restart: unless-stopped
+    networks:
+      - prefect-network
+
+volumes:
+  prefect-postgres-data:
+    name: rpsd-prefect-postgres-data
+  prefect-redis-data:
+    name: rpsd-prefect-redis-data
+
+networks:
+  prefect-network:
+    name: rpsd-prefect-network
+    driver: bridge
