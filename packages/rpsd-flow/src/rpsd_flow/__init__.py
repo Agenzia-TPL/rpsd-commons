@@ -36,7 +36,7 @@ Settings:
 
 Serving:
   serve_flows            Serve one or more flow deployments in this process
-  serve_tasks            Serve one or more tasks as background workers
+  serve_tasks            Serve one or more tasks as a background task server
 
 Execution:
   run_flow               Trigger a named deployment run with a TransportMessage (sync)

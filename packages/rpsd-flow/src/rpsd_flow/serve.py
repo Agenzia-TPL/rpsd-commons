@@ -124,9 +124,9 @@ def serve_tasks[**P, R](
     settings: TaskServeSettings | None = None,
 ) -> None:
     """
-    Serve one or more Prefect tasks as background workers.
+    Serve one or more Prefect tasks as a background task server.
 
-    Starts a task worker that listens for task runs submitted outside of
+    Starts a task server that listens for task runs submitted outside of
     a flow context (e.g. from application code). Blocks until the
     process is stopped.
 
@@ -140,10 +140,10 @@ def serve_tasks[**P, R](
             (the default), Prefect's own default (10) is used. Pass an
             explicit integer to override it. Overrides
             ``TASK_SERVE__LIMIT``.
-        timeout: Seconds after which the worker shuts down. ``None``
+        timeout: Seconds after which the task server shuts down. ``None``
             means run indefinitely. Overrides ``TASK_SERVE__TIMEOUT``.
         status_server_port: Port on which to start an HTTP server
-            exposing worker status. ``None`` disables it. Overrides
+            exposing task server status. ``None`` disables it. Overrides
             ``TASK_SERVE__STATUS_SERVER_PORT``.
         settings: Optional ``TaskServeSettings`` instance. If ``None``,
             one is created automatically from environment variables.
@@ -172,7 +172,7 @@ def serve_tasks[**P, R](
 
     names = ", ".join(t.name for t in tasks)
     logger.info(
-        "Starting task worker for %d task(s): %s",
+        "Starting task server for %d task(s): %s",
         len(tasks),
         names,
     )
@@ -197,7 +197,7 @@ def serve_tasks[**P, R](
                 status_server_port=resolved_port,
             )
     except KeyboardInterrupt:
-        logger.info("Task worker stopped.")
+        logger.info("Task server stopped.")
     except Exception:
         logger.exception("Task worker encountered an unexpected error.")
         raise

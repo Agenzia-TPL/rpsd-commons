@@ -319,6 +319,8 @@ and able to load and save content and metadata using rpsd-storage.
 All decorator factories and serving functions will be settings-driven: defaults come from pydantic-settings
 classes (env vars with `__` delimiter), but explicit arguments always take precedence.
 
+Albeit Prefect documentation uses the word "worker" when referring to Tasks, this project does not use it, since Flows may also be executed in workers and always keep the parallel words "flow" and "task" everywhere.
+
 ## Flow definition
 __DONE__
 
