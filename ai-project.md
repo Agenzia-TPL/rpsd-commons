@@ -352,9 +352,14 @@ default (10). Logs startup/shutdown with task names.
 ## Flow execution
 __DONE__
 
-A `run_flow()` helper that triggers a named Prefect deployment with a `TransportMessage`.
-It will serialize the message via `.model_dump()` and pass it as `parameters={"message": <dict>}`.
+A `run_flow()` / `run_flow_async()` pair that triggers a named Prefect deployment with a `TransportMessage`.
+Mirrors rpsd-transport's dual API convention: plain method = sync, `_async` suffix = async.
+Serializes the message via `.model_dump()` and passes it as `parameters={"message": <dict>}`.
 The receiving flow auto-deserializes via Pydantic. Supports optional `timeout` for blocking execution.
+
+Key design decisions:
+- Prefect's `run_deployment` uses `@async_dispatch`: calling it without `await` in a sync context works natively.
+- `run_flow_async` calls `run_deployment.aio(...)` directly (the attached coroutine function) rather than `await run_deployment(...)` to avoid type-checker errors from the sync return annotation on the dispatch wrapper.
 
 ## Subprocess Task
 __DONE__

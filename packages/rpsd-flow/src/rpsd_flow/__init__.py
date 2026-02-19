@@ -39,14 +39,15 @@ Serving:
   serve_tasks            Serve one or more tasks as background workers
 
 Execution:
-  run_flow               Trigger a named deployment run with a TransportMessage
+  run_flow               Trigger a named deployment run with a TransportMessage (sync)
+  run_flow_async         Async version of run_flow
 
 Subprocess tasks:
   create_subprocess_task  Build a @task that runs a CLI script
   SubprocessResult        Result model returned by subprocess tasks
 """
 
-from rpsd_flow.execute import run_flow
+from rpsd_flow.execute import run_flow, run_flow_async
 from rpsd_flow.flows import flow
 from rpsd_flow.serve import serve_flows, serve_tasks
 from rpsd_flow.settings import (
@@ -72,6 +73,7 @@ __all__ = [
     "serve_tasks",
     # Execution
     "run_flow",
+    "run_flow_async",
     # Subprocess tasks
     "create_subprocess_task",
     "SubprocessResult",
