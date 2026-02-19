@@ -583,6 +583,7 @@ source = { editable = "examples/fastapi_ingest_app" }
 dependencies = [
     { name = "fastapi" },
     { name = "httpx" },
+    { name = "rpsd-flow" },
     { name = "rpsd-storage" },
     { name = "rpsd-transport", extra = ["kafka", "rabbitmq"] },
     { name = "uvicorn", extra = ["standard"] },
@@ -592,6 +593,7 @@ dependencies = [
 requires-dist = [
     { name = "fastapi", specifier = ">=0.100.0" },
     { name = "httpx", specifier = ">=0.24.0" },
+    { name = "rpsd-flow", editable = "packages/rpsd-flow" },
     { name = "rpsd-storage", editable = "packages/rpsd-storage" },
     { name = "rpsd-transport", extras = ["kafka", "rabbitmq"], editable = "packages/rpsd-transport" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.24.0" },

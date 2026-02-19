@@ -6,6 +6,7 @@ requires-python = ">=3.13"
 dependencies = [
     "rpsd-transport[kafka,rabbitmq]",
     "rpsd-storage",
+    "rpsd-flow",
     "fastapi>=0.100.0",
     "uvicorn[standard]>=0.24.0",
     "httpx>=0.24.0",
@@ -14,6 +15,7 @@ dependencies = [
 [tool.uv.sources]
 rpsd-transport = { workspace = true }
 rpsd-storage = { workspace = true }
+rpsd-flow = { workspace = true }
 
 [build-system]
 requires = ["hatchling"]
@@ -22,3 +24,5 @@ build-backend = "hatchling.build"
 [project.scripts]
 fastapi-ingest-app = "fastapi_ingest_app.main:run"
 consumer = "fastapi_ingest_app.consumer:main"
+sample-flow = "fastapi_ingest_app.sample_flow:serve"
+sample-task = "fastapi_ingest_app.sample_flow:serve_task"

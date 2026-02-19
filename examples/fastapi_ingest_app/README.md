@@ -1,6 +1,6 @@
 # FastAPI Ingest Example
 
-A comprehensive FastAPI application demonstrating HTTP ingestion with optional message broker forwarding (Kafka or RabbitMQ) using `rpsd-transport` and `rpsd-storage`.
+A comprehensive FastAPI application demonstrating HTTP ingestion with optional message broker forwarding (Kafka or RabbitMQ) and optional Prefect Flow invocation using `rpsd-transport`, `rpsd-storage`, and `rpsd-flow`.
 
 ## Features
 
@@ -10,9 +10,10 @@ A comprehensive FastAPI application demonstrating HTTP ingestion with optional m
 - **Storage Abstraction**: Supports both filesystem and S3 storage via configuration
 - **Dual Metadata Formats**: Handles both inline (JSON) and outline (headers/query) metadata
 - **API Key Authentication**: Bearer/Token authentication with configurable keys
+- **Optional Prefect Flow Invocation**: Trigger a Prefect Flow deployment after storage via `rpsd-flow`
 - **Async Lifecycle Management**: Proper startup/shutdown handling for broker connections
 - **Carrier Abstraction**: Single codebase works with multiple message brokers via factory pattern
-- **Modality Support**: Demonstrates HTTP→Storage and HTTP→Storage→Broker pipelines
+- **Modality Support**: Demonstrates HTTP→Storage, HTTP→Storage→Broker, and HTTP→Storage→Flow pipelines
 
 ## Architecture
 
@@ -50,6 +51,26 @@ FastAPI App (HTTPCarrier)
 - **fatheavy** (default): Forwards storage URL reference - efficient, recommended
 - **slimfast**: Forwards content inline - self-contained, larger messages
 
+### Modality #3: HTTP → Storage → Prefect Flow (Flow Enabled)
+
+```
+External System
+    ↓ HTTP POST /ingest
+FastAPI App (HTTPCarrier)
+    ↓ IngestProcessor.process()
+    ├─→ Storage (S3/Filesystem)
+    │     [Content saved]
+    │
+    └─→ Prefect Flow Deployment
+          [Triggered with TransportMessage]
+          [message.where = storage URL]
+          ↓
+    Flow Tasks (validate → process → finalize)
+```
+
+**Note**: Forwarding and flow invocation are independent features.
+Both can be enabled simultaneously.
+
 ## Installation
 
 From the workspace root:
@@ -58,7 +79,7 @@ From the workspace root:
 uv sync
 ```
 
-This installs all workspace dependencies including `rpsd-transport[kafka,rabbitmq]`, `rpsd-storage`, and FastAPI.
+This installs all workspace dependencies including `rpsd-transport[kafka,rabbitmq]`, `rpsd-storage`, `rpsd-flow`, and FastAPI.
 
 **Note**: The `[kafka,rabbitmq]` extras include `aiokafka` and `aio-pika` for message broker support. These are true optional dependencies - you only need them if you want to enable forwarding.
 
@@ -96,6 +117,11 @@ APP__STORAGE__FS__BASE_PATH=/tmp/rpsd-storage
 # APP__FORWARD__RECIPIENT=enriched-events
 # APP__FORWARD__MODE=fatheavy
 # APP__FORWARD__RABBITMQ__URL=amqp://guest:guest@host.docker.internal/
+
+# Optional: Prefect Flow invocation (triggers a flow after storage)
+# APP__FLOW__DEPLOYMENT=ingest-flow/ingest-deployment
+# APP__FLOW__TIMEOUT=60.0
+# PREFECT_API_URL=http://host.docker.internal:4200/api
 
 # Optional: Message broker consumption (consumer.py script)
 # Separate settings demonstrate separation of concerns: publishing vs consuming
@@ -161,9 +187,9 @@ From host machine (outside Docker):
 APP__FORWARD__RABBITMQ__URL=amqp://guest:guest@localhost/
 ```
 
-## Message Broker Setup (Optional)
+## Infrastructure Setup (Optional)
 
-Choose either Kafka or RabbitMQ (or run both for experimentation).
+Choose the infrastructure you need based on which features you want to enable.
 
 ### Kafka Setup
 
@@ -241,6 +267,45 @@ Open http://localhost:15672 in your browser:
 - View message rates and statistics
 - Manage users and permissions
 
+### Prefect Server Setup
+
+To use Prefect Flow invocation, you must start Prefect server infrastructure on your host machine.
+
+### Start Prefect
+
+From your **host machine** (not from inside devcontainer):
+
+```bash
+cd host-scripts
+./prefect/start.sh
+```
+
+This starts:
+- PostgreSQL (Prefect metadata store)
+- Redis (Prefect cache)
+- Prefect server on port 4200
+
+### Stop Prefect
+
+```bash
+cd host-scripts
+./prefect/stop.sh
+```
+
+To stop and remove all data:
+
+```bash
+./prefect/stop.sh --clean
+```
+
+### Access Prefect UI
+
+Open http://localhost:4200 in your browser to:
+- View flow runs and their status
+- Browse deployments
+- Monitor task execution
+- View logs and artifacts
+
 ## Choosing a Message Broker
 
 **Use Kafka when:**
@@ -305,6 +370,63 @@ This consumer will:
 - Display received messages with metadata
 - Fetch content from storage URLs (for fatheavy messages)
 - Show rich metadata from storage providers
+
+## Running the Sample Flow
+
+To demonstrate Prefect Flow invocation after ingest:
+
+### 1. Start Prefect Server
+
+From your **host machine** (not from inside devcontainer):
+
+```bash
+cd host-scripts
+./prefect/start.sh
+```
+
+### 2. Serve the Sample Flow
+
+```bash
+cd examples/fastapi_ingest_app
+uv run sample-flow
+```
+
+This starts serving the `ingest-flow/ingest-deployment`
+deployment, listening for triggered flow runs.
+
+The sample flow demonstrates a three-task pipeline:
+1. **validate-message** — fast task that checks metadata
+2. **process-content** — slow subprocess task calling `scripts/process.py`
+3. **finalize** — fast task that logs the processing result
+
+### 3. Configure Flow Invocation
+
+Add to your `.env`:
+
+```bash
+APP__FLOW__DEPLOYMENT=ingest-flow/ingest-deployment
+PREFECT_API_URL=http://host.docker.internal:4200/api
+```
+
+### 4. Start the FastAPI App
+
+```bash
+uv run fastapi-ingest-app
+```
+
+### 5. Send a Request
+
+```bash
+curl -X POST http://localhost:8000/ingest \
+  -H "Authorization: Bearer your-secret-key" \
+  -H "X-RPSD-Who: alice" \
+  -H "X-RPSD-What: report" \
+  -H "Content-Type: application/json" \
+  -d '{"data": "example"}'
+```
+
+The response will include `"flow_invoked": true` and the flow
+execution will be visible in the Prefect UI at http://localhost:4200.
 
 ## Quick Demo
 
@@ -402,6 +524,7 @@ curl -X POST http://localhost:8000/ingest \
   "message": "Content received and stored",
   "storage_url": "file:///tmp/rpsd-storage/alice/report/abc123.json",
   "forwarded": true,
+  "flow_invoked": true,
   "metadata": {
     "who": "alice",
     "what": "report",
@@ -427,7 +550,8 @@ Response:
   "status": "healthy",
   "storage_provider": "fs",
   "forward_carrier": "kafka",
-  "forward_recipient": "enriched-events"
+  "forward_recipient": "enriched-events",
+  "flow_deployment": "ingest-flow/ingest-deployment"
 }
 ```
 
@@ -517,6 +641,31 @@ APP__FORWARD__KAFKA__BOOTSTRAP_SERVERS=host.docker.internal:9092
 
 System works as HTTP → Storage → Kafka.
 
+### Flow Invocation Configuration
+
+#### Disable Flow Invocation (default)
+
+Comment out or remove `APP__FLOW__DEPLOYMENT`:
+
+```bash
+# APP__FLOW__DEPLOYMENT=ingest-flow/ingest-deployment
+```
+
+#### Enable Flow Invocation
+
+```bash
+APP__FLOW__DEPLOYMENT=ingest-flow/ingest-deployment
+PREFECT_API_URL=http://host.docker.internal:4200/api
+
+# Optional: wait for flow completion (default: fire-and-forget)
+# APP__FLOW__TIMEOUT=60.0
+```
+
+Requires:
+1. A running Prefect server (`host-scripts/prefect/start.sh`)
+2. The sample flow served (`uv run sample-flow`)
+3. `PREFECT_API_URL` set to the Prefect API endpoint
+
 #### Forward Modes
 
 **Fatheavy** (recommended):
@@ -599,6 +748,28 @@ mkdir -p /tmp/rpsd-storage
 chmod 777 /tmp/rpsd-storage
 ```
 
+### Flow Invocation Not Working
+
+**Problem**: `flow_invoked` is always `false` in the response.
+
+**Possible causes:**
+1. Prefect server not running
+2. Flow deployment not served
+3. Wrong `PREFECT_API_URL`
+4. Deployment name mismatch
+
+**Debug steps:**
+
+```bash
+# Check Prefect server is reachable
+curl http://localhost:4200/api/health
+
+# List deployments
+prefect deployment ls
+
+# Check app logs for "Failed to invoke flow" errors
+```
+
 ### Kafka Consumer Not Receiving Messages
 
 **Possible causes:**
@@ -627,22 +798,26 @@ examples/fastapi_ingest_app/
 ├── src/
 │   └── fastapi_ingest_app/
 │       ├── __init__.py
-│       ├── main.py          # FastAPI application with forwarding support
-│       ├── settings.py      # Configuration with ForwardSettings
+│       ├── main.py          # FastAPI app with forwarding + flow support
+│       ├── settings.py      # Configuration with Forward/Flow settings
 │       ├── auth.py          # API key validation
-│       └── consumer.py      # Kafka consumer demo
+│       ├── consumer.py      # Kafka/RabbitMQ consumer demo
+│       └── sample_flow.py   # Sample Prefect Flow + serve entry point
+├── scripts/
+│   └── process.py           # Subprocess script for the sample flow
 ├── .env                     # Local configuration (git-ignored)
 ├── .env.example             # Configuration template
-├── pyproject.toml           # Dependencies (includes kafka extras)
+├── pyproject.toml           # Dependencies
 ├── README.md                # This file
 ├── demo.sh                  # End-to-end demo script
-└── test-requests.sh         # Test script with Kafka tests
+└── test-requests.sh         # Test script
 ```
 
 ## Related Documentation
 
 - [rpsd-transport documentation](../../packages/rpsd-transport/README.md)
 - [rpsd-storage documentation](../../packages/rpsd-storage/README.md)
+- [rpsd-flow documentation](../../packages/rpsd-flow/README.md)
 - [Kafka host scripts](../../host-scripts/README.md)
 - [IngestProcessor API](../../packages/rpsd-transport/src/rpsd_transport/processors/README.md)
 
@@ -651,9 +826,11 @@ examples/fastapi_ingest_app/
 1. **Explore Kafka UI**: Browse topics and messages at http://localhost:8080
 2. **Customize forwarding**: Try both fatheavy and slimfast modes
 3. **Add consumer logic**: Extend consumer.py with your processing logic
-4. **Production deployment**: Replace filesystem storage with S3, use managed Kafka
-5. **Add transformations**: Implement custom processing in IngestProcessor
-6. **Monitor**: Set up Kafka consumer lag monitoring and alerting
+4. **Customize flow routing**: Extend `resolve_flow_deployment()` in main.py to route based on who/what
+5. **Add flow tasks**: Extend sample_flow.py with your processing logic
+6. **Production deployment**: Replace filesystem storage with S3, use managed Kafka
+7. **Add transformations**: Implement custom processing in IngestProcessor
+8. **Monitor**: Set up Kafka consumer lag monitoring and alerting
 
 ## License
 

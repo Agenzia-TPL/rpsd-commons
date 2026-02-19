@@ -16,6 +16,23 @@ from rpsd_transport.settings import (
 )
 
 
+class FlowInvokeSettings(BaseModel):
+    """Settings for optional Prefect Flow invocation after ingest.
+
+    When ``deployment`` is set, the app invokes a Prefect Flow
+    after saving to storage. When ``None`` (default), flow
+    invocation is disabled.
+
+    Environment variables (via AppSettings):
+    - APP__FLOW__DEPLOYMENT=ingest-flow/ingest-deployment
+    - APP__FLOW__TIMEOUT=0      # 0 = fire-and-forget (default)
+    - APP__FLOW__TIMEOUT=60.0   # wait up to 60 s for the flow to finish
+    """
+
+    deployment: str | None = None
+    timeout: float | None = 0
+
+
 class ConsumerSettings(BaseModel):
     """Consumer settings for the message broker consumer (consumer.py).
 
@@ -59,9 +76,11 @@ class AppSettings(BaseSettings):
         env_nested_delimiter="__",
         env_file=".env",
         env_file_encoding="utf-8",
+        extra="ignore",
     )
 
     transport: TransportSettings = TransportSettings()
     storage: StorageSettings = StorageSettings()
     forward: ForwardSettings = Field(default_factory=ForwardSettings)
+    flow: FlowInvokeSettings = Field(default_factory=FlowInvokeSettings)
     consumer: ConsumerSettings = Field(default_factory=ConsumerSettings)
