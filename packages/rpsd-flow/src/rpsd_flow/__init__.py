@@ -31,6 +31,8 @@ Decorators:
 Settings:
   FlowSettings           Pydantic-settings class (FLOW__ prefix)
   TaskSettings           Pydantic-settings class (TASK__ prefix)
+  FlowServeSettings      Pydantic-settings class (FLOW_SERVE__ prefix)
+  TaskServeSettings     Pydantic-settings class (TASK_SERVE__ prefix)
 
 Serving:
   serve_flows            Serve one or more flow deployments in this process
@@ -47,7 +49,12 @@ Subprocess tasks:
 from rpsd_flow.execute import run_flow
 from rpsd_flow.flows import flow
 from rpsd_flow.serve import serve_flows, serve_tasks
-from rpsd_flow.settings import FlowSettings, TaskSettings
+from rpsd_flow.settings import (
+    FlowServeSettings,
+    FlowSettings,
+    TaskServeSettings,
+    TaskSettings,
+)
 from rpsd_flow.subprocess_task import SubprocessResult, create_subprocess_task
 from rpsd_flow.tasks import task
 
@@ -58,6 +65,8 @@ __all__ = [
     # Settings
     "FlowSettings",
     "TaskSettings",
+    "FlowServeSettings",
+    "TaskServeSettings",
     # Serving
     "serve_flows",
     "serve_tasks",
