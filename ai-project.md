@@ -313,70 +313,63 @@ Key design decisions:
 ## Overview
 
 Library code helping developers to implement Prefect Flows and Tasks, by integrating them into the Rapsodia project.
-It will help defining Flows and Tasks capable of receiving and sending messages through rpsd-transport 
+It will help defining Flows and Tasks capable of receiving and sending messages through rpsd-transport
 and able to load and save content and metadata using rpsd-storage.
 
+All decorator factories and serving functions will be settings-driven: defaults come from pydantic-settings
+classes (env vars with `__` delimiter), but explicit arguments always take precedence.
+
 ## Flow definition
+__DONE__
 
-Code for defining a Prefect **@flow** getting a **TransportMessage** as input.
-It includes support for common concerns, such as:
-- settings
-- logging
-- retry
-- timeouts
-- error management
-- result management
-- etc.
-
-## Flow serving
-
-Code for serving one or more Prefect Flows in their own process, using the Prefect **@flow.serve()** method, like in_:
-
-```python
-from prefect import flow
-
-@flow
-def demo_flow() -> None:
-    pass
-
-if __name__ == "__main__":
-    # Serve the flow - creates deployment and listens for work
-    demo_flow.serve(name="...", ..., ...)
-```
-
-## Flow execution
-
-Code for executing a named Prefect Flow passing it a **TransportMessage**, using the Prefect **run_deployment** method.
+We'll create a `flow()` decorator factory wrapping Prefect's `@flow`, with defaults loaded from a
+`FlowSettings` class (env prefix `FLOW__`). Supported settings: `name`, `description`, `retries`,
+`retry_delay_seconds`, `timeout_seconds`, `log_prints`. Extra kwargs pass through to Prefect.
 
 ## Task definition
+__DONE__
 
-Code for defining a Prefect **@task** getting a **TransportMessage** as input.
-It includes support for common concerns, such as:
-- settings
-- logging
-- retry
-- timeouts
-- error management
-- result management
-- etc.
+Same pattern as flow definition. A `task()` decorator factory wrapping Prefect's `@task`, with defaults
+from `TaskSettings` (env prefix `TASK__`). Same settings as FlowSettings. Extra kwargs (e.g.
+`cache_key_fn`, `tags`) pass through to Prefect.
 
-## Command line Task definition
+## Flow serving
+__DONE__
 
-Code for defining a Prefect **@task** getting a TransportMessage as input, that is able to run an arbitrary command line script using Python **subprocess**.
-It includes support for defining:
-- script arguments
-- script environment
-- stdin/stdout/stderr management
-- script return code management
-- etc.
+A `serve_flows()` function that takes one or more `RunnerDeployment` objects and runs them in a shared
+Prefect runner. Defaults from `FlowServeSettings` (env prefix `FLOW_SERVE__`): `limit`,
+`pause_on_shutdown`, `print_starting_message`. Logs startup/shutdown with deployment names.
+For a single flow, callers can just use `flow.serve(name="...")` directly.
 
-## Background Task
+## Task serving (Background Tasks)
+__DONE__
 
-Code for serving a Prefect Tasks in the Background inside its own own process, using the **prefect.task_worker.serve** method, like in:
+A `serve_tasks()` function that takes one or more Prefect Task objects and runs them as background workers
+via `prefect.task_worker.serve`. Defaults from `TaskServeSettings` (env prefix `TASK_SERVE__`): `limit`,
+`timeout`, `status_server_port`. When `limit` is None, we'll omit it entirely so Prefect uses its own
+default (10). Logs startup/shutdown with task names.
 
-```python
-from prefect.task_worker import serve
+## Flow execution
+__DONE__
 
-if __name__ == "__main__":
-    serve(slow_task, ..., ...)
-```
+A `run_flow()` helper that triggers a named Prefect deployment with a `TransportMessage`.
+It will serialize the message via `.model_dump()` and pass it as `parameters={"message": <dict>}`.
+The receiving flow auto-deserializes via Pydantic. Supports optional `timeout` for blocking execution.
+
+## Subprocess Task
+__DONE__
+
+A `create_subprocess_task()` factory function that builds a Prefect task running an arbitrary CLI command
+via Python `subprocess`. Message data can flow to the script through four configurable channels:
+
+1. **Environment variables** (default ON, via `pass_metadata_as_env`): `RPSD_WHO`, `RPSD_WHAT`,
+   `RPSD_CONTENT_TYPE`, `RPSD_FILENAME`, `RPSD_WHERE`, `RPSD_CUSTOM_METADATA` (JSON-encoded).
+2. **stdin** (opt-in via `pass_content_to_stdin`): pipes `message.content` bytes to the subprocess.
+   Only for slim/fast messages; skipped for fat/heavy. Cannot combine with `stdin_source`.
+3. **Extra CLI arguments** (`extra_args`): appended to the base command.
+4. **File I/O redirection** (`stdin_source`, `stdout_target`, `stderr_target`): redirect to/from
+   Path, BinaryIO, or DEVNULL.
+
+Returns a `SubprocessResult` model with `returncode`, `stdout`, `stderr`, `success`, and optional
+target paths. When `raise_on_failure=True` (default), non-zero exit raises `RuntimeError`.
+Merges env vars with priority: current process → RPSD_* → `extra_env`.
