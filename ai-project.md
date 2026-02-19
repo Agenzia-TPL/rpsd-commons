@@ -366,8 +366,8 @@ Key design decisions:
 ## Subprocess Task
 __DONE__
 
-A `create_subprocess_task()` factory function that builds a Prefect task running an arbitrary CLI command
-via Python `subprocess`. Message data can flow to the script through four configurable channels:
+A `subprocess_task` decorator factory that builds a Prefect task running an arbitrary CLI command
+via an async subprocess. Message data can flow to the script through four configurable channels:
 
 1. **Environment variables** (default ON, via `pass_metadata_as_env`): `RPSD_WHO`, `RPSD_WHAT`,
    `RPSD_CONTENT_TYPE`, `RPSD_FILENAME`, `RPSD_WHERE`, `RPSD_CUSTOM_METADATA` (JSON-encoded).

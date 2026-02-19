@@ -1,7 +1,7 @@
 """
-Subprocess task factory for rpsd-flow.
+Subprocess task decorator for rpsd-flow.
 
-Provides ``create_subprocess_task`` — a factory that builds a Prefect
+Provides ``subprocess_task`` — a decorator factory that builds a Prefect
 ``@task`` which runs an arbitrary command-line script, passing data
 from a ``TransportMessage`` via environment variables, stdin, and/or
 extra command-line arguments.
@@ -32,9 +32,10 @@ mechanisms:
    ``None``.
 """
 
+import asyncio
 import json
 import os
-import subprocess
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any, BinaryIO
 
@@ -109,8 +110,8 @@ def _build_rpsd_env(message: TransportMessage) -> dict[str, str]:
     return env
 
 
-def create_subprocess_task(
-    command: list[str],
+def subprocess_task(
+    command: list[str] | None = None,
     *,
     # --- Prefect task parameters (resolved via TaskSettings) ---
     name: str | None = None,
@@ -131,25 +132,41 @@ def create_subprocess_task(
     stdout_target: Path | BinaryIO | int | None = None,
     stderr_target: Path | BinaryIO | int | None = None,
     subprocess_kwargs: dict[str, Any] | None = None,
-) -> Task[[TransportMessage], SubprocessResult]:
+) -> Callable[[Callable], Task]:
     """
-    Create a Prefect ``@task`` that runs a command-line script.
+    Decorator factory that creates a Prefect ``@task`` running a CLI script.
 
-    The returned task accepts a single ``TransportMessage`` argument and
-    runs the given ``command``, passing message data through the
-    configured mechanisms (env vars, stdin, extra args, file
-    redirection).
+    Decorate a function whose **name** becomes the Prefect task name
+    (snake_case converted to kebab-case automatically) and whose
+    **docstring** becomes the task description. The decorated name becomes
+    a callable Prefect task that runs a command-line script as an async
+    subprocess.
 
-    Prefect task parameters (``name``, ``retries``, etc.) are resolved
-    through ``TaskSettings``: explicit arguments override env-var
-    defaults (``TASK__RETRIES``, ``TASK__TIMEOUT_SECONDS``, …).
+    The command to run can be specified in two ways:
+
+    1. **Static command** — pass ``command`` to the decorator. The function
+       body is ignored (use ``...`` as a placeholder).
+    2. **Command builder** — omit ``command``. The function body is called
+       at runtime with the ``TransportMessage`` and must return the command
+       as a ``list[str]``. This allows choosing the command dynamically
+       based on the message.
+
+    The task accepts a single ``TransportMessage`` argument and runs the
+    command, passing message data through the configured mechanisms
+    (env vars, stdin, extra args, file redirection).
+
+    Prefect task parameters (``retries``, etc.) are resolved through
+    ``TaskSettings``: explicit arguments override env-var defaults
+    (``TASK__RETRIES``, ``TASK__TIMEOUT_SECONDS``, …).
 
     Args:
         command: Base command and arguments as a list, e.g.
             ``["python", "my_script.py"]``. ``extra_args`` are appended
-            after this list at call time.
-        name: Prefect task name. Defaults to the first element of
-            ``command``.
+            after this list at call time. When ``None`` (the default),
+            the decorated function is called at runtime with the message
+            and must return the command list.
+        name: Prefect task name. Defaults to the decorated function's
+            name with underscores replaced by hyphens.
         retries: Number of retries on task failure (non-zero exit code
             when ``raise_on_failure=True``). Falls back to
             ``TASK__RETRIES`` (default: 0).
@@ -157,10 +174,9 @@ def create_subprocess_task(
             back to ``TASK__RETRY_DELAY_SECONDS`` (default: 0.0).
         timeout_seconds: Maximum time in seconds the subprocess may
             run. ``None`` means no timeout. Falls back to
-            ``TASK__TIMEOUT_SECONDS``. Note: also enforced via
-            ``subprocess.run``'s ``timeout`` parameter, which raises
-            ``subprocess.TimeoutExpired`` (triggering Prefect retries
-            when ``retries > 0``).
+            ``TASK__TIMEOUT_SECONDS``. Enforced via
+            ``asyncio.wait_for``, which reliably kills the subprocess
+            when the deadline is reached.
         log_prints: Whether to log print statements. Falls back to
             ``TASK__LOG_PRINTS`` (default: False).
         settings: Optional ``TaskSettings`` instance. If ``None``, one
@@ -208,61 +224,70 @@ def create_subprocess_task(
             mode automatically. When set, ``SubprocessResult.stderr``
             is ``None``.
         subprocess_kwargs: Additional keyword arguments forwarded to
-            ``subprocess.run()``, e.g. ``{"shell": True}``. Our
-            managed keys (``input``, ``stdin``, ``stdout``, ``stderr``,
-            ``env``, ``cwd``, ``timeout``) take precedence over
-            entries in this dict.
+            ``asyncio.create_subprocess_exec()``. Keys managed by this
+            task (``stdin``, ``stdout``, ``stderr``, ``env``, ``cwd``)
+            take precedence over entries in this dict. The ``input``
+            and ``timeout`` keys are not forwarded (they are handled
+            via ``proc.communicate()`` and ``asyncio.wait_for``
+            respectively).
 
     Returns:
-        A Prefect task callable that accepts a ``TransportMessage`` and
-        returns a ``SubprocessResult``.
+        A decorator that accepts a function and returns a Prefect
+        task callable accepting a ``TransportMessage`` and returning
+        a ``SubprocessResult``.
 
     Raises:
         ValueError: If both ``pass_content_to_stdin`` and
             ``stdin_source`` are specified.
 
-    Example — fat/heavy message, script reads from URL::
+    Example — static command, script reads from storage URL::
 
-        from rpsd_flow import create_subprocess_task
+        from rpsd_flow import subprocess_task
 
-        ocr_task = create_subprocess_task(
+        @subprocess_task(
             command=["python", "ocr_script.py"],
-            name="ocr-task",
             retries=2,
             timeout_seconds=120.0,
         )
+        def ocr_document(message: TransportMessage) -> SubprocessResult:
+            \"\"\"Run OCR on the document at RPSD_WHERE.\"\"\"
+            ...
 
         # In a flow:
-        result = ocr_task(message)  # RPSD_WHERE is set for the script
+        result = ocr_document(message)
+
+    Example — command builder, choose script based on content type::
+
+        @subprocess_task(retries=2, timeout_seconds=120.0)
+        def process_content(
+            message: TransportMessage,
+        ) -> list[str]:
+            \"\"\"Choose processor based on content type.\"\"\"
+            if message.metadata.content_type == "application/pdf":
+                return ["python", "ocr_script.py"]
+            return ["python", "text_script.py"]
 
     Example — slim/fast message, pipe content to stdin::
 
-        extract_task = create_subprocess_task(
+        @subprocess_task(
             command=["jq", ".title"],
-            name="extract-title",
             pass_content_to_stdin=True,
         )
+        def extract_title(message: TransportMessage) -> SubprocessResult:
+            \"\"\"Extract the title field via jq.\"\"\"
+            ...
 
     Example — redirect stdout to a file for large output::
 
         from pathlib import Path
 
-        dump_task = create_subprocess_task(
+        @subprocess_task(
             command=["pg_dump", "mydb"],
-            name="db-dump",
             stdout_target=Path("/tmp/dump.sql"),
         )
-
-    Example — pipe stdin from a file, discard stderr::
-
-        import subprocess
-
-        load_task = create_subprocess_task(
-            command=["psql", "mydb"],
-            name="db-load",
-            stdin_source=Path("/tmp/dump.sql"),
-            stderr_target=subprocess.DEVNULL,
-        )
+        def dump_database(message: TransportMessage) -> SubprocessResult:
+            \"\"\"Dump the database to /tmp/dump.sql.\"\"\"
+            ...
     """
     if pass_content_to_stdin and stdin_source is not None:
         raise ValueError(
@@ -270,128 +295,168 @@ def create_subprocess_task(
             "'stdin_source'. Choose one mechanism for stdin."
         )
 
-    task_name = name if name is not None else command[0]
+    def decorator(fn: Callable) -> Task:
+        task_name = name if name is not None else fn.__name__.replace("_", "-")
+        description = fn.__doc__
 
-    @rpsd_task(
-        name=task_name,
-        retries=retries,
-        retry_delay_seconds=retry_delay_seconds,
-        timeout_seconds=timeout_seconds,
-        log_prints=log_prints,
-        settings=settings,
-        **(task_kwargs or {}),
-    )
-    def _subprocess_task(
-        message: TransportMessage,
-    ) -> SubprocessResult:
-        # Build final environment: inherit current process env, then
-        # add RPSD_* vars (if enabled), then apply extra_env overrides.
-        env = dict(os.environ)
+        async def _run(
+            message: TransportMessage,
+        ) -> SubprocessResult:
+            # Build final environment: inherit current process env, then
+            # add RPSD_* vars (if enabled), then apply extra_env overrides.
+            env = dict(os.environ)
 
-        if pass_metadata_as_env:
-            env.update(_build_rpsd_env(message))
+            if pass_metadata_as_env:
+                env.update(_build_rpsd_env(message))
 
-        if extra_env:
-            env.update(extra_env)
+            if extra_env:
+                env.update(extra_env)
 
-        # Build final command (base + extra args).
-        full_command = list(command)
-        if extra_args:
-            full_command.extend(extra_args)
+            # Build final command: static or from builder.
+            base_command = command if command is not None else fn(message)
+            full_command = list(base_command)
+            if extra_args:
+                full_command.extend(extra_args)
 
-        # Determine stdin: stdin_source takes priority, then
-        # pass_content_to_stdin, then no stdin.
-        stdin_data: bytes | None = None
-        stdin_handle = None
-        stdin_file_to_close = None
+            # Determine stdin: stdin_source takes priority, then
+            # pass_content_to_stdin, then no stdin.
+            communicate_input: bytes | None = None
+            stdin_for_proc = None
+            stdin_file_to_close = None
 
-        if stdin_source is not None:
-            if isinstance(stdin_source, Path):
-                stdin_file_to_close = open(  # noqa: SIM115
-                    stdin_source, "rb"
+            if stdin_source is not None:
+                if isinstance(stdin_source, Path):
+                    stdin_file_to_close = open(  # noqa: SIM115
+                        stdin_source, "rb"
+                    )
+                    stdin_for_proc = stdin_file_to_close
+                else:
+                    stdin_for_proc = stdin_source
+            elif pass_content_to_stdin and message.content is not None:
+                communicate_input = message.content
+                stdin_for_proc = asyncio.subprocess.PIPE
+
+            # Determine stdout target.
+            stdout_handle: Any = asyncio.subprocess.PIPE
+            stdout_file_to_close = None
+            result_stdout_target: Path | None = None
+
+            if stdout_target is not None:
+                if isinstance(stdout_target, Path):
+                    stdout_file_to_close = open(  # noqa: SIM115
+                        stdout_target, "wb"
+                    )
+                    stdout_handle = stdout_file_to_close
+                    result_stdout_target = stdout_target
+                else:
+                    stdout_handle = stdout_target
+
+            # Determine stderr target.
+            stderr_handle: Any = asyncio.subprocess.PIPE
+            stderr_file_to_close = None
+            result_stderr_target: Path | None = None
+
+            if stderr_target is not None:
+                if isinstance(stderr_target, Path):
+                    stderr_file_to_close = open(  # noqa: SIM115
+                        stderr_target, "wb"
+                    )
+                    stderr_handle = stderr_file_to_close
+                    result_stderr_target = stderr_target
+                else:
+                    stderr_handle = stderr_target
+
+            # Filter subprocess_kwargs: remove keys that are managed
+            # by us or that are incompatible with
+            # asyncio.create_subprocess_exec (input, timeout).
+            proc_kwargs: dict[str, Any] = {
+                k: v
+                for k, v in (subprocess_kwargs or {}).items()
+                if k
+                not in {
+                    "input",
+                    "timeout",
+                    "stdin",
+                    "stdout",
+                    "stderr",
+                    "env",
+                    "cwd",
+                }
+            }
+
+            try:
+                proc = await asyncio.create_subprocess_exec(
+                    *full_command,
+                    stdin=stdin_for_proc,
+                    stdout=stdout_handle,
+                    stderr=stderr_handle,
+                    env=env,
+                    cwd=cwd,
+                    **proc_kwargs,
                 )
-                stdin_handle = stdin_file_to_close
-            else:
-                stdin_handle = stdin_source
-        elif pass_content_to_stdin and message.content is not None:
-            stdin_data = message.content
 
-        # Determine stdout target.
-        stdout_handle = subprocess.PIPE
-        stdout_file_to_close = None
-        result_stdout_target: Path | None = None
+                try:
+                    if timeout_seconds is not None:
+                        stdout_bytes, stderr_bytes = await asyncio.wait_for(
+                            proc.communicate(input=communicate_input),
+                            timeout=timeout_seconds,
+                        )
+                    else:
+                        stdout_bytes, stderr_bytes = await proc.communicate(
+                            input=communicate_input
+                        )
+                except TimeoutError:
+                    proc.kill()
+                    await proc.wait()
+                    raise
 
-        if stdout_target is not None:
-            if isinstance(stdout_target, Path):
-                stdout_file_to_close = open(  # noqa: SIM115
-                    stdout_target, "wb"
-                )
-                stdout_handle = stdout_file_to_close
-                result_stdout_target = stdout_target
-            else:
-                stdout_handle = stdout_target
+            finally:
+                if stdin_file_to_close is not None:
+                    stdin_file_to_close.close()
+                if stdout_file_to_close is not None:
+                    stdout_file_to_close.close()
+                if stderr_file_to_close is not None:
+                    stderr_file_to_close.close()
 
-        # Determine stderr target.
-        stderr_handle = subprocess.PIPE
-        stderr_file_to_close = None
-        result_stderr_target: Path | None = None
-
-        if stderr_target is not None:
-            if isinstance(stderr_target, Path):
-                stderr_file_to_close = open(  # noqa: SIM115
-                    stderr_target, "wb"
-                )
-                stderr_handle = stderr_file_to_close
-                result_stderr_target = stderr_target
-            else:
-                stderr_handle = stderr_target
-
-        try:
-            # Start from user-supplied subprocess kwargs, then
-            # overlay our managed keys so they always win.
-            run_kwargs: dict[str, Any] = dict(subprocess_kwargs or {})
-            run_kwargs.update(
-                input=(stdin_data if stdin_handle is None else None),
-                stdin=stdin_handle,
-                stdout=stdout_handle,
-                stderr=stderr_handle,
-                env=env,
-                cwd=cwd,
-                timeout=timeout_seconds,
+            captured_stdout = (
+                stdout_bytes.decode("utf-8", errors="replace") if stdout_bytes else None
             )
-            proc = subprocess.run(full_command, **run_kwargs)
-        finally:
-            if stdin_file_to_close is not None:
-                stdin_file_to_close.close()
-            if stdout_file_to_close is not None:
-                stdout_file_to_close.close()
-            if stderr_file_to_close is not None:
-                stderr_file_to_close.close()
-
-        captured_stdout = (
-            proc.stdout.decode("utf-8", errors="replace") if proc.stdout else None
-        )
-        captured_stderr = (
-            proc.stderr.decode("utf-8", errors="replace") if proc.stderr else None
-        )
-
-        result = SubprocessResult(
-            returncode=proc.returncode,
-            stdout=captured_stdout,
-            stderr=captured_stderr,
-            success=proc.returncode == 0,
-            stdout_target=result_stdout_target,
-            stderr_target=result_stderr_target,
-        )
-
-        if raise_on_failure and not result.success:
-            stderr_info = result.stderr if result.stderr is not None else "<redirected>"
-            raise RuntimeError(
-                f"Subprocess '{task_name}' exited with "
-                f"code {result.returncode}. "
-                f"stderr: {stderr_info!r}"
+            captured_stderr = (
+                stderr_bytes.decode("utf-8", errors="replace") if stderr_bytes else None
             )
 
-        return result
+            # returncode is always set after communicate() resolves.
+            assert proc.returncode is not None
+            result = SubprocessResult(
+                returncode=proc.returncode,
+                stdout=captured_stdout,
+                stderr=captured_stderr,
+                success=proc.returncode == 0,
+                stdout_target=result_stdout_target,
+                stderr_target=result_stderr_target,
+            )
 
-    return _subprocess_task
+            if raise_on_failure and not result.success:
+                stderr_info = (
+                    result.stderr if result.stderr is not None else "<redirected>"
+                )
+                raise RuntimeError(
+                    f"Subprocess '{task_name}' exited with "
+                    f"code {result.returncode}. "
+                    f"stderr: {stderr_info!r}"
+                )
+
+            return result
+
+        return rpsd_task(
+            name=task_name,
+            description=description,
+            retries=retries,
+            retry_delay_seconds=retry_delay_seconds,
+            timeout_seconds=timeout_seconds,
+            log_prints=log_prints,
+            settings=settings,
+            **(task_kwargs or {}),
+        )(_run)
+
+    return decorator

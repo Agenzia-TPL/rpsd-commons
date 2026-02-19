@@ -43,7 +43,7 @@ Execution:
   run_flow_async         Async version of run_flow
 
 Subprocess tasks:
-  create_subprocess_task  Build a @task that runs a CLI script
+  subprocess_task         Decorator factory that builds a @task running a CLI script
   SubprocessResult        Result model returned by subprocess tasks
 """
 
@@ -56,7 +56,7 @@ from rpsd_flow.settings import (
     TaskServeSettings,
     TaskSettings,
 )
-from rpsd_flow.subprocess_task import SubprocessResult, create_subprocess_task
+from rpsd_flow.subprocess_task import SubprocessResult, subprocess_task
 from rpsd_flow.tasks import task
 
 __all__ = [
@@ -75,6 +75,6 @@ __all__ = [
     "run_flow",
     "run_flow_async",
     # Subprocess tasks
-    "create_subprocess_task",
+    "subprocess_task",
     "SubprocessResult",
 ]
