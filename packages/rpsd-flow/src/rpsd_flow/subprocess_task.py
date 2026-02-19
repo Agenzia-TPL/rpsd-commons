@@ -35,10 +35,10 @@ mechanisms:
 import json
 import os
 import subprocess
-from collections.abc import Callable
 from pathlib import Path
 from typing import Any, BinaryIO
 
+from prefect.tasks import Task
 from pydantic import BaseModel
 
 from rpsd_flow.settings import TaskSettings
@@ -131,7 +131,7 @@ def create_subprocess_task(
     stdout_target: Path | BinaryIO | int | None = None,
     stderr_target: Path | BinaryIO | int | None = None,
     subprocess_kwargs: dict[str, Any] | None = None,
-) -> Callable:
+) -> Task[[TransportMessage], SubprocessResult]:
     """
     Create a Prefect ``@task`` that runs a command-line script.
 
