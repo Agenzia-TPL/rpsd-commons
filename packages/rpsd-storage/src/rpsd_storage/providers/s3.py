@@ -2,7 +2,6 @@ import hashlib
 import json
 import logging
 import os
-import uuid
 from datetime import UTC, datetime
 from urllib.parse import urlparse
 
@@ -10,6 +9,7 @@ import boto3
 
 from rpsd_storage.metadata import StorageMetadata
 from rpsd_storage.providers.base import StorageProvider
+from rpsd_storage.utils import generate_object_id
 
 logger = logging.getLogger()
 
@@ -43,7 +43,7 @@ class S3StorageProvider(StorageProvider):
         """
         Saves content to S3
         """
-        uuid_part = str(uuid.uuid4())
+        uuid_part = generate_object_id()
         timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
 
         # Determine file extension with priority:

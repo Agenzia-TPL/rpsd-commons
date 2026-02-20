@@ -3,6 +3,8 @@ from rpsd_storage.providers.fs import FSStorageProvider
 from rpsd_storage.providers.http import HTTPStorageProvider
 from rpsd_storage.providers.s3 import S3StorageProvider
 from rpsd_storage.settings import StorageSettings
+from rpsd_storage.utils import flip_uuid as flip_uuid
+from rpsd_storage.utils import generate_object_id as generate_object_id
 
 
 def get_storage_provider(settings: StorageSettings | None = None):

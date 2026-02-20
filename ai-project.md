@@ -35,6 +35,9 @@ The url must be the complete URL of the saved object/file, constructed like this
 where "user123" must be the "who" value and "document" the "what" value.
 The last part is the UUID "object_id", with an (optional) extension.
 The metadata dictionary must, among other things, contain the "who", "what" and "object_id" values.
+The object_id must be constructed using an inverted UUID v7 value, so that newest object/file will always have the smallest object_id value.
+This is very important for S3 retrieval, where only listing object keys in ascending lexicographic order is supported.
+The inverted value will have to be formatted with no separating dashes, so as not to resemble a true UUID value.
 
 Refactor the load() method of provider (and derived classes) to accept a "url" parameter, like the one returned by the save() method.
 Since it's a complete URL, the S3 or FS provider can retrieve it very fast.

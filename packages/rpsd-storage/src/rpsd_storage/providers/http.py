@@ -145,9 +145,10 @@ class HTTPStorageProvider(StorageProvider):
             StorageMetadata: Metadata including HTTP headers and status
         """
         import hashlib
-        import uuid
         from datetime import UTC, datetime
         from urllib.parse import urlparse
+
+        from rpsd_storage.utils import generate_object_id
 
         content_length = None
         if hasattr(response, "content") and response.content:
@@ -170,13 +171,15 @@ class HTTPStorageProvider(StorageProvider):
             if parsed_url.path and "/" in parsed_url.path:
                 original_filename = parsed_url.path.split("/")[-1] or "unknown"
 
-        # Generate object_id from URL or create UUID
+        # Generate object_id from URL
         parsed_url = urlparse(url)
         if parsed_url.path:
-            # Use path as basis for object_id, but ensure it's unique
-            object_id = f"http_{abs(hash(url))}_{uuid.uuid4().hex[:8]}"
+            object_id = (
+                f"http_{abs(hash(url))}"
+                f"_{generate_object_id()[:8]}"
+            )
         else:
-            object_id = f"http_{uuid.uuid4().hex}"
+            object_id = f"http_{generate_object_id()}"
 
         # Generate timestamp
         timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
