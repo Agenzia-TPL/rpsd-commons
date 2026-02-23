@@ -108,6 +108,7 @@ export LOG_LEVEL="DEBUG"
 export APP__TRANSPORT__API_KEY="${APP__TRANSPORT__API_KEY:-demo-key-12345}"
 export APP__STORAGE__PROVIDER="${APP__STORAGE__PROVIDER:-fs}"
 export APP__STORAGE__FS__BASE_PATH="${APP__STORAGE__FS__BASE_PATH:-/tmp/rpsd-storage}"
+export APP__STORAGE__COMPARE_BEFORE_SAVE="${APP__STORAGE__COMPARE_BEFORE_SAVE:-true}"
 export APP__FORWARD__CARRIER="$CARRIER"
 export APP__FORWARD__RECIPIENT="${APP__FORWARD__RECIPIENT:-enriched-events}"
 export APP__FORWARD__MODE="${APP__FORWARD__MODE:-fatheavy}"
@@ -140,6 +141,7 @@ cat > .env <<EOF
 APP__TRANSPORT__API_KEY=${APP__TRANSPORT__API_KEY}
 APP__STORAGE__PROVIDER=${APP__STORAGE__PROVIDER}
 APP__STORAGE__FS__BASE_PATH=${APP__STORAGE__FS__BASE_PATH}
+APP__STORAGE__COMPARE_BEFORE_SAVE=${APP__STORAGE__COMPARE_BEFORE_SAVE}
 APP__FORWARD__CARRIER=${APP__FORWARD__CARRIER}
 APP__FORWARD__RECIPIENT=${APP__FORWARD__RECIPIENT}
 APP__FORWARD__MODE=${APP__FORWARD__MODE}
@@ -171,6 +173,13 @@ fi
 
 echo -e "${GREEN}✓ Demo configuration ready${NC}"
 echo ""
+
+# Clean storage from previous runs so deduplication tests start fresh
+STORAGE_DIR="${APP__STORAGE__FS__BASE_PATH:-/tmp/rpsd-storage}"
+if [ -d "$STORAGE_DIR" ]; then
+    rm -rf "$STORAGE_DIR"
+    echo -e "${GREEN}✓ Cleaned previous storage at ${STORAGE_DIR}${NC}"
+fi
 
 # Start Prefect task worker and flow server if Prefect is available
 TASK_PID=""
@@ -241,11 +250,15 @@ fi
 echo -e "${GREEN}✓ ${CARRIER_UPPER} consumer running (PID: $CONSUMER_PID)${NC}"
 echo ""
 
-# Helper: check forwarded + flow_invoked from a JSON response
+# Helper: check deduplicated + forwarded + flow_invoked from a JSON response
 check_result() {
     local response="$1"
+    local deduplicated=$(echo "$response" | python3 -c "import sys, json; print(json.load(sys.stdin).get('deduplicated', False))")
     local forwarded=$(echo "$response" | python3 -c "import sys, json; print(json.load(sys.stdin).get('forwarded', False))")
     local flow_invoked=$(echo "$response" | python3 -c "import sys, json; print(json.load(sys.stdin).get('flow_invoked', False))")
+    if [ "$deduplicated" = "True" ]; then
+        echo -e "${GREEN}✓ Deduplicated (content unchanged, save skipped)${NC}"
+    fi
     if [ "$forwarded" = "True" ]; then
         echo -e "${GREEN}✓ Forwarded to ${CARRIER_UPPER}${NC}"
     else
@@ -287,8 +300,30 @@ echo ""
 
 sleep 2
 
-# Test 2: Fatheavy message with https:// URL
-echo -e "${BLUE}Test 2: Fatheavy message with https:// URL reference${NC}"
+# Test 2: Deduplication - re-send identical slimfast message
+echo -e "${BLUE}Test 2: Deduplication (re-send identical content)${NC}"
+echo -e "  Testing: Same who/what/content as Test 1 — should be deduplicated"
+RESPONSE=$(curl -s -X POST "http://localhost:8000/ingest" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer ${APP__TRANSPORT__API_KEY:-demo-key-12345}" \
+  -d '{
+    "metadata": {
+      "who": "demo-user",
+      "what": "test-report",
+      "content_type": "text/plain",
+      "filename": "test.txt"
+    },
+    "content": "SGVsbG8sIEthZmthIVRoaXMgaXMgYSB0ZXN0IG1lc3NhZ2Uu"
+  }')
+
+echo "$RESPONSE" | python3 -m json.tool
+check_result "$RESPONSE"
+echo ""
+
+sleep 2
+
+# Test 3: Fatheavy message with https:// URL
+echo -e "${BLUE}Test 3: Fatheavy message with https:// URL reference${NC}"
 echo -e "  Testing: Consumer fetches content from HTTPS URL via rpsd-storage"
 RESPONSE=$(curl -s -X POST "http://localhost:8000/ingest" \
   -H "X-RPSD-Who: demo-user" \
@@ -304,8 +339,8 @@ echo ""
 
 sleep 2
 
-# Test 3: Fatheavy message with file:// URL (referencing stored content from Test 1)
-echo -e "${BLUE}Test 3: Fatheavy message with file:// URL reference${NC}"
+# Test 4: Fatheavy message with file:// URL (referencing stored content from Test 1)
+echo -e "${BLUE}Test 4: Fatheavy message with file:// URL reference${NC}"
 echo -e "  Testing: Consumer fetches content from local filesystem via rpsd-storage"
 if [ -n "$STORAGE_URL_TEST1" ]; then
     echo -e "  Using storage URL from Test 1: ${STORAGE_URL_TEST1}"
@@ -320,14 +355,14 @@ if [ -n "$STORAGE_URL_TEST1" ]; then
     echo "$RESPONSE" | python3 -m json.tool
     check_result "$RESPONSE"
 else
-    echo -e "${YELLOW}⚠ Skipping Test 3 (no storage URL from Test 1)${NC}"
+    echo -e "${YELLOW}⚠ Skipping Test 4 (no storage URL from Test 1)${NC}"
 fi
 echo ""
 
 sleep 2
 
-# Test 4: Fatheavy message with http:// URL (non-HTTPS)
-echo -e "${BLUE}Test 4: Fatheavy message with http:// URL reference${NC}"
+# Test 5: Fatheavy message with http:// URL (non-HTTPS)
+echo -e "${BLUE}Test 5: Fatheavy message with http:// URL reference${NC}"
 echo -e "  Testing: Consumer fetches content from HTTP URL via rpsd-storage"
 RESPONSE=$(curl -s -X POST "http://localhost:8000/ingest" \
   -H "X-RPSD-Who: demo-user" \
@@ -343,8 +378,8 @@ echo ""
 
 sleep 2
 
-# Test 5: Error handling - non-existent file:// URL
-echo -e "${BLUE}Test 5: Error handling with non-existent file:// URL${NC}"
+# Test 6: Error handling - non-existent file:// URL
+echo -e "${BLUE}Test 6: Error handling with non-existent file:// URL${NC}"
 echo -e "  Testing: Consumer gracefully handles FileNotFoundError"
 RESPONSE=$(curl -s -X POST "http://localhost:8000/ingest" \
   -H "X-RPSD-Who: demo-user" \
@@ -360,8 +395,8 @@ echo ""
 
 sleep 2
 
-# Test 6: Error handling - HTTP 404
-echo -e "${BLUE}Test 6: Error handling with HTTP 404 URL${NC}"
+# Test 7: Error handling - HTTP 404
+echo -e "${BLUE}Test 7: Error handling with HTTP 404 URL${NC}"
 echo -e "  Testing: Consumer gracefully handles HTTP 404 errors"
 RESPONSE=$(curl -s -X POST "http://localhost:8000/ingest" \
   -H "X-RPSD-Who: demo-user" \
@@ -405,11 +440,12 @@ fi
 
 echo -e "${BLUE}Summary of test scenarios:${NC}"
 echo "  ✓ Test 1: Slimfast message (inline content)"
-echo "  ✓ Test 2: Fatheavy message with https:// URL"
-echo "  ✓ Test 3: Fatheavy message with file:// URL"
-echo "  ✓ Test 4: Fatheavy message with http:// URL"
-echo "  ✓ Test 5: Error handling - non-existent file:// URL"
-echo "  ✓ Test 6: Error handling - HTTP 404"
+echo "  ✓ Test 2: Deduplication (re-send identical content)"
+echo "  ✓ Test 3: Fatheavy message with https:// URL"
+echo "  ✓ Test 4: Fatheavy message with file:// URL"
+echo "  ✓ Test 5: Fatheavy message with http:// URL"
+echo "  ✓ Test 6: Error handling - non-existent file:// URL"
+echo "  ✓ Test 7: Error handling - HTTP 404"
 if [ "$PREFECT_AVAILABLE" = true ]; then
     echo "  ✓ Prefect Flow invoked for each test (3-task pipeline)"
 fi

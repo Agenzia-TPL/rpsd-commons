@@ -225,7 +225,7 @@ async def ingest_data(request: Request):
         # Optionally invoke a Prefect Flow deployment
         flow_invoked = False
         t_flow = 0.0
-        if settings.flow.deployment:
+        if settings.flow.deployment and not result.deduplicated:
             try:
                 from rpsd_flow import run_flow_async
 
@@ -280,6 +280,7 @@ async def ingest_data(request: Request):
             "success": True,
             "message": "Content received and stored",
             "storage_url": result.storage_url,
+            "deduplicated": result.deduplicated,
             "forwarded": result.forwarded,
             "flow_invoked": flow_invoked,
             "metadata": {
@@ -299,11 +300,13 @@ async def ingest_data(request: Request):
         logger.info(
             "Successfully processed message: "
             "who=%s, what=%s, url=%s, "
-            "forwarded=%s, flow_invoked=%s | "
-            "timing: receive=%.3fs process=%.3fs flow=%.3fs total=%.3fs",
+            "deduplicated=%s, forwarded=%s, flow_invoked=%s | "
+            "timing: receive=%.3fs process=%.3fs flow=%.3fs"
+            " total=%.3fs",
             message.who,
             message.what,
             result.storage_url,
+            result.deduplicated,
             result.forwarded,
             flow_invoked,
             t_receive,
