@@ -302,6 +302,7 @@ Key design decisions:
 ## Processors
 
 ### IngestProcessor
+__DONE__
 
 **Problem**: The receive → resolve → save → forward pipeline is a common pattern when integrating carriers with storage. Currently, each carrier type requires its own subclass to add storage integration (e.g., StorageHTTPCarrier), duplicating logic across carrier types.
 
@@ -318,6 +319,14 @@ Key design decisions:
 - Settings-driven via `IngestSettings` nested under `TransportSettings`.
 
 **Expected outcome**: Elimination of carrier-specific storage subclasses. Applications use plain carriers + IngestProcessor for the receive-save-forward pattern.
+
+#### Deduplication-aware forwarding
+
+**Problem**: When rpsd-storage's `compare_before_save` is enabled, duplicate content is detected but IngestProcessor still forwards the message unconditionally, causing downstream consumers to re-process unchanged data.
+
+**Proposed Solution**: After saving, check `storage_metadata.deduplicated` and skip forwarding when `True`. Add a `deduplicated: bool` field (excluded from serialization) to `IngestResult` so callers can inspect the outcome without None-guarding `storage_metadata`.
+
+**Expected outcome**: Duplicate messages are silently absorbed at the ingest layer. `IngestResult.deduplicated` and `IngestResult.forwarded` reflect the actual outcome.
 
 # rpsd-flow
 

@@ -400,6 +400,48 @@ class TestProcessSync:
         call_kwargs = mock_storage.save.call_args.kwargs
         assert call_kwargs["custom_metadata"] == custom
 
+    def test_deduplicated_skips_forward(
+        self, slim_message, mock_storage, mock_forward_carrier
+    ):
+        """Forward is skipped when storage returns deduplicated."""
+        # Make storage return deduplicated metadata
+        _url, meta = mock_storage.save.return_value
+        meta.deduplicated = True
+
+        processor = IngestProcessor(
+            storage=mock_storage,
+            forward_carrier=mock_forward_carrier,
+            forward_recipient="output-topic",
+        )
+        result = processor.process(slim_message)
+
+        assert result.deduplicated is True
+        assert result.forwarded is False
+        assert result.storage_url is not None
+        mock_forward_carrier.send_slimfast.assert_not_called()
+        mock_forward_carrier.send_fatheavy.assert_not_called()
+
+    def test_not_deduplicated_forwards(
+        self, slim_message, mock_storage, mock_forward_carrier
+    ):
+        """Forward happens when storage does not deduplicate."""
+        processor = IngestProcessor(
+            storage=mock_storage,
+            forward_carrier=mock_forward_carrier,
+            forward_recipient="output-topic",
+        )
+        result = processor.process(slim_message)
+
+        assert result.deduplicated is False
+        assert result.forwarded is True
+
+    def test_deduplicated_false_without_storage(self, slim_message):
+        """Deduplicated defaults to False when no storage."""
+        processor = IngestProcessor()
+        result = processor.process(slim_message)
+
+        assert result.deduplicated is False
+
 
 # =============================================================================
 # Async Process Tests
@@ -586,6 +628,50 @@ class TestProcessAsync:
         assert result.forwarded is True
         # The sync method should have been called via to_thread
         carrier.send_slimfast.assert_called_once()
+
+    @pytest.mark.anyio
+    async def test_deduplicated_skips_forward(
+        self, slim_message, mock_storage, mock_forward_carrier
+    ):
+        """Forward is skipped when storage returns deduplicated."""
+        _url, meta = mock_storage.save.return_value
+        meta.deduplicated = True
+
+        processor = IngestProcessor(
+            storage=mock_storage,
+            forward_carrier=mock_forward_carrier,
+            forward_recipient="output-topic",
+        )
+        result = await processor.process_async(slim_message)
+
+        assert result.deduplicated is True
+        assert result.forwarded is False
+        assert result.storage_url is not None
+        mock_forward_carrier.send_slimfast.assert_not_called()
+        mock_forward_carrier.send_fatheavy.assert_not_called()
+
+    @pytest.mark.anyio
+    async def test_not_deduplicated_forwards(
+        self, slim_message, mock_storage, mock_forward_carrier
+    ):
+        """Forward happens when storage does not deduplicate."""
+        processor = IngestProcessor(
+            storage=mock_storage,
+            forward_carrier=mock_forward_carrier,
+            forward_recipient="output-topic",
+        )
+        result = await processor.process_async(slim_message)
+
+        assert result.deduplicated is False
+        assert result.forwarded is True
+
+    @pytest.mark.anyio
+    async def test_deduplicated_false_without_storage(self, slim_message):
+        """Deduplicated defaults to False when no storage."""
+        processor = IngestProcessor()
+        result = await processor.process_async(slim_message)
+
+        assert result.deduplicated is False
 
 
 # =============================================================================

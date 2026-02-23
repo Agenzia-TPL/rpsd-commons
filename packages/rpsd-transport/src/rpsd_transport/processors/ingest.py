@@ -57,8 +57,14 @@ class IngestResult(BaseModel):
         fetch_metadata: Metadata from fetching the fat/heavy
             content URL. None for slim/fast messages or if no
             fetch occurred. Excluded from serialization.
+        deduplicated: True if storage had compare-before-save
+            enabled and the content was already stored (not
+            newer). False otherwise. Excluded from
+            serialization.
         forwarded: True if message was successfully forwarded
-            to a second carrier. False otherwise.
+            to a second carrier. False if forwarding was not
+            configured or was skipped (e.g. due to
+            deduplication).
     """
 
     message: TransportMessage
@@ -66,6 +72,7 @@ class IngestResult(BaseModel):
     storage_url: str | None = None
     storage_metadata: StorageMetadata | None = Field(default=None, exclude=True)
     fetch_metadata: StorageMetadata | None = Field(default=None, exclude=True)
+    deduplicated: bool = Field(default=False, exclude=True)
     forwarded: bool = False
 
 
@@ -346,20 +353,28 @@ class IngestProcessor:
         # 4. Optionally save to storage
         storage_url = None
         storage_metadata = None
+        deduplicated = False
         if self.storage is not None:
             storage_url, storage_metadata = self._save_to_storage(
                 message_for_save, content
             )
+            deduplicated = storage_metadata.deduplicated
 
         # 5. Apply pre_forward_transform
         message_for_forward = self._apply_transform(
             message_for_save, content, self.pre_forward_transform
         )
 
-        # 6. Optionally forward
+        # 6. Optionally forward (skip if deduplicated)
         forwarded = False
-        if self.forward_carrier is not None:
+        if self.forward_carrier is not None and not deduplicated:
             forwarded = self._forward_message(message_for_forward, content, storage_url)
+        elif deduplicated:
+            logger.info(
+                "Skipping forward: content deduplicated (who=%s, what=%s)",
+                message.who,
+                message.what,
+            )
 
         return IngestResult(
             message=reconciled,
@@ -367,6 +382,7 @@ class IngestProcessor:
             storage_url=storage_url,
             storage_metadata=storage_metadata,
             fetch_metadata=fetch_metadata,
+            deduplicated=deduplicated,
             forwarded=forwarded,
         )
 
@@ -410,21 +426,29 @@ class IngestProcessor:
         # 4. Optionally save to storage (sync — StorageProvider is sync)
         storage_url = None
         storage_metadata = None
+        deduplicated = False
         if self.storage is not None:
             storage_url, storage_metadata = self._save_to_storage(
                 message_for_save, content
             )
+            deduplicated = storage_metadata.deduplicated
 
         # 5. Apply pre_forward_transform
         message_for_forward = await self._apply_transform_async(
             message_for_save, content, self.pre_forward_transform
         )
 
-        # 6. Optionally forward
+        # 6. Optionally forward (skip if deduplicated)
         forwarded = False
-        if self.forward_carrier is not None:
+        if self.forward_carrier is not None and not deduplicated:
             forwarded = await self._forward_message_async(
                 message_for_forward, content, storage_url
+            )
+        elif deduplicated:
+            logger.info(
+                "Skipping forward: content deduplicated (who=%s, what=%s)",
+                message.who,
+                message.what,
             )
 
         return IngestResult(
@@ -433,6 +457,7 @@ class IngestProcessor:
             storage_url=storage_url,
             storage_metadata=storage_metadata,
             fetch_metadata=fetch_metadata,
+            deduplicated=deduplicated,
             forwarded=forwarded,
         )
 
