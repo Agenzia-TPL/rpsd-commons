@@ -275,11 +275,10 @@ async def ingest_data(request: Request):
                     e,
                 )
 
-        # Build response with storage URL and forward status
+        # Build response
         response_data = {
             "success": True,
             "message": "Content received and stored",
-            "storage_url": result.storage_url,
             "deduplicated": result.deduplicated,
             "forwarded": result.forwarded,
             "flow_invoked": flow_invoked,
@@ -288,13 +287,12 @@ async def ingest_data(request: Request):
                 "what": message.what,
                 "content_type": message.metadata.content_type,
             },
+            "storage": (
+                result.storage_metadata.model_dump()
+                if result.storage_metadata
+                else None
+            ),
         }
-
-        if result.storage_metadata is not None:
-            response_data["metadata"]["object_id"] = result.storage_metadata.object_id
-            response_data["metadata"]["content_length"] = (
-                result.storage_metadata.content_length
-            )
 
         t_total = time.perf_counter() - t0
         logger.info(

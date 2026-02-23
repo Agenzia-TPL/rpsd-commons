@@ -522,15 +522,28 @@ curl -X POST http://localhost:8000/ingest \
 {
   "success": true,
   "message": "Content received and stored",
-  "storage_url": "file:///tmp/rpsd-storage/alice/report/abc123.json",
+  "deduplicated": false,
   "forwarded": true,
   "flow_invoked": true,
   "metadata": {
     "who": "alice",
     "what": "report",
+    "content_type": "application/json"
+  },
+  "storage": {
+    "provider": "fs",
+    "url": "file:///tmp/rpsd-storage/alice/report/abc123.json",
     "content_type": "application/json",
+    "content_length": 1024,
+    "hash": "d41d8cd98f00b204e9800998ecf8427e",
+    "who": "alice",
+    "what": "report",
+    "original_filename": "data.json",
     "object_id": "abc123",
-    "content_length": 1024
+    "save_stamp": "2026-01-15T10:30:00Z",
+    "schema_version": 1,
+    "source_url": "",
+    "custom_metadata": {}
   }
 }
 ```

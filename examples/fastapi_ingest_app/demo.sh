@@ -294,7 +294,7 @@ RESPONSE=$(curl -s -X POST "http://localhost:8000/ingest" \
   }')
 
 echo "$RESPONSE" | python3 -m json.tool
-STORAGE_URL_TEST1=$(echo "$RESPONSE" | python3 -c "import sys, json; print(json.load(sys.stdin).get('storage_url', ''))")
+STORAGE_URL_TEST1=$(echo "$RESPONSE" | python3 -c "import sys, json; print(json.load(sys.stdin).get('storage', {}).get('url', ''))")
 check_result "$RESPONSE"
 echo ""
 
