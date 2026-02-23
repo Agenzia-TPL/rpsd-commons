@@ -19,7 +19,7 @@ from rpsd_transport.models import FastMessage
 @pytest.fixture
 def http_carrier():
     """Create HTTP carrier instance."""
-    return HTTPCarrier(base_url="https://test.example.com", timeout=5.0)
+    return HTTPCarrier(base_url="https://test.example.com", timeout=5)
 
 
 @pytest.fixture

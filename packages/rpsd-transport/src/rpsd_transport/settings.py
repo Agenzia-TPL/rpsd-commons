@@ -4,6 +4,18 @@ from pydantic import BaseModel, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
+class HTTPSettings(BaseModel):
+    """HTTP carrier settings.
+
+    Environment variables (via TransportSettings):
+    - TRANSPORT__HTTP__BASE_URL=http://localhost:8000
+    - TRANSPORT__HTTP__TIMEOUT=30
+    """
+
+    base_url: str | None = None
+    timeout: int = 30
+
+
 class KafkaSettings(BaseModel):
     """Kafka broker settings.
 
@@ -11,11 +23,13 @@ class KafkaSettings(BaseModel):
     - TRANSPORT__KAFKA__BOOTSTRAP_SERVERS=localhost:9092
     - TRANSPORT__KAFKA__GROUP_ID=my-group
     - TRANSPORT__KAFKA__CLIENT_ID=my-client
+    - TRANSPORT__KAFKA__TIMEOUT=30
     """
 
     bootstrap_servers: str = "localhost:9092"
     group_id: str | None = None
     client_id: str | None = None
+    timeout: int = 30
 
 
 class RabbitMQSettings(BaseModel):
@@ -27,6 +41,7 @@ class RabbitMQSettings(BaseModel):
     - TRANSPORT__RABBITMQ__EXCHANGE_TYPE=direct
     - TRANSPORT__RABBITMQ__QUEUE_DURABLE=true
     - TRANSPORT__RABBITMQ__PREFETCH_COUNT=10
+    - TRANSPORT__RABBITMQ__TIMEOUT=30
     """
 
     url: str = "amqp://guest:guest@localhost/"
@@ -34,6 +49,7 @@ class RabbitMQSettings(BaseModel):
     exchange_type: str = "direct"
     queue_durable: bool = True
     prefetch_count: int = 10
+    timeout: int = 30
 
 
 class ForwardSettings(BaseModel):
@@ -85,6 +101,7 @@ class TransportSettings(BaseSettings):
 
     api_key: str | None = None
     carrier: Literal["http", "kafka", "rabbitmq"] = "http"
+    http: HTTPSettings = Field(default_factory=HTTPSettings)
     kafka: KafkaSettings = Field(default_factory=KafkaSettings)
     rabbitmq: RabbitMQSettings = Field(default_factory=RabbitMQSettings)
     ingest: IngestSettings = Field(default_factory=IngestSettings)

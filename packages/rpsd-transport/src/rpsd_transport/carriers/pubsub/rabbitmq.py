@@ -76,6 +76,7 @@ class RabbitMQPubSubCarrier(PubSubCarrier):
         exchange_type: str = "direct",
         queue_durable: bool = True,
         prefetch_count: int = 10,
+        timeout: int = 30,
     ):
         """Initialize RabbitMQ carrier.
 
@@ -87,6 +88,8 @@ class RabbitMQPubSubCarrier(PubSubCarrier):
                 topic, headers).
             queue_durable: Whether declared queues are durable.
             prefetch_count: QoS prefetch count for consumers.
+            timeout: Timeout in seconds for connection and
+                publish operations.
         """
         try:
             import aio_pika  # noqa: F401
@@ -101,6 +104,7 @@ class RabbitMQPubSubCarrier(PubSubCarrier):
         self.exchange_type = exchange_type
         self.queue_durable = queue_durable
         self.prefetch_count = prefetch_count
+        self.timeout = timeout
         self._connection: aio_pika.abc.AbstractRobustConnection | None = None
         self._channel: aio_pika.abc.AbstractChannel | None = None
         self._exchange: aio_pika.abc.AbstractExchange | None = None
@@ -117,7 +121,7 @@ class RabbitMQPubSubCarrier(PubSubCarrier):
         if self._connection is not None:
             return
 
-        self._connection = await aio_pika.connect_robust(self.url)
+        self._connection = await aio_pika.connect_robust(self.url, timeout=self.timeout)
         self._channel = await self._connection.channel()
         await self._channel.set_qos(prefetch_count=self.prefetch_count)
 
@@ -261,7 +265,9 @@ class RabbitMQPubSubCarrier(PubSubCarrier):
             priority=options.priority,
         )
 
-        await self._exchange.publish(message, routing_key=routing_key)
+        await self._exchange.publish(
+            message, routing_key=routing_key, timeout=self.timeout
+        )
 
         logger.info(
             "Published slim/fast message to %s: who=%s, what=%s, exchange=%s",
@@ -426,7 +432,9 @@ class RabbitMQPubSubCarrier(PubSubCarrier):
             priority=options.priority,
         )
 
-        await self._exchange.publish(message, routing_key=routing_key)
+        await self._exchange.publish(
+            message, routing_key=routing_key, timeout=self.timeout
+        )
 
         logger.info(
             "Published fat/heavy message to %s: who=%s, what=%s, where=%s, exchange=%s",

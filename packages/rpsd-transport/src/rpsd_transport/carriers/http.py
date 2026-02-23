@@ -64,7 +64,7 @@ class HTTPCarrier(BaseCarrier):
     def __init__(
         self,
         base_url: str | None = None,
-        timeout: float = 30.0,
+        timeout: int = 30,
     ):
         """Initialize HTTP carrier.
 

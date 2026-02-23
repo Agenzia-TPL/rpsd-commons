@@ -56,7 +56,7 @@ if not logger.handlers:
 # Initialize settings and dependencies
 settings = AppSettings()
 storage_provider = get_storage_provider(settings.storage)
-carrier = HTTPCarrier(timeout=30.0)
+carrier = HTTPCarrier(timeout=30)
 
 # Create forward carrier if configured
 forward_carrier = None

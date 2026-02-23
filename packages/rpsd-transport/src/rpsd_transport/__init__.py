@@ -44,6 +44,7 @@ from rpsd_transport.resolve import (
 )
 from rpsd_transport.settings import (
     ForwardSettings,
+    HTTPSettings,
     IngestSettings,
     KafkaSettings,
     RabbitMQSettings,
@@ -75,7 +76,10 @@ def get_carrier(
     if settings.carrier == "http":
         from rpsd_transport.carriers.http import HTTPCarrier
 
-        return HTTPCarrier()
+        return HTTPCarrier(
+            base_url=settings.http.base_url,
+            timeout=settings.http.timeout,
+        )
 
     if settings.carrier == "kafka":
         from rpsd_transport.carriers.pubsub.kafka import (
@@ -86,6 +90,7 @@ def get_carrier(
             bootstrap_servers=settings.kafka.bootstrap_servers,
             group_id=settings.kafka.group_id,
             client_id=settings.kafka.client_id,
+            timeout=settings.kafka.timeout,
         )
 
     if settings.carrier == "rabbitmq":
@@ -99,6 +104,7 @@ def get_carrier(
             exchange_type=settings.rabbitmq.exchange_type,
             queue_durable=settings.rabbitmq.queue_durable,
             prefetch_count=settings.rabbitmq.prefetch_count,
+            timeout=settings.rabbitmq.timeout,
         )
 
     raise ValueError(f"Unknown carrier type: {settings.carrier}")
@@ -119,6 +125,7 @@ __all__ = [
     "reconcile_metadata",
     # Settings
     "TransportSettings",
+    "HTTPSettings",
     "KafkaSettings",
     "RabbitMQSettings",
     "IngestSettings",

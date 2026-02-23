@@ -47,7 +47,7 @@ def test_client(receiving_app):
 @pytest.fixture
 def sending_carrier():
     """Create an HTTPCarrier for sending messages."""
-    return HTTPCarrier(base_url="http://testserver", timeout=30.0)
+    return HTTPCarrier(base_url="http://testserver", timeout=30)
 
 
 class TestSlimfastIntegration:

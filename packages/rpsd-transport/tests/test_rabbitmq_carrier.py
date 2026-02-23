@@ -137,8 +137,10 @@ class TestRabbitMQSendSlimfastAsync:
         assert parsed["metadata"]["what"] == "report"
         assert call_kwargs["headers"] is None
 
-        # Verify publish was called
+        # Verify publish was called with timeout
         carrier._exchange.publish.assert_awaited_once()
+        pub_kwargs = carrier._exchange.publish.call_args.kwargs
+        assert pub_kwargs["timeout"] == 30
 
     @pytest.mark.anyio
     async def test_send_outline(self, rabbitmq_carrier):
@@ -551,7 +553,9 @@ class TestRabbitMQLifecycle:
 
         assert carrier._connection is mock_conn
         assert carrier._channel is mock_channel
-        mock_mod.connect_robust.assert_awaited_once_with("amqp://localhost/")
+        mock_mod.connect_robust.assert_awaited_once_with(
+            "amqp://localhost/", timeout=30
+        )
         mock_channel.set_qos.assert_awaited_once_with(prefetch_count=20)
 
     @pytest.mark.anyio

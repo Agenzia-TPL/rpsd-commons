@@ -73,6 +73,7 @@ class KafkaPubSubCarrier(PubSubCarrier):
         bootstrap_servers: str = "localhost:9092",
         group_id: str | None = None,
         client_id: str | None = None,
+        timeout: int = 30,
     ):
         """Initialize Kafka carrier.
 
@@ -81,6 +82,8 @@ class KafkaPubSubCarrier(PubSubCarrier):
                 broker addresses.
             group_id: Consumer group ID. Required for consuming.
             client_id: Optional client identifier for Kafka.
+            timeout: Timeout in seconds for broker requests.
+                Converted to milliseconds for aiokafka.
         """
         try:
             import aiokafka  # noqa: F401
@@ -93,6 +96,7 @@ class KafkaPubSubCarrier(PubSubCarrier):
         self.bootstrap_servers = bootstrap_servers
         self.group_id = group_id
         self.client_id = client_id
+        self.timeout = timeout
         self._producer: AIOKafkaProducer | None = None
 
     async def start(self) -> None:
@@ -106,6 +110,7 @@ class KafkaPubSubCarrier(PubSubCarrier):
             self._producer = AIOKafkaProducer(
                 bootstrap_servers=self.bootstrap_servers,
                 client_id=self.client_id,
+                request_timeout_ms=self.timeout * 1000,
             )
             await self._producer.start()
 
@@ -451,6 +456,7 @@ class KafkaPubSubCarrier(PubSubCarrier):
             group_id=self.group_id,
             client_id=(self.client_id if self.client_id else "aiokafka-consumer"),
             enable_auto_commit=False,
+            request_timeout_ms=self.timeout * 1000,
         )
 
         await consumer.start()

@@ -904,6 +904,9 @@ class TestKafkaLifecycle:
 
         assert carrier._producer is mock_producer
         mock_producer.start.assert_awaited_once()
+        # Verify timeout is passed as request_timeout_ms
+        call_kwargs = mock_aiokafka.AIOKafkaProducer.call_args.kwargs
+        assert call_kwargs["request_timeout_ms"] == 30000
 
     @pytest.mark.anyio
     async def test_stop_stops_producer(self):
