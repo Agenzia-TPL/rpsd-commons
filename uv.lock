@@ -2003,7 +2003,6 @@ dependencies = [
     { name = "prefect" },
     { name = "pydantic" },
     { name = "pydantic-settings" },
-    { name = "rpsd-storage" },
     { name = "rpsd-transport" },
 ]
 
@@ -2012,7 +2011,6 @@ requires-dist = [
     { name = "prefect", specifier = ">=3.0,<4.0" },
     { name = "pydantic", specifier = ">=2.0.0" },
     { name = "pydantic-settings", specifier = ">=2.0.0" },
-    { name = "rpsd-storage", editable = "packages/rpsd-storage" },
     { name = "rpsd-transport", editable = "packages/rpsd-transport" },
 ]
 
