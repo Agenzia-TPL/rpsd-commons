@@ -13,7 +13,8 @@ logger = logging.getLogger()
 
 
 class FSStorageProvider(StorageProvider):
-    def __init__(self, base_path):
+    def __init__(self, base_path, *, compare_before_save: bool = False):
+        super().__init__(compare_before_save=compare_before_save)
         if not base_path:
             raise Exception("FS base path not configured")
         self.base_path = base_path
@@ -27,6 +28,27 @@ class FSStorageProvider(StorageProvider):
         """
         path = os.path.join(self.base_path, who, what, object_id)
         return f"file://{path}"
+
+    def _find_latest_metadata(self, who: str, what: str) -> StorageMetadata | None:
+        """
+        Find the latest stored metadata for a (who, what) pair.
+
+        Lists .meta files in the directory, sorts ascending.
+        The first entry is the newest due to bit-flipped UUID7
+        (newer IDs have smaller hex values).
+
+        Returns:
+            StorageMetadata of the latest object, or None.
+        """
+        dir_path = os.path.join(self.base_path, who, what)
+        if not os.path.isdir(dir_path):
+            return None
+        meta_files = sorted(f for f in os.listdir(dir_path) if f.endswith(".meta"))
+        if not meta_files:
+            return None
+        # First in ascending sort = newest (bit-flipped UUID7)
+        content_path = os.path.join(dir_path, meta_files[0].removesuffix(".meta"))
+        return self._load_file_metadata(content_path)
 
     def save(
         self,
@@ -79,6 +101,14 @@ class FSStorageProvider(StorageProvider):
             source_url=source_url or "",
             **({"custom_metadata": custom_metadata} if custom_metadata else {}),
         )
+
+        # Compare-before-save: skip write if not a newer update
+        if self.compare_before_save:
+            existing = self._find_latest_metadata(who, what)
+            if existing is not None:
+                if StorageMetadata.compare(existing, metadata) != 1:
+                    existing.deduplicated = True
+                    return existing.url, existing
 
         with open(file_path, "wb") as f:
             f.write(content)

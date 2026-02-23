@@ -64,9 +64,8 @@ __DONE__
 We must re-think the naming strategy for files in S3 and FS provider, considering the fact that S3 can filter objects having a key with a given prefix.
 In the current implementation, since the "Object_id" is at the end of the key, we get a list of ALL the objects and then filter them one by one.
 Also S3 object list method accept a parameter that sets the maximum number of keys to return.
-Since we're always looking for a single key, we can set that limit to 2, so that:
+Since we're always looking for a single key, we can set that limit to 1, so that:
 - if 0 keys are found => it's an error
-- if 2 keys are found => it's an error as well (kind of weird, because object_ids are UUIDs and, as such they could never be duplicated)
 - if 1 key is found => that's the looked upon object
 
 I don't know for FS, but for S3 this way should be much faster, shouldn't it?
@@ -107,6 +106,15 @@ A result of 0 means: "no, the newly saved file is actually equal to the previous
 So, I expect only 0 or 1 results, in this use case.
 Maybe we should not use "compare" for this method, since it probably is not the "classical" compare method?
 Should we better create a boolean returning method, instead?
+
+## Compare before save
+__DONE__
+
+Add an opt-in `compare_before_save` flag to `StorageProvider` so that `save()` checks for existing identical content before writing. Each provider's `save()` will build its candidate `StorageMetadata` as usual, then use `StorageMetadata.compare()` against the latest stored metadata for the same `(who, what)` pair. Save only proceeds when the candidate is a genuine update (compare result == 1); identical or older content is skipped, returning the existing metadata with a `deduplicated` flag.
+
+Finding the latest object is cheap thanks to bit-flipped UUID7 object IDs (newest sorts first in ascending order): FS uses sorted `listdir`, S3 uses `list_objects_v2` with `MaxKeys=1`.
+
+The `deduplicated` field on `StorageMetadata` uses `Field(exclude=True)` so it never leaks into `.meta` files or S3 headers. The setting is driven by `STORAGE__COMPARE_BEFORE_SAVE` env var and propagated through `get_storage_provider()`.
 
 # rpsd-transport
 

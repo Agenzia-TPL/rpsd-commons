@@ -51,6 +51,13 @@ class StorageMetadata(BaseModel):
         default=None, description="The content encoding for HTTP provider."
     )
 
+    # Deduplication tracking (excluded from serialization)
+    deduplicated: bool = Field(
+        default=False,
+        exclude=True,
+        description="Whether this save was deduplicated.",
+    )
+
     @staticmethod
     def compare(current: "StorageMetadata", candidate: "StorageMetadata") -> int:
         """

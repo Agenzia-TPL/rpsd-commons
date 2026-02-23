@@ -10,6 +10,9 @@ class StorageProvider(ABC):
     Abstract base class for storage providers.
     """
 
+    def __init__(self, *, compare_before_save: bool = False) -> None:
+        self.compare_before_save = compare_before_save
+
     @staticmethod
     def extension_from_mime(mime_type: str) -> str:
         """

@@ -15,7 +15,8 @@ logger = logging.getLogger()
 
 
 class S3StorageProvider(StorageProvider):
-    def __init__(self, bucket_name):
+    def __init__(self, bucket_name, *, compare_before_save: bool = False):
+        super().__init__(compare_before_save=compare_before_save)
         if not bucket_name:
             raise Exception("S3 bucket not configured")
         self.bucket_name = bucket_name
@@ -29,6 +30,39 @@ class S3StorageProvider(StorageProvider):
         """
         s3_key = f"{who}/{what}/{object_id}"
         return f"s3://{self.bucket_name}/{s3_key}"
+
+    def _find_latest_metadata(self, who: str, what: str) -> StorageMetadata | None:
+        """
+        Find the latest stored metadata for a (who, what) pair.
+
+        Uses list_objects_v2 with MaxKeys=1. S3 lists in
+        ascending order, and bit-flipped UUID7 means the newest
+        object has the smallest key, so it comes first.
+
+        Returns:
+            StorageMetadata of the latest object, or None.
+        """
+        prefix = f"{who}/{what}/"
+        try:
+            response = self.s3_client.list_objects_v2(
+                Bucket=self.bucket_name,
+                Prefix=prefix,
+                MaxKeys=1,
+            )
+        except Exception:
+            return None
+        contents = response.get("Contents", [])
+        if not contents:
+            return None
+        newest_key = contents[0]["Key"]
+        try:
+            head = self.s3_client.head_object(
+                Bucket=self.bucket_name,
+                Key=newest_key,
+            )
+            return self._extract_metadata_from_response(head)
+        except Exception:
+            return None
 
     def save(
         self,
@@ -82,6 +116,14 @@ class S3StorageProvider(StorageProvider):
             source_url=source_url or "",
             **({"custom_metadata": custom_metadata} if custom_metadata else {}),
         )
+
+        # Compare-before-save: skip write if not a newer update
+        if self.compare_before_save:
+            existing = self._find_latest_metadata(who, what)
+            if existing is not None:
+                if StorageMetadata.compare(existing, metadata) != 1:
+                    existing.deduplicated = True
+                    return existing.url, existing
 
         # S3 metadata must be strings
         s3_metadata = {

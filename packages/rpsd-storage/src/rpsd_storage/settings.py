@@ -36,6 +36,7 @@ class StorageSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="STORAGE__", env_nested_delimiter="__")
 
     provider: Literal["s3", "fs", "http"] = "fs"
+    compare_before_save: bool = False
     s3: S3Settings = Field(default_factory=S3Settings)
     fs: FSSettings = Field(default_factory=FSSettings)
     http: HTTPSettings = Field(default_factory=HTTPSettings)

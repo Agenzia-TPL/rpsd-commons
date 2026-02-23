@@ -24,10 +24,17 @@ def get_storage_provider(settings: StorageSettings | None = None):
     if settings is None:
         settings = StorageSettings()
 
+    cbs = settings.compare_before_save
     if settings.provider == "s3":
-        return S3StorageProvider(settings.s3.bucket_name)
+        return S3StorageProvider(
+            settings.s3.bucket_name,
+            compare_before_save=cbs,
+        )
     elif settings.provider == "fs":
-        return FSStorageProvider(settings.fs.base_path)
+        return FSStorageProvider(
+            settings.fs.base_path,
+            compare_before_save=cbs,
+        )
     elif settings.provider == "http":
         return HTTPStorageProvider(settings.http.timeout)
     else:

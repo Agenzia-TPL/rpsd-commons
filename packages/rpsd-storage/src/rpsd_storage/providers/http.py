@@ -29,6 +29,7 @@ class HTTPStorageProvider(StorageProvider):
         Args:
             timeout: Request timeout in seconds (default: 30.0)
         """
+        super().__init__(compare_before_save=False)
         self.timeout = timeout
 
     def _build_url(self, who: str, what: str, object_id: str) -> str:
@@ -174,10 +175,7 @@ class HTTPStorageProvider(StorageProvider):
         # Generate object_id from URL
         parsed_url = urlparse(url)
         if parsed_url.path:
-            object_id = (
-                f"http_{abs(hash(url))}"
-                f"_{generate_object_id()[:8]}"
-            )
+            object_id = f"http_{abs(hash(url))}_{generate_object_id()[:8]}"
         else:
             object_id = f"http_{generate_object_id()}"
 
