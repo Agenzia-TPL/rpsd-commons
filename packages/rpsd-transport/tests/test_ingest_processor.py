@@ -849,14 +849,14 @@ class TestTransformations:
 
         class AsyncTransformer:
             async def transform(
-                self, msg: TransportMessage, content: bytes
+                self, message: TransportMessage, content: bytes
             ) -> TransportMessage:
-                return msg.model_copy(
+                return message.model_copy(
                     update={
-                        "metadata": msg.metadata.model_copy(
+                        "metadata": message.metadata.model_copy(
                             update={
                                 "custom_metadata": {
-                                    **msg.metadata.custom_metadata,
+                                    **message.metadata.custom_metadata,
                                     "async": "true",
                                 }
                             }
