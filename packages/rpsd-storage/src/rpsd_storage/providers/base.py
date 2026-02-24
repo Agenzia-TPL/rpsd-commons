@@ -57,6 +57,7 @@ class StorageProvider(ABC):
         content_type="application/xml",
         source_url=None,
         custom_metadata=None,
+        compare_before_save: bool | None = None,
     ) -> tuple[str, StorageMetadata]:
         """
         Saves content to the storage provider.
@@ -69,6 +70,10 @@ class StorageProvider(ABC):
             who: Required identifier for the entity saving the content
             what: Required identifier for the content type/category
             custom_metadata: Optional additional metadata
+            compare_before_save: Per-call override for deduplication. When True,
+                skip the write if an identical or newer version already exists.
+                When False, always write. When None (default), falls back to
+                the instance-level compare_before_save setting.
 
         Returns:
             tuple: A tuple containing:

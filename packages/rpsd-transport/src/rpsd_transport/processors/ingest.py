@@ -314,7 +314,11 @@ class IngestProcessor:
         except Exception as e:
             raise TransformError(f"Message transformation failed: {e}") from e
 
-    def process(self, message: TransportMessage) -> IngestResult:
+    def process(
+        self,
+        message: TransportMessage,
+        compare_before_save: bool | None = None,
+    ) -> IngestResult:
         """Process a received message (sync version).
 
         Uses httpx.Client for heavy content resolution.
@@ -330,6 +334,9 @@ class IngestProcessor:
 
         Args:
             message: Parsed TransportMessage from any carrier.
+            compare_before_save: Per-call override for deduplication passed
+                to storage.save(). None means use the storage provider's
+                instance-level setting.
 
         Returns:
             IngestResult with outcomes of each pipeline step.
@@ -356,7 +363,7 @@ class IngestProcessor:
         deduplicated = False
         if self.storage is not None:
             storage_url, storage_metadata = self._save_to_storage(
-                message_for_save, content
+                message_for_save, content, compare_before_save
             )
             deduplicated = storage_metadata.deduplicated
 
@@ -384,7 +391,11 @@ class IngestProcessor:
             forwarded=forwarded,
         )
 
-    async def process_async(self, message: TransportMessage) -> IngestResult:
+    async def process_async(
+        self,
+        message: TransportMessage,
+        compare_before_save: bool | None = None,
+    ) -> IngestResult:
         """Process a received message (async version).
 
         Uses httpx.AsyncClient for heavy content resolution.
@@ -401,6 +412,9 @@ class IngestProcessor:
 
         Args:
             message: Parsed TransportMessage from any carrier.
+            compare_before_save: Per-call override for deduplication passed
+                to storage.save(). None means use the storage provider's
+                instance-level setting.
 
         Returns:
             IngestResult with outcomes of each pipeline step.
@@ -427,7 +441,7 @@ class IngestProcessor:
         deduplicated = False
         if self.storage is not None:
             storage_url, storage_metadata = self._save_to_storage(
-                message_for_save, content
+                message_for_save, content, compare_before_save
             )
             deduplicated = storage_metadata.deduplicated
 
@@ -521,12 +535,15 @@ class IngestProcessor:
         self,
         message: TransportMessage,
         content: bytes,
+        compare_before_save: bool | None = None,
     ) -> tuple[str, StorageMetadata]:
         """Save resolved content to storage provider.
 
         Args:
             message: Original TransportMessage (for metadata).
             content: Resolved content bytes to save.
+            compare_before_save: Per-call override for deduplication.
+                None means use the storage provider's instance-level setting.
 
         Returns:
             Tuple of (storage_url, storage_metadata).
@@ -549,6 +566,7 @@ class IngestProcessor:
                 content_type=message.metadata.content_type,
                 source_url=(message.where if message.is_fatheavy else None),
                 custom_metadata=message.metadata.custom_metadata,
+                compare_before_save=compare_before_save,
             )
             logger.info("Content saved successfully: %s", url)
             return url, metadata

@@ -94,6 +94,7 @@ class S3StorageProvider(StorageProvider):
         content_type="application/xml",
         source_url=None,
         custom_metadata=None,
+        compare_before_save: bool | None = None,
     ) -> tuple[str, StorageMetadata]:
         """
         Saves content to S3
@@ -139,7 +140,12 @@ class S3StorageProvider(StorageProvider):
         )
 
         # Compare-before-save: skip write if not a newer update
-        if self.compare_before_save:
+        _cbs = (
+            compare_before_save
+            if compare_before_save is not None
+            else self.compare_before_save
+        )
+        if _cbs:
             existing = self._find_latest_metadata(who, what)
             if existing is not None:
                 if StorageMetadata.compare(existing, metadata) != 1:

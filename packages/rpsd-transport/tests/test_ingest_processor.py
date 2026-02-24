@@ -173,6 +173,7 @@ class TestProcessSync:
             content_type="application/json",
             source_url=None,
             custom_metadata={},
+            compare_before_save=None,
         )
 
     @respx.mock
@@ -202,6 +203,7 @@ class TestProcessSync:
             content_type="application/xml",
             source_url="https://storage.example.com/files/abc123",
             custom_metadata={},
+            compare_before_save=None,
         )
 
     def test_slim_message_forward_no_storage(self, slim_message, mock_forward_carrier):

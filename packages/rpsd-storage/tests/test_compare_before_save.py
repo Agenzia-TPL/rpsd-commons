@@ -19,8 +19,8 @@ from rpsd_storage import (
     StorageSettings,
     get_storage_provider,
 )
-from rpsd_storage.settings import FSSettings, S3Settings
 from rpsd_storage.metadata import StorageMetadata
+from rpsd_storage.settings import FSSettings, S3Settings
 
 # -- Fixtures -------------------------------------------------------
 
@@ -463,3 +463,166 @@ class TestFactoryPassesSetting:
         provider = get_storage_provider(settings)
         assert isinstance(provider, S3StorageProvider)
         assert provider.compare_before_save is True
+
+
+# -- Per-call override tests -----------------------------------------
+
+
+@pytest.mark.file
+class TestFSPerCallOverride:
+    """Test that compare_before_save can be overridden per save() call."""
+
+    def test_instance_false_call_true_deduplicates(self, fs_storage_provider):
+        """Instance has compare_before_save=False, but passing True per call
+        enables deduplication for that call."""
+        content = SampleContent.SIMPLE_TEXT
+
+        url1, meta1 = fs_storage_provider.save(
+            content,
+            "test.txt",
+            "user1",
+            "doc",
+            content_type="text/plain",
+            compare_before_save=True,
+        )
+        assert not meta1.deduplicated
+
+        url2, meta2 = fs_storage_provider.save(
+            content,
+            "test.txt",
+            "user1",
+            "doc",
+            content_type="text/plain",
+            compare_before_save=True,
+        )
+        assert meta2.deduplicated
+        assert url2 == url1
+
+    def test_instance_true_call_false_skips_dedup(self, fs_dedup):
+        """Instance has compare_before_save=True, but passing False per call
+        disables deduplication for that call."""
+        content = SampleContent.SIMPLE_TEXT
+
+        url1, meta1 = fs_dedup.save(
+            content,
+            "test.txt",
+            "user1",
+            "doc",
+            content_type="text/plain",
+            compare_before_save=False,
+        )
+        assert not meta1.deduplicated
+
+        url2, meta2 = fs_dedup.save(
+            content,
+            "test.txt",
+            "user1",
+            "doc",
+            content_type="text/plain",
+            compare_before_save=False,
+        )
+        assert not meta2.deduplicated
+        assert url2 != url1
+
+    def test_call_none_uses_instance_setting(self, fs_dedup):
+        """Passing compare_before_save=None falls back to instance setting."""
+        content = SampleContent.SIMPLE_TEXT
+
+        url1, _ = fs_dedup.save(
+            content,
+            "test.txt",
+            "user1",
+            "doc",
+            content_type="text/plain",
+            compare_before_save=None,
+        )
+        _, meta2 = fs_dedup.save(
+            content,
+            "test.txt",
+            "user1",
+            "doc",
+            content_type="text/plain",
+            compare_before_save=None,
+        )
+        # Instance has compare_before_save=True, so second save deduplicates
+        assert meta2.deduplicated
+
+
+@pytest.mark.s3
+class TestS3PerCallOverride:
+    """Test that compare_before_save can be overridden per save() call."""
+
+    def test_instance_false_call_true_deduplicates(self, s3_storage_provider):
+        """Instance has compare_before_save=False, but passing True per call
+        enables deduplication for that call."""
+        content = SampleContent.SIMPLE_TEXT
+
+        url1, meta1 = s3_storage_provider.save(
+            content,
+            "test.txt",
+            "user1",
+            "doc",
+            content_type="text/plain",
+            compare_before_save=True,
+        )
+        assert not meta1.deduplicated
+
+        url2, meta2 = s3_storage_provider.save(
+            content,
+            "test.txt",
+            "user1",
+            "doc",
+            content_type="text/plain",
+            compare_before_save=True,
+        )
+        assert meta2.deduplicated
+        assert url2 == url1
+
+    def test_instance_true_call_false_skips_dedup(self, s3_dedup):
+        """Instance has compare_before_save=True, but passing False per call
+        disables deduplication for that call."""
+        content = SampleContent.SIMPLE_TEXT
+
+        url1, meta1 = s3_dedup.save(
+            content,
+            "test.txt",
+            "user1",
+            "doc",
+            content_type="text/plain",
+            compare_before_save=False,
+        )
+        assert not meta1.deduplicated
+
+        url2, meta2 = s3_dedup.save(
+            content,
+            "test.txt",
+            "user1",
+            "doc",
+            content_type="text/plain",
+            compare_before_save=False,
+        )
+        assert not meta2.deduplicated
+        assert url2 != url1
+
+    def test_call_none_uses_instance_setting(self, s3_dedup):
+        """Passing compare_before_save=None falls back to instance setting."""
+        content = SampleContent.SIMPLE_TEXT
+
+        url1, _ = s3_dedup.save(
+            content,
+            "test.txt",
+            "user1",
+            "doc",
+            content_type="text/plain",
+            compare_before_save=None,
+        )
+        _, meta2 = s3_dedup.save(
+            content,
+            "test.txt",
+            "user1",
+            "doc",
+            content_type="text/plain",
+            compare_before_save=None,
+        )
+        # Instance has compare_before_save=True, so second save deduplicates
+        assert meta2.deduplicated
