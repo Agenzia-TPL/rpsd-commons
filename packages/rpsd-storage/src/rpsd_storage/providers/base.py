@@ -353,69 +353,6 @@ class StorageProvider(ABC):
         return StorageMetadata.compare(current_metadata, candidate_metadata)
 
     @staticmethod
-    def load_from_parts(
-        who: str, what: str, object_id: str
-    ) -> tuple[bytes, StorageMetadata]:
-        """
-        Static convenience method to load content using separate parameters.
-        Note: This requires a configured default provider since we can't determine
-        the provider type from the parameters alone.
-
-        Args:
-            who: The "who" value
-            what: The "what" value
-            object_id: The object ID (UUID)
-
-        Returns:
-            tuple: A tuple containing:
-                - content (bytes): The file content
-                - metadata (StorageMetadata): The metadata associated with the file
-        """
-        from rpsd_storage import storage_provider
-
-        return storage_provider.load_by_parts(who, what, object_id)
-
-    @staticmethod
-    def load_content_from_parts(who: str, what: str, object_id: str) -> bytes:
-        """
-        Static convenience method to load only content using separate parameters.
-        Note: This requires a configured default provider since we can't determine
-        the provider type from the parameters alone.
-
-        Args:
-            who: The "who" value
-            what: The "what" value
-            object_id: The object ID (UUID)
-
-        Returns:
-            bytes: The file content
-        """
-        from rpsd_storage import storage_provider
-
-        return storage_provider.load_content_by_parts(who, what, object_id)
-
-    @staticmethod
-    def load_metadata_from_parts(
-        who: str, what: str, object_id: str
-    ) -> StorageMetadata:
-        """
-        Static convenience method to load only metadata using separate parameters.
-        Note: This requires a configured default provider since we can't determine
-        the provider type from the parameters alone.
-
-        Args:
-            who: The "who" value
-            what: The "what" value
-            object_id: The object ID (UUID)
-
-        Returns:
-            StorageMetadata: The metadata associated with the file
-        """
-        from rpsd_storage import storage_provider
-
-        return storage_provider.load_metadata_by_parts(who, what, object_id)
-
-    @staticmethod
     def delete_from_url(url: str) -> None:
         """
         Static method to delete object using URL, automatically selecting the provider.

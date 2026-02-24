@@ -46,10 +46,5 @@ def get_storage_provider(settings: StorageSettings | None = None):
         raise ValueError(f"Unknown storage provider: {settings.provider}")
 
 
-# Module-level singleton for backward compatibility
-# Applications should use get_storage_provider() with explicit settings instead
-storage_provider = get_storage_provider()
-
 # Export static methods for convenience
 load_from_url = StorageProvider.load_from_url
-load_from_parts = StorageProvider.load_from_parts
