@@ -3,6 +3,42 @@
 Storage utilities for the rpsd-commons workspace. Provides pluggable storage
 providers for S3, local filesystem, and HTTP.
 
+## Configuration
+
+Storage is configured through `StorageSettings`, which reads environment variables
+prefixed with `STORAGE__` (double-underscore as delimiter).
+
+| Variable | Default | Description |
+|---|---|---|
+| `STORAGE__PROVIDER` | `fs` | Active provider: `s3`, `fs`, or `http` |
+| `STORAGE__COMPARE_BEFORE_SAVE` | `false` | Skip save when content is unchanged |
+| `STORAGE__S3__BUCKET_NAME` | — | S3 bucket (required when provider is `s3`) |
+| `STORAGE__S3__AWS_ACCESS_KEY_ID` | — | AWS key ID (optional; falls back to boto3 chain) |
+| `STORAGE__S3__AWS_SECRET_ACCESS_KEY` | — | AWS secret (optional) |
+| `STORAGE__S3__AWS_SESSION_TOKEN` | — | AWS session token (optional, for temporary creds) |
+| `STORAGE__S3__REGION_NAME` | — | AWS region (optional) |
+| `STORAGE__S3__ENDPOINT_URL` | — | Custom endpoint for LocalStack/MinIO (optional) |
+| `STORAGE__FS__BASE_PATH` | `/tmp/ingested` | Root directory for filesystem provider |
+| `STORAGE__HTTP__TIMEOUT` | `30.0` | Request timeout in seconds for HTTP provider |
+
+Copy `.env.example` to `.env` and fill in the values you need.
+
+`StorageSettings` reads only actual environment variables — it does **not** auto-load any
+`.env` file. Load the file explicitly if needed:
+
+```python
+from rpsd_storage.settings import StorageSettings
+
+# standalone use with a .env file
+settings = StorageSettings(_env_file=".env")
+
+# or just rely on environment variables already in the shell
+settings = StorageSettings()
+```
+
+When `StorageSettings` is embedded inside a parent settings class (e.g. `AppSettings`),
+the parent is responsible for loading the `.env` file and passing down the nested values.
+
 ## Running tests
 
 ### Mocked tests (default)
@@ -24,12 +60,12 @@ normal CI.
 The target bucket must already exist. Test objects are cleaned up on teardown;
 the bucket itself is never created or deleted.
 
-**Against real AWS** — set `BUCKET_NAME` and any credentials you want to use
-explicitly. Do **not** set `STORAGE__S3__ENDPOINT_URL`; boto3 will connect to
+**Against real AWS** — copy `.env.example` to `packages/rpsd-storage/.env` and fill
+in your values. Do **not** set `STORAGE__S3__ENDPOINT_URL`; boto3 will connect to
 the real AWS endpoint automatically.
 
 ```
-# .env
+# packages/rpsd-storage/.env
 STORAGE__S3__BUCKET_NAME=my-existing-bucket
 STORAGE__S3__AWS_ACCESS_KEY_ID=AKIA...
 STORAGE__S3__AWS_SECRET_ACCESS_KEY=...

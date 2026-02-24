@@ -46,8 +46,6 @@ class StorageSettings(BaseSettings):
     model_config = SettingsConfigDict(
         env_prefix="STORAGE__",
         env_nested_delimiter="__",
-        env_file=".env",
-        env_file_encoding="utf-8",
     )
 
     provider: Literal["s3", "fs", "http"] = "fs"

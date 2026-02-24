@@ -108,19 +108,18 @@ def pytest_configure(config):
 @pytest.fixture(scope="session")
 def s3_live_settings():
     """
-    Load S3Settings from the environment (reads .env automatically via
-    pydantic-settings). Skips if STORAGE__S3__BUCKET_NAME is not set,
-    so normal CI runs are completely unaffected.
+    Load S3Settings from the environment. Skips if STORAGE__S3__BUCKET_NAME
+    is not set, so normal CI runs are completely unaffected.
 
+    Reads packages/rpsd-storage/.env (STORAGE__* vars only) if it exists.
     For real AWS: set STORAGE__S3__BUCKET_NAME; credentials come from the
     standard AWS chain (IAM role, ~/.aws/credentials, etc.).
     For LocalStack/MinIO: also set STORAGE__S3__ENDPOINT_URL and credentials.
     """
     from rpsd_storage.settings import StorageSettings
 
-    # Use StorageSettings() so pydantic-settings loads the .env file before
-    # the check — os.environ.get() alone would miss variables set only in .env.
-    s3 = StorageSettings().s3
+    env_file = Path(__file__).parent.parent / ".env"
+    s3 = StorageSettings(_env_file=env_file if env_file.exists() else None).s3
     if not s3.bucket_name:
         pytest.skip(
             "Live S3 tests skipped: set STORAGE__S3__BUCKET_NAME to enable",
