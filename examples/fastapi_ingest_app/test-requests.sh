@@ -21,6 +21,11 @@ echo ""
 echo "Base URL: $BASE_URL"
 echo "API Key: $API_KEY"
 echo ""
+echo "Deduplication is resolved server-side from the 'what' field:"
+echo "  daily-report, config-snapshot, test-report → compare_before_save=True"
+echo "  audit-log, transaction-record             → compare_before_save=False"
+echo "  anything else                              → None (instance default)"
+echo ""
 
 # Colors for output
 GREEN='\033[0;32m'
@@ -44,26 +49,88 @@ run_test() {
 run_test "Health Check" \
     -X GET "$BASE_URL/health"
 
-# Test 2: Outline format with headers
-run_test "Outline Format - Headers (JSON content)" \
+# Test 2: Deduplication enabled — what=daily-report → compare_before_save=True
+# Send twice with identical content; second call should be deduplicated.
+REPORT_B64=$(echo -n '{"period": "2024-01-01", "value": 42}' | base64)
+run_test "Dedup ON — first daily-report (what=daily-report → True)" \
     -X POST "$BASE_URL/ingest" \
     -H "Authorization: Bearer $API_KEY" \
-    -H "X-RPSD-WHO: alice" \
-    -H "X-RPSD-WHAT: test-data" \
     -H "Content-Type: application/json" \
-    -d '{"example": "data", "timestamp": "2024-01-01T00:00:00Z"}'
+    -d "{
+        \"metadata\": {
+            \"who\": \"alice\",
+            \"what\": \"daily-report\",
+            \"content_type\": \"application/json\",
+            \"filename\": \"report.json\"
+        },
+        \"content\": \"$REPORT_B64\"
+    }"
 
-# Test 3: Outline format with query parameters
-run_test "Outline Format - Query Params (plain text)" \
+run_test "Dedup ON — identical daily-report re-sent (expect deduplicated=true)" \
+    -X POST "$BASE_URL/ingest" \
+    -H "Authorization: Bearer $API_KEY" \
+    -H "Content-Type: application/json" \
+    -d "{
+        \"metadata\": {
+            \"who\": \"alice\",
+            \"what\": \"daily-report\",
+            \"content_type\": \"application/json\",
+            \"filename\": \"report.json\"
+        },
+        \"content\": \"$REPORT_B64\"
+    }"
+
+# Test 3: Deduplication disabled — what=audit-log → compare_before_save=False
+# Send twice with identical content; both calls must always be written.
+AUDIT_B64=$(echo -n 'user=alice action=login result=ok' | base64)
+run_test "Dedup OFF — first audit-log (what=audit-log → False)" \
+    -X POST "$BASE_URL/ingest" \
+    -H "Authorization: Bearer $API_KEY" \
+    -H "Content-Type: application/json" \
+    -d "{
+        \"metadata\": {
+            \"who\": \"alice\",
+            \"what\": \"audit-log\",
+            \"content_type\": \"text/plain\",
+            \"filename\": \"audit.txt\"
+        },
+        \"content\": \"$AUDIT_B64\"
+    }"
+
+run_test "Dedup OFF — identical audit-log re-sent (expect deduplicated=false)" \
+    -X POST "$BASE_URL/ingest" \
+    -H "Authorization: Bearer $API_KEY" \
+    -H "Content-Type: application/json" \
+    -d "{
+        \"metadata\": {
+            \"who\": \"alice\",
+            \"what\": \"audit-log\",
+            \"content_type\": \"text/plain\",
+            \"filename\": \"audit.txt\"
+        },
+        \"content\": \"$AUDIT_B64\"
+    }"
+
+# Test 4: Instance default — what=sensor-reading → compare_before_save=None
+# Dedup behaviour falls back to APP__STORAGE__COMPARE_BEFORE_SAVE in .env.
+run_test "Instance default — outline format (what=sensor-reading → None)" \
+    -X POST "$BASE_URL/ingest" \
+    -H "Authorization: Bearer $API_KEY" \
+    -H "X-RPSD-WHO: bob" \
+    -H "X-RPSD-WHAT: sensor-reading" \
+    -H "Content-Type: application/json" \
+    -d '{"sensor": "temp-01", "value": 21.5}'
+
+# Test 5: Outline format with query parameters (what=text-data → None)
+run_test "Instance default — query params (what=text-data → None)" \
     -X POST "$BASE_URL/ingest?who=bob&what=text-data" \
     -H "Authorization: Bearer $API_KEY" \
     -H "Content-Type: text/plain" \
     -d "This is plain text content for testing"
 
-# Test 4: Inline format with JSON
-# Note: Content must be base64-encoded
+# Test 6: Inline format with JSON (what=inline-test → None)
 CONTENT_B64=$(echo -n '{"nested": "json", "value": 42}' | base64)
-run_test "Inline Format - JSON with embedded metadata" \
+run_test "Instance default — inline format (what=inline-test → None)" \
     -X POST "$BASE_URL/ingest" \
     -H "Authorization: Bearer $API_KEY" \
     -H "Content-Type: application/json" \
@@ -77,8 +144,8 @@ run_test "Inline Format - JSON with embedded metadata" \
         \"content\": \"$CONTENT_B64\"
     }"
 
-# Test 5: Legacy headers (backward compatibility)
-run_test "Legacy Format - X-RAPS-INGEST headers" \
+# Test 7: Legacy headers (backward compatibility) — what=legacy-data → None
+run_test "Legacy Format - X-RAPS-INGEST headers (what=legacy-data → None)" \
     -X POST "$BASE_URL/ingest" \
     -H "Authorization: Bearer $API_KEY" \
     -H "X-RAPS-INGEST_WHO: legacy-user" \
@@ -86,8 +153,8 @@ run_test "Legacy Format - X-RAPS-INGEST headers" \
     -H "Content-Type: application/xml" \
     -d '<?xml version="1.0"?><test>Legacy XML</test>'
 
-# Test 6: Token authentication instead of Bearer
-run_test "Token Authentication" \
+# Test 8: Token authentication — what=token-test → None
+run_test "Token Authentication (what=token-test → None)" \
     -X POST "$BASE_URL/ingest" \
     -H "Authorization: Token $API_KEY" \
     -H "X-RPSD-WHO: alice" \
@@ -95,18 +162,41 @@ run_test "Token Authentication" \
     -H "Content-Type: text/plain" \
     -d "Testing Token auth"
 
-# Test 7: X-API-Key header authentication
-run_test "X-API-Key Authentication" \
+# Test 9: config-snapshot → compare_before_save=True (another dedup category)
+SNAP_B64=$(echo -n '{"version": "1.2.3", "feature_flags": {"x": true}}' | base64)
+run_test "Dedup ON — config-snapshot (what=config-snapshot → True)" \
     -X POST "$BASE_URL/ingest" \
-    -H "X-API-Key: $API_KEY" \
-    -H "X-RPSD-WHO: alice" \
-    -H "X-RPSD-WHAT: apikey-test" \
-    -H "Content-Type: text/plain" \
-    -d "Testing X-API-Key auth"
+    -H "Authorization: Bearer $API_KEY" \
+    -H "Content-Type: application/json" \
+    -d "{
+        \"metadata\": {
+            \"who\": \"system\",
+            \"what\": \"config-snapshot\",
+            \"content_type\": \"application/json\",
+            \"filename\": \"config.json\"
+        },
+        \"content\": \"$SNAP_B64\"
+    }"
 
-# Test 8: Binary content (base64 in inline format)
+# Test 10: transaction-record → compare_before_save=False (always write)
+TXN_B64=$(echo -n 'txn-id=abc123 amount=99.95 status=ok' | base64)
+run_test "Dedup OFF — transaction-record (what=transaction-record → False)" \
+    -X POST "$BASE_URL/ingest" \
+    -H "Authorization: Bearer $API_KEY" \
+    -H "Content-Type: application/json" \
+    -d "{
+        \"metadata\": {
+            \"who\": \"payments\",
+            \"what\": \"transaction-record\",
+            \"content_type\": \"text/plain\",
+            \"filename\": \"txn.txt\"
+        },
+        \"content\": \"$TXN_B64\"
+    }"
+
+# Test 11: Binary content (base64 in inline format) — what=binary-test → None
 BINARY_B64=$(echo -n "Binary content with special chars: \x00\x01\x02" | base64)
-run_test "Inline Format - Binary content" \
+run_test "Instance default — binary content (what=binary-test → None)" \
     -X POST "$BASE_URL/ingest" \
     -H "Authorization: Bearer $API_KEY" \
     -H "Content-Type: application/json" \
@@ -222,10 +312,12 @@ echo "All tests completed!"
 echo "======================================"
 echo ""
 echo "Check storage directory for saved files:"
-echo "  ls -la /tmp/rpsd-storage/alice/"
+echo "  ls -la /tmp/rpsd-storage/alice/daily-report/   # 1 file (dedup)"
+echo "  ls -la /tmp/rpsd-storage/alice/audit-log/      # 2 files (force-save)"
+echo "  ls -la /tmp/rpsd-storage/alice/config-snapshot/ # 1 file (dedup)"
+echo "  ls -la /tmp/rpsd-storage/payments/transaction-record/ # 1 file (force-save)"
 echo "  ls -la /tmp/rpsd-storage/bob/"
 echo "  ls -la /tmp/rpsd-storage/charlie/"
-echo "  ls -la /tmp/rpsd-storage/forward-test/"
 echo ""
 echo "Check Kafka for forwarded messages:"
 echo "  Kafka UI: http://localhost:8080"

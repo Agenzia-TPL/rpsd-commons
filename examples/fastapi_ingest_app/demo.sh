@@ -41,6 +41,8 @@ echo "  4. Prefect Flow invocation (if Prefect server is available)"
 echo ""
 echo "Test scenarios:"
 echo "  • Slimfast messages (inline content)"
+echo "  • Deduplication (what=daily-report → compare_before_save=True)"
+echo "  • Force-save audit log (what=audit-log → compare_before_save=False)"
 echo "  • Fatheavy messages with file:// URLs"
 echo "  • Fatheavy messages with http:// URLs"
 echo "  • Fatheavy messages with https:// URLs"
@@ -277,18 +279,18 @@ check_result() {
 echo -e "${YELLOW}Step 5: Sending test requests...${NC}"
 echo ""
 
-# Test 1: Slimfast message (content inline)
-echo -e "${BLUE}Test 1: Slimfast message (content inline)${NC}"
-echo -e "  Testing: Inline content in JSON payload"
+# Test 1: Slimfast message — what=daily-report → compare_before_save=True
+echo -e "${BLUE}Test 1: Slimfast message (what=daily-report → dedup enabled)${NC}"
+echo -e "  Testing: Inline content; server maps 'daily-report' to compare_before_save=True"
 RESPONSE=$(curl -s -X POST "http://localhost:8000/ingest" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer ${APP__TRANSPORT__API_KEY:-demo-key-12345}" \
   -d '{
     "metadata": {
       "who": "demo-user",
-      "what": "test-report",
+      "what": "daily-report",
       "content_type": "text/plain",
-      "filename": "test.txt"
+      "filename": "report.txt"
     },
     "content": "SGVsbG8sIEthZmthIVRoaXMgaXMgYSB0ZXN0IG1lc3NhZ2Uu"
   }')
@@ -300,18 +302,18 @@ echo ""
 
 sleep 2
 
-# Test 2: Deduplication - re-send identical slimfast message
-echo -e "${BLUE}Test 2: Deduplication (re-send identical content)${NC}"
-echo -e "  Testing: Same who/what/content as Test 1 — should be deduplicated"
+# Test 2: Deduplication — re-send identical daily-report, expect dedup
+echo -e "${BLUE}Test 2: Deduplication (re-send identical daily-report)${NC}"
+echo -e "  Testing: Same who/what/content as Test 1 — server enforces dedup (True)"
 RESPONSE=$(curl -s -X POST "http://localhost:8000/ingest" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer ${APP__TRANSPORT__API_KEY:-demo-key-12345}" \
   -d '{
     "metadata": {
       "who": "demo-user",
-      "what": "test-report",
+      "what": "daily-report",
       "content_type": "text/plain",
-      "filename": "test.txt"
+      "filename": "report.txt"
     },
     "content": "SGVsbG8sIEthZmthIVRoaXMgaXMgYSB0ZXN0IG1lc3NhZ2Uu"
   }')
@@ -321,6 +323,31 @@ check_result "$RESPONSE"
 echo ""
 
 sleep 2
+
+# Test 2b: Audit log — what=audit-log → compare_before_save=False (always write)
+echo -e "${BLUE}Test 2b: Audit log — same content, always written (what=audit-log → dedup=False)${NC}"
+echo -e "  Testing: Server maps 'audit-log' to compare_before_save=False — no dedup ever"
+for i in 1 2; do
+  RESPONSE=$(curl -s -X POST "http://localhost:8000/ingest" \
+    -H "Content-Type: application/json" \
+    -H "Authorization: Bearer ${APP__TRANSPORT__API_KEY:-demo-key-12345}" \
+    -d '{
+      "metadata": {
+        "who": "demo-user",
+        "what": "audit-log",
+        "content_type": "text/plain",
+        "filename": "audit.txt"
+      },
+      "content": "SGVsbG8sIEthZmthIVRoaXMgaXMgYSB0ZXN0IG1lc3NhZ2Uu"
+    }')
+  echo "  Send $i:"
+  echo "$RESPONSE" | python3 -m json.tool
+  check_result "$RESPONSE"
+  sleep 1
+done
+echo ""
+
+sleep 1
 
 # Test 3: Fatheavy message with https:// URL
 echo -e "${BLUE}Test 3: Fatheavy message with https:// URL reference${NC}"
@@ -439,13 +466,14 @@ if [ "$PREFECT_AVAILABLE" = true ]; then
 fi
 
 echo -e "${BLUE}Summary of test scenarios:${NC}"
-echo "  ✓ Test 1: Slimfast message (inline content)"
-echo "  ✓ Test 2: Deduplication (re-send identical content)"
-echo "  ✓ Test 3: Fatheavy message with https:// URL"
-echo "  ✓ Test 4: Fatheavy message with file:// URL"
-echo "  ✓ Test 5: Fatheavy message with http:// URL"
-echo "  ✓ Test 6: Error handling - non-existent file:// URL"
-echo "  ✓ Test 7: Error handling - HTTP 404"
+echo "  ✓ Test 1:  Slimfast message (what=daily-report → compare_before_save=True)"
+echo "  ✓ Test 2:  Deduplication — identical daily-report skipped (True)"
+echo "  ✓ Test 2b: Audit log — identical content always written (what=audit-log → False)"
+echo "  ✓ Test 3:  Fatheavy with https:// URL (what=https-content → None/default)"
+echo "  ✓ Test 4:  Fatheavy with file:// URL  (what=file-reference → None/default)"
+echo "  ✓ Test 5:  Fatheavy with http:// URL  (what=http-content → None/default)"
+echo "  ✓ Test 6:  Error handling - non-existent file:// URL"
+echo "  ✓ Test 7:  Error handling - HTTP 404"
 if [ "$PREFECT_AVAILABLE" = true ]; then
     echo "  ✓ Prefect Flow invoked for each test (3-task pipeline)"
 fi
