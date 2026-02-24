@@ -547,7 +547,7 @@ class IngestProcessor:
         try:
             url, metadata = self.storage.save(
                 content=content,
-                filename=(message.metadata.filename or "data.bin"),
+                filename=message.metadata.filename,
                 who=message.who,
                 what=message.what,
                 content_type=message.metadata.content_type,
