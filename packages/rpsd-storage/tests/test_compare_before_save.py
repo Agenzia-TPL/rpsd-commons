@@ -19,6 +19,7 @@ from rpsd_storage import (
     StorageSettings,
     get_storage_provider,
 )
+from rpsd_storage.settings import FSSettings, S3Settings
 from rpsd_storage.metadata import StorageMetadata
 
 # -- Fixtures -------------------------------------------------------
@@ -442,7 +443,7 @@ class TestFactoryPassesSetting:
         """Factory passes compare_before_save to FS provider."""
         settings = StorageSettings(
             provider="fs",
-            fs={"base_path": str(temp_dir)},
+            fs=FSSettings(base_path=str(temp_dir)),
             compare_before_save=True,
         )
         provider = get_storage_provider(settings)
@@ -456,7 +457,7 @@ class TestFactoryPassesSetting:
         s3_client.create_bucket(Bucket="test-bucket")
         settings = StorageSettings(
             provider="s3",
-            s3={"bucket_name": "test-bucket"},
+            s3=S3Settings(bucket_name="test-bucket"),
             compare_before_save=True,
         )
         provider = get_storage_provider(settings)

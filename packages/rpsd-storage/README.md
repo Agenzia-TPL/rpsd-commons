@@ -24,15 +24,13 @@ prefixed with `STORAGE__` (double-underscore as delimiter).
 Copy `.env.example` to `.env` and fill in the values you need.
 
 `StorageSettings` reads only actual environment variables — it does **not** auto-load any
-`.env` file. Load the file explicitly if needed:
+`.env` file. Load the file via the parent settings class or set the variables in the shell
+before constructing `StorageSettings`:
 
 ```python
 from rpsd_storage.settings import StorageSettings
 
-# standalone use with a .env file
-settings = StorageSettings(_env_file=".env")
-
-# or just rely on environment variables already in the shell
+# rely on environment variables already in the shell
 settings = StorageSettings()
 ```
 
@@ -60,12 +58,12 @@ normal CI.
 The target bucket must already exist. Test objects are cleaned up on teardown;
 the bucket itself is never created or deleted.
 
-**Against real AWS** — copy `.env.example` to `packages/rpsd-storage/.env` and fill
-in your values. Do **not** set `STORAGE__S3__ENDPOINT_URL`; boto3 will connect to
-the real AWS endpoint automatically.
+**Against real AWS** — copy `tests/.env.example` to `packages/rpsd-storage/tests/.env`
+and fill in your values. Do **not** set `STORAGE__S3__ENDPOINT_URL`; boto3 will connect
+to the real AWS endpoint automatically.
 
 ```
-# packages/rpsd-storage/.env
+# packages/rpsd-storage/tests/.env
 STORAGE__S3__BUCKET_NAME=my-existing-bucket
 STORAGE__S3__AWS_ACCESS_KEY_ID=AKIA...
 STORAGE__S3__AWS_SECRET_ACCESS_KEY=...

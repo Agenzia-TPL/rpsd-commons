@@ -9,9 +9,28 @@ from pathlib import Path
 import boto3
 import pytest
 from moto import mock_aws
+from pydantic_settings import SettingsConfigDict
 from test_utils import TEST_SCENARIOS, create_test_file_data, create_test_metadata
 
 from rpsd_storage import FSStorageProvider, S3StorageProvider
+from rpsd_storage.settings import StorageSettings
+
+# ---------------------------------------------------------------------------
+# Live-test settings
+# ---------------------------------------------------------------------------
+# Absolute path so this class works regardless of pytest cwd.
+_TESTS_DIR = Path(__file__).parent
+
+
+class _StorageLiveSettings(StorageSettings):
+    """StorageSettings that reads tests/.env for live S3 tests."""
+
+    model_config = SettingsConfigDict(
+        env_prefix="STORAGE__",
+        env_nested_delimiter="__",
+        env_file=str(_TESTS_DIR / ".env"),
+        env_file_encoding="utf-8",
+    )
 
 
 @pytest.fixture
@@ -111,15 +130,12 @@ def s3_live_settings():
     Load S3Settings from the environment. Skips if STORAGE__S3__BUCKET_NAME
     is not set, so normal CI runs are completely unaffected.
 
-    Reads packages/rpsd-storage/.env (STORAGE__* vars only) if it exists.
+    Reads packages/rpsd-storage/tests/.env (STORAGE__* vars only) if present.
     For real AWS: set STORAGE__S3__BUCKET_NAME; credentials come from the
     standard AWS chain (IAM role, ~/.aws/credentials, etc.).
     For LocalStack/MinIO: also set STORAGE__S3__ENDPOINT_URL and credentials.
     """
-    from rpsd_storage.settings import StorageSettings
-
-    env_file = Path(__file__).parent.parent / ".env"
-    s3 = StorageSettings(_env_file=env_file if env_file.exists() else None).s3
+    s3 = _StorageLiveSettings().s3
     if not s3.bucket_name:
         pytest.skip(
             "Live S3 tests skipped: set STORAGE__S3__BUCKET_NAME to enable",
@@ -170,16 +186,14 @@ def s3_live_provider(s3_live_settings, s3_live_bucket):
 
 @pytest.fixture(autouse=True)
 def clean_environment():
-    """Clean environment variables before and after each test."""
-    original_env = {}
-    storage_env_vars = ["STORAGE_PROVIDER", "FS_BASE_PATH", "S3_BUCKET_NAME"]
-    for var in storage_env_vars:
-        if var in os.environ:
-            original_env[var] = os.environ[var]
-            del os.environ[var]
+    """Clean STORAGE__* environment variables before and after each test."""
+    prefix = "STORAGE__"
+    # Snapshot and remove all STORAGE__* vars before the test
+    saved = {k: v for k, v in os.environ.items() if k.startswith(prefix)}
+    for k in saved:
+        del os.environ[k]
     yield
-    for var in storage_env_vars:
-        if var in os.environ:
-            del os.environ[var]
-        if var in original_env:
-            os.environ[var] = original_env[var]
+    # Remove any STORAGE__* vars the test may have set, then restore originals
+    for k in [k for k in os.environ if k.startswith(prefix)]:
+        del os.environ[k]
+    os.environ.update(saved)
