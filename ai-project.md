@@ -116,6 +116,17 @@ Finding the latest object is cheap thanks to bit-flipped UUID7 object IDs (newes
 
 The `deduplicated` field on `StorageMetadata` uses `Field(exclude=True)` so it never leaks into `.meta` files or S3 headers. The setting is driven by `STORAGE__COMPARE_BEFORE_SAVE` env var and propagated through `get_storage_provider()`.
 
+## S3 provider configuration
+__DONE__
+
+**Problem:** `S3StorageProvider` constructed its boto3 client with no arguments, relying solely on the standard AWS credential chain. This made it impossible to supply credentials or a custom endpoint via `.env` files for testing against real S3 or S3-compatible services (LocalStack, MinIO).
+
+**Proposed solution:** Add five optional fields to `S3Settings`: `aws_access_key_id`, `aws_secret_access_key`, `aws_session_token`, `region_name`, `endpoint_url`. When any are set, they are forwarded to `boto3.client("s3")`; when all are `None` the behaviour is unchanged. `StorageSettings` is configured with `env_file=".env"` so values in a repo-root `.env` file are picked up automatically.
+
+A `live_s3` pytest marker and session-scoped fixtures (`s3_live_settings`, `s3_live_bucket`, `s3_live_provider`) enable running the compare-before-save suite against a real endpoint. Tests are skipped automatically unless `STORAGE__S3__BUCKET_NAME` is present in the environment or `.env`. The target bucket must already exist; test objects are cleaned up on teardown.
+
+**Expected outcome:** Developers can place S3 credentials in a git-ignored `.env` at the repo root and run `uv run pytest packages/rpsd-storage/ -m live_s3 -v` to verify behaviour on real infrastructure, without affecting normal CI.
+
 # rpsd-transport
 
 ## Overview

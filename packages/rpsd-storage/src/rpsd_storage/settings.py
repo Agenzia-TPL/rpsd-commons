@@ -43,7 +43,12 @@ class StorageSettings(BaseSettings):
     - STORAGE__HTTP__TIMEOUT=30.0
     """
 
-    model_config = SettingsConfigDict(env_prefix="STORAGE__", env_nested_delimiter="__")
+    model_config = SettingsConfigDict(
+        env_prefix="STORAGE__",
+        env_nested_delimiter="__",
+        env_file=".env",
+        env_file_encoding="utf-8",
+    )
 
     provider: Literal["s3", "fs", "http"] = "fs"
     compare_before_save: bool = False

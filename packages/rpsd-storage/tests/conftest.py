@@ -98,6 +98,75 @@ def pytest_configure(config):
     config.addinivalue_line("markers", "integration: integration tests")
     config.addinivalue_line("markers", "unit: unit tests")
     config.addinivalue_line("markers", "error_handling: tests for error conditions")
+    config.addinivalue_line(
+        "markers",
+        "live_s3: tests against a real S3-compatible endpoint "
+        "(requires STORAGE__S3__BUCKET_NAME)",
+    )
+
+
+@pytest.fixture(scope="session")
+def s3_live_settings():
+    """
+    Load S3Settings from the environment (reads .env automatically via
+    pydantic-settings). Skips if STORAGE__S3__BUCKET_NAME is not set,
+    so normal CI runs are completely unaffected.
+
+    For real AWS: set STORAGE__S3__BUCKET_NAME; credentials come from the
+    standard AWS chain (IAM role, ~/.aws/credentials, etc.).
+    For LocalStack/MinIO: also set STORAGE__S3__ENDPOINT_URL and credentials.
+    """
+    from rpsd_storage.settings import StorageSettings
+
+    # Use StorageSettings() so pydantic-settings loads the .env file before
+    # the check — os.environ.get() alone would miss variables set only in .env.
+    s3 = StorageSettings().s3
+    if not s3.bucket_name:
+        pytest.skip(
+            "Live S3 tests skipped: set STORAGE__S3__BUCKET_NAME to enable",
+            allow_module_level=True,
+        )
+    return s3
+
+
+@pytest.fixture(scope="session")
+def s3_live_bucket(s3_live_settings):
+    """
+    Use the configured bucket and clean up only the objects written during
+    this test session (those under the 'live_' prefixes used by the tests).
+
+    The bucket must already exist; this fixture does NOT create or delete it,
+    so it works against real AWS where you may not have CreateBucket permission.
+    """
+    bucket_name = s3_live_settings.bucket_name
+    client = boto3.client(
+        "s3",
+        endpoint_url=s3_live_settings.endpoint_url,
+        aws_access_key_id=s3_live_settings.aws_access_key_id,
+        aws_secret_access_key=s3_live_settings.aws_secret_access_key,
+        aws_session_token=s3_live_settings.aws_session_token,
+        region_name=s3_live_settings.region_name or "us-east-1",
+    )
+    yield bucket_name
+    # Clean up only objects written by these tests (all use a "live_*" who prefix)
+    for prefix in ("live_user/", "alice_live/", "bob_live/", "live_order/"):
+        response = client.list_objects_v2(Bucket=bucket_name, Prefix=prefix)
+        for obj in response.get("Contents", []):
+            client.delete_object(Bucket=bucket_name, Key=obj["Key"])
+
+
+@pytest.fixture
+def s3_live_provider(s3_live_settings, s3_live_bucket):
+    """S3StorageProvider pointed at the live endpoint, compare_before_save enabled."""
+    return S3StorageProvider(
+        bucket_name=s3_live_bucket,
+        compare_before_save=True,
+        aws_access_key_id=s3_live_settings.aws_access_key_id,
+        aws_secret_access_key=s3_live_settings.aws_secret_access_key,
+        aws_session_token=s3_live_settings.aws_session_token,
+        region_name=s3_live_settings.region_name,
+        endpoint_url=s3_live_settings.endpoint_url,
+    )
 
 
 @pytest.fixture(autouse=True)
