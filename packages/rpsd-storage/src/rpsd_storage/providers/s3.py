@@ -15,12 +15,33 @@ logger = logging.getLogger()
 
 
 class S3StorageProvider(StorageProvider):
-    def __init__(self, bucket_name, *, compare_before_save: bool = False):
+    def __init__(
+        self,
+        bucket_name,
+        *,
+        compare_before_save: bool = False,
+        aws_access_key_id: str | None = None,
+        aws_secret_access_key: str | None = None,
+        aws_session_token: str | None = None,
+        region_name: str | None = None,
+        endpoint_url: str | None = None,
+    ):
         super().__init__(compare_before_save=compare_before_save)
         if not bucket_name:
             raise Exception("S3 bucket not configured")
         self.bucket_name = bucket_name
-        self.s3_client = boto3.client("s3")
+        boto3_kwargs: dict[str, str] = {}
+        if aws_access_key_id is not None:
+            boto3_kwargs["aws_access_key_id"] = aws_access_key_id
+        if aws_secret_access_key is not None:
+            boto3_kwargs["aws_secret_access_key"] = aws_secret_access_key
+        if aws_session_token is not None:
+            boto3_kwargs["aws_session_token"] = aws_session_token
+        if region_name is not None:
+            boto3_kwargs["region_name"] = region_name
+        if endpoint_url is not None:
+            boto3_kwargs["endpoint_url"] = endpoint_url
+        self.s3_client = boto3.client("s3", **boto3_kwargs)
 
     def _build_url(self, who: str, what: str, object_id: str) -> str:
         """

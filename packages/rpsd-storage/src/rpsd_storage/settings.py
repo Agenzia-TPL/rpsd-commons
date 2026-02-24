@@ -8,6 +8,11 @@ class S3Settings(BaseModel):
     """S3 storage provider settings."""
 
     bucket_name: str | None = None
+    aws_access_key_id: str | None = None
+    aws_secret_access_key: str | None = None
+    aws_session_token: str | None = None
+    region_name: str | None = None
+    endpoint_url: str | None = None
 
 
 class FSSettings(BaseModel):
@@ -29,6 +34,11 @@ class StorageSettings(BaseSettings):
     Environment variables use double underscore delimiter:
     - STORAGE__PROVIDER=s3
     - STORAGE__S3__BUCKET_NAME=my-bucket
+    - STORAGE__S3__AWS_ACCESS_KEY_ID=... (optional, for testing)
+    - STORAGE__S3__AWS_SECRET_ACCESS_KEY=... (optional, for testing)
+    - STORAGE__S3__AWS_SESSION_TOKEN=... (optional, for testing)
+    - STORAGE__S3__REGION_NAME=us-east-1 (optional)
+    - STORAGE__S3__ENDPOINT_URL=http://localhost:4566 (optional, for LocalStack/MinIO)
     - STORAGE__FS__BASE_PATH=/tmp/storage
     - STORAGE__HTTP__TIMEOUT=30.0
     """

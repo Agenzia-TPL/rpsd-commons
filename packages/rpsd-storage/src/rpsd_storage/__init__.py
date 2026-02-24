@@ -29,6 +29,11 @@ def get_storage_provider(settings: StorageSettings | None = None):
         return S3StorageProvider(
             settings.s3.bucket_name,
             compare_before_save=cbs,
+            aws_access_key_id=settings.s3.aws_access_key_id,
+            aws_secret_access_key=settings.s3.aws_secret_access_key,
+            aws_session_token=settings.s3.aws_session_token,
+            region_name=settings.s3.region_name,
+            endpoint_url=settings.s3.endpoint_url,
         )
     elif settings.provider == "fs":
         return FSStorageProvider(
