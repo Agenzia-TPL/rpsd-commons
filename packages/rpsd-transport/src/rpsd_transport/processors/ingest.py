@@ -87,8 +87,8 @@ class IngestProcessor:
     2. Reconcile metadata (update content_type, filename from fetch)
     3. Apply pre_save_transform (if configured)
     4. Optionally save to a StorageProvider
-    5. Apply pre_forward_transform (if configured)
-    6. Optionally forward to a second BaseCarrier
+    5. Apply pre_forward_transform and forward to a second BaseCarrier
+       (if configured and not deduplicated)
 
     All steps are optional except content resolution and metadata
     reconciliation, which always run. For fat/heavy messages, the
@@ -325,8 +325,8 @@ class IngestProcessor:
         2. Reconcile metadata from fetched content
         3. Apply pre_save_transform (if configured)
         4. Save to storage (if configured) - uses transformed message
-        5. Apply pre_forward_transform (if configured)
-        6. Forward (if configured) - uses transformed message
+        5. Apply pre_forward_transform and forward (if configured and
+           not deduplicated)
 
         Args:
             message: Parsed TransportMessage from any carrier.
@@ -360,14 +360,12 @@ class IngestProcessor:
             )
             deduplicated = storage_metadata.deduplicated
 
-        # 5. Apply pre_forward_transform
-        message_for_forward = self._apply_transform(
-            message_for_save, content, self.pre_forward_transform
-        )
-
-        # 6. Optionally forward (skip if deduplicated)
+        # 5+6. Optionally forward (skip if deduplicated)
         forwarded = False
         if self.forward_carrier is not None and not deduplicated:
+            message_for_forward = self._apply_transform(
+                message_for_save, content, self.pre_forward_transform
+            )
             forwarded = self._forward_message(message_for_forward, content, storage_url)
         elif deduplicated:
             logger.info(
@@ -398,8 +396,8 @@ class IngestProcessor:
         2. Reconcile metadata from fetched content
         3. Apply pre_save_transform (if configured)
         4. Save to storage (if configured) - uses transformed message
-        5. Apply pre_forward_transform (if configured)
-        6. Forward (if configured) - uses transformed message
+        5. Apply pre_forward_transform and forward (if configured and
+           not deduplicated)
 
         Args:
             message: Parsed TransportMessage from any carrier.
@@ -433,14 +431,12 @@ class IngestProcessor:
             )
             deduplicated = storage_metadata.deduplicated
 
-        # 5. Apply pre_forward_transform
-        message_for_forward = await self._apply_transform_async(
-            message_for_save, content, self.pre_forward_transform
-        )
-
-        # 6. Optionally forward (skip if deduplicated)
+        # 5+6. Optionally forward (skip if deduplicated)
         forwarded = False
         if self.forward_carrier is not None and not deduplicated:
+            message_for_forward = await self._apply_transform_async(
+                message_for_save, content, self.pre_forward_transform
+            )
             forwarded = await self._forward_message_async(
                 message_for_forward, content, storage_url
             )
