@@ -5,7 +5,9 @@ Provides UUID7-based object ID generation with bit-flipping for
 reverse chronological sorting in ascending lexicographic order.
 """
 
-from edwh_uuid7 import uuid7
+import secrets
+import time
+from uuid import UUID
 
 
 def flip_uuid(uuid_str: str) -> str:
@@ -46,13 +48,27 @@ def generate_object_id() -> str:
     """
     Generate a flipped UUID7 object ID.
 
-    Uses UUID7 for time-ordered generation, then XOR-flips the
-    bits so that newer IDs sort first in ascending lexicographic
-    order. This is important for S3 listing, which only supports
+    Uses UUID7 similar to PostgreSQL for time-ordered generation,
+    then XOR-flips the bits so that newer IDs
+    sort first in ascending lexicographic order.
+    This is important for S3 listing, which only supports
     ascending order.
 
     Returns:
         A 32-character dashless hex string
         (e.g., "ff1a2b3c4d5e6f789a0bcdef01234567").
     """
-    return flip_uuid(str(uuid7()))
+    nano = time.time_ns()
+    milli = nano // 1_000_000
+
+    uuid_int = (
+        ((milli & ((1 << 48) - 1)) << 80)
+        | (0x7 << 76)
+        | ((nano % 1_000_000 & 0xFFFFF) << 56)
+        | (secrets.randbits(54) & ~(0b11 << 62))
+        | (0b10 << 62)
+    )
+
+    uuid7 = UUID(int=uuid_int)
+
+    return flip_uuid(str(uuid7))
