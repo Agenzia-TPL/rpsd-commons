@@ -3,8 +3,9 @@ name = "rpsd-storage"
 version = "0.1.0"
 description = "Storage utilities (part of rpsd-commons)"
 readme = "README.md"
+license = "BSD-3-Clause"
 authors = [
-    { name = "caipirginka" }
+    { name = "Agenzia TPL" }
 ]
 requires-python = ">=3.13"
 dependencies = [
@@ -13,6 +14,11 @@ dependencies = [
     "pydantic>=2.0.0",
     "pydantic-settings>=2.0.0",
 ]
+
+[project.urls]
+Homepage = "https://github.com/Agenzia-TPL/rpsd-commons"
+Repository = "https://github.com/Agenzia-TPL/rpsd-commons"
+Issues = "https://github.com/Agenzia-TPL/rpsd-commons/issues"
 
 [tool.uv.sources]
 # Internal workspace dependencies

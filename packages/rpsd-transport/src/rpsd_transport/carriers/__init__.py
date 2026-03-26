@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright (C) 2026 AGENZIA TPL BACINO CITTA' METROPOLITANA MILANO,
+# MONZA E BRIANZA, LODI, PAVIA
 """Transport carriers for rpsd-transport."""
 
 from rpsd_transport.carriers.base import BaseCarrier, CarrierOptions

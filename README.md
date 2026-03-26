@@ -235,4 +235,9 @@ Benefits:
 
 ## License
 
-[Add license information]
+This project is licensed under the **BSD 3-Clause License** (SPDX: `BSD-3-Clause`).
+
+Copyright (c) 2026, AGENZIA TPL BACINO CITTA' METROPOLITANA MILANO,
+MONZA E BRIANZA, LODI, PAVIA
+
+See the [LICENSE](LICENSE) file for the full license text.
