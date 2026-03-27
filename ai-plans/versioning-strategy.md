@@ -48,7 +48,16 @@ rpsd-transport = { path = "../rpsd-commons/packages/rpsd-transport" }
 rpsd-transport = { git = "https://github.com/Agenzia-TPL/rpsd-commons", tag = "v0.2.0", subdirectory = "packages/rpsd-transport" }
 ```
 
+## CI Strategy
+
+**No duplicate runs:** CI (`ci.yml`) triggers on `push` to `main` and on `pull_request`. It does NOT trigger on pushes to dev branches, to avoid duplicate runs when a branch with an open PR is pushed.
+
+**Rationale:** With a protected `main` branch (PR-only merges), the `pull_request` event already provides CI feedback for all branch work. Running on every push to every branch would duplicate runs on PRs without adding value.
+
+**Manual runs:** `ci.yml` includes `workflow_dispatch:` so developers can trigger CI on any branch from the GitHub Actions UI ("Run workflow" button) when needed — e.g. after a "save" push before a PR is opened.
+
 ## Implementation
 
 - Each `pyproject.toml` has an alignment comment above the `version` field explaining the lock-step requirement
 - `.github/workflows/tag-release.yml` triggers on push to `main`, checks version consistency across all packages using Python stdlib (`tomllib`), and creates the git tag if it does not already exist
+- `.github/workflows/ci.yml` triggers on `push: main`, `pull_request`, and `workflow_dispatch`
