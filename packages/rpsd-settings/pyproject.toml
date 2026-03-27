@@ -1,10 +1,15 @@
 [project]
 name = "rpsd-settings"
-version = "0.1.0"
+# IMPORTANT: This version must match the version in all other packages in this
+# workspace (root pyproject.toml and all packages/*/pyproject.toml).
+# When releasing, update all of them to the same value and open a PR to main.
+# A git tag is created automatically by CI when the PR is merged.
+version = "0.2.0"
 description = "Composable settings system for rpsd-commons (OPTIONAL convenience package)"
 readme = "README.md"
+license = "BSD-3-Clause"
 authors = [
-    { name = "caipirginka" }
+    { name = "Agenzia TPL" }
 ]
 requires-python = ">=3.13"
 dependencies = [
@@ -13,6 +18,11 @@ dependencies = [
     "rpsd-storage",
     "rpsd-transport",
 ]
+
+[project.urls]
+Homepage = "https://github.com/Agenzia-TPL/rpsd-commons"
+Repository = "https://github.com/Agenzia-TPL/rpsd-commons"
+Issues = "https://github.com/Agenzia-TPL/rpsd-commons/issues"
 
 [tool.uv.sources]
 # Internal workspace dependencies

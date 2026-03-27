@@ -2,7 +2,10 @@ name: CI
 
 on:
   push:
+    branches:
+      - main
   pull_request:
+  workflow_dispatch:
 
 jobs:
   test:
@@ -25,3 +28,88 @@ jobs:
 
       - name: Test
         run: uv run pytest -m "not integration" || [ $? -eq 5 ]
+
+  secrets-scan:
+    name: Secret Scan
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Check out rpsd-commons
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Scan PR diff for verified secrets
+        if: github.event_name == 'pull_request'
+        uses: trufflesecurity/trufflehog@6c64db94d5b2e09d7e0948fb6bd3166cc6fffbc7  # v3.94.0
+        with:
+          path: ./
+          base: ${{ github.event.pull_request.base.sha }}
+          head: ${{ github.event.pull_request.head.sha }}
+          extra_args: --only-verified
+
+      - name: Scan push for verified secrets
+        if: github.event_name == 'push' && github.event.before != '0000000000000000000000000000000000000000'
+        uses: trufflesecurity/trufflehog@6c64db94d5b2e09d7e0948fb6bd3166cc6fffbc7  # v3.94.0
+        with:
+          path: ./
+          base: ${{ github.event.before }}
+          head: ${{ github.event.after }}
+          extra_args: --only-verified
+
+  license-check:
+    name: License Check
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --all-packages --dev
+
+      - name: Check dependency licenses
+        run: |
+          uv run pip-licenses \
+            --from=mixed \
+            --partial-match \
+            --allow-only="\
+          MIT;\
+          BSD;\
+          Apache;\
+          ISC;\
+          PSF;\
+          Python Software Foundation;\
+          Python-2.0;\
+          Unlicense;\
+          Public Domain;\
+          CC0;\
+          Artistic;\
+          Zlib;\
+          CNRI;\
+          WTFPL;\
+          Boost;\
+          BSL;\
+          Historical Permission Notice;\
+          HPND;\
+          X11;\
+          0BSD;\
+          SIL Open Font;\
+          MPL;\
+          Mozilla Public License;\
+          LGPL;\
+          Lesser General Public License;\
+          EPL;\
+          Eclipse Public License;\
+          EUPL;\
+          European Union Public License;\
+          CeCILL-B;\
+          CeCILL-C"

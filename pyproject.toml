@@ -1,10 +1,15 @@
 [project]
 name = "rpsd-commons"
-version = "0.1.0"
+# IMPORTANT: This version must match the version in all other packages in this
+# workspace (root pyproject.toml and all packages/*/pyproject.toml).
+# When releasing, update all of them to the same value and open a PR to main.
+# A git tag is created automatically by CI when the PR is merged.
+version = "0.2.0"
 description = "Collection of common useful packages"
 readme = "README.md"
+license = "BSD-3-Clause"
 authors = [
-    { name = "caipirginka" }
+    { name = "Agenzia TPL" }
 ]
 requires-python = ">=3.13"
 dependencies = [
@@ -14,6 +19,11 @@ dependencies = [
     "rpsd-flow",
     "rpsd-settings",
 ]
+
+[project.urls]
+Homepage = "https://github.com/Agenzia-TPL/rpsd-commons"
+Repository = "https://github.com/Agenzia-TPL/rpsd-commons"
+Issues = "https://github.com/Agenzia-TPL/rpsd-commons/issues"
 
 [tool.uv.sources]
 rpsd-transport = { workspace = true }
@@ -37,6 +47,7 @@ dev = [
     "hypothesis>=6.0.0",
     "pytest-benchmark>=4.0.0",
     "pytest-mock>=3.11.0",
+    "pip-licenses>=5.5.1",
 ]
 
 [tool.ruff]

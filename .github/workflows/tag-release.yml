@@ -1,0 +1,63 @@
+name: Tag release
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  tag-release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check all package versions are in sync and read version
+        id: version
+        run: |
+          python - <<'EOF'
+          import os
+          import sys
+          import tomllib
+          from pathlib import Path
+
+          files = [
+              Path("pyproject.toml"),
+              Path("packages/rpsd-transport/pyproject.toml"),
+              Path("packages/rpsd-storage/pyproject.toml"),
+              Path("packages/rpsd-settings/pyproject.toml"),
+              Path("packages/rpsd-flow/pyproject.toml"),
+          ]
+
+          versions = {}
+          for path in files:
+              with path.open("rb") as f:
+                  versions[str(path)] = tomllib.load(f)["project"]["version"]
+
+          unique = set(versions.values())
+          if len(unique) != 1:
+              print("ERROR — version mismatch across packages:")
+              for f, v in versions.items():
+                  print(f"  {v}  {f}")
+              sys.exit(1)
+
+          version = unique.pop()
+          print(f"OK — all packages at version {version}")
+
+          with open(os.environ["GITHUB_OUTPUT"], "a") as out:
+              out.write(f"version={version}\n")
+          EOF
+
+      - name: Create tag if it does not exist
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          if git ls-remote --tags origin "refs/tags/v$VERSION" | grep -q "v$VERSION"; then
+            echo "Tag v$VERSION already exists — skipping."
+          else
+            git tag "v$VERSION"
+            git push origin "v$VERSION"
+            echo "Created and pushed tag v$VERSION."
+          fi
