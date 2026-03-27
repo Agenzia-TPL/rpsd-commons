@@ -1,7 +1,11 @@
 [project]
 name = "fastapi-ingest-app"
 version = "0.1.0"
-description = "Example FastAPI application using rpsd-transport and rpsd-storage"
+description = "Example FastAPI application using rpsd-transport, rpsd-storage and rpsd-flow"
+license = "BSD-3-Clause"
+authors = [
+    { name = "Agenzia TPL" }
+]
 requires-python = ">=3.13"
 dependencies = [
     "rpsd-transport[kafka,rabbitmq]",
