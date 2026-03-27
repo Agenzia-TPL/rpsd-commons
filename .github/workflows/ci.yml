@@ -55,3 +55,58 @@ jobs:
           base: ${{ github.event.before }}
           head: ${{ github.event.after }}
           extra_args: --only-verified
+
+  license-check:
+    name: License Check
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --all-packages --dev
+
+      - name: Check dependency licenses
+        run: |
+          uv run pip-licenses \
+            --from=mixed \
+            --partial-match \
+            --allow-only="\
+          MIT;\
+          BSD;\
+          Apache;\
+          ISC;\
+          PSF;\
+          Python Software Foundation;\
+          Python-2.0;\
+          Unlicense;\
+          Public Domain;\
+          CC0;\
+          Artistic;\
+          Zlib;\
+          CNRI;\
+          WTFPL;\
+          Boost;\
+          BSL;\
+          Historical Permission Notice;\
+          HPND;\
+          X11;\
+          0BSD;\
+          SIL Open Font;\
+          MPL;\
+          Mozilla Public License;\
+          LGPL;\
+          Lesser General Public License;\
+          EPL;\
+          Eclipse Public License;\
+          EUPL;\
+          European Union Public License;\
+          CeCILL-B;\
+          CeCILL-C"
