@@ -6,6 +6,7 @@ Common libraries for the Rapsodia project, organized as a uv workspace with mult
 
 - **[rpsd-storage](packages/rpsd-storage/)** - Storage providers (S3, Filesystem, HTTP)
 - **[rpsd-transport](packages/rpsd-transport/)** - Data transport utilities
+- **[rpsd-flow](packages/rpsd-flow/)** - Prefect Flow and Task utilities
 - **[rpsd-settings](packages/rpsd-settings/)** - Composable settings system (optional convenience package)
 
 ## Installation
@@ -21,6 +22,7 @@ Or install specific packages in your application:
 ```bash
 uv add rpsd-storage
 uv add rpsd-transport
+uv add rpsd-flow      # optional, for Prefect-based workflows
 uv add rpsd-settings  # optional
 ```
 
@@ -115,6 +117,7 @@ rpsd-commons/
 ├── packages/               # Workspace packages
 │   ├── rpsd-storage/
 │   ├── rpsd-transport/
+│   ├── rpsd-flow/
 │   └── rpsd-settings/
 ├── src/rpsd_commons/       # Workspace root
 ├── pyproject.toml          # Workspace configuration
@@ -158,6 +161,18 @@ Data transport utilities for receiving/sending data through:
 
 See [rpsd-transport README](packages/rpsd-transport/README.md) for details.
 
+### rpsd-flow
+
+**Optional** Prefect integration package providing decorator factories and utilities
+to define, serve, and execute Prefect flows and tasks within the rpsd-commons ecosystem.
+
+- Flow and task decorator factories with rpsd-transport integration
+- `serve_flows()` / `serve_tasks()` for long-running workers
+- `run_flow()` / `run_flow_async()` for one-shot execution
+- `subprocess_task` decorator for wrapping CLI commands as Prefect tasks
+
+See [rpsd-flow README](packages/rpsd-flow/README.md) for details.
+
 ### rpsd-settings
 
 **Optional** convenience package that composes settings from all packages. Applications can use this for quick setup or compose their own settings directly from individual packages.
@@ -187,7 +202,7 @@ uv run python packages/rpsd-storage/examples/01_getting_started.py
 
 Full applications demonstrating multi-package integration and real-world usage:
 
-- **[FastAPI Ingest App](examples/fastapi_ingest_app/)** - Complete FastAPI application using rpsd-transport and rpsd-storage
+- **[FastAPI Ingest App](examples/fastapi_ingest_app/)** - Complete FastAPI application using rpsd-transport, rpsd-storage and rpsd-flow
   - HTTP carrier integration
   - Storage abstraction (filesystem and S3)
   - Authentication and configuration
