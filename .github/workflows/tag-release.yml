@@ -55,7 +55,8 @@ jobs:
           VERSION: ${{ steps.version.outputs.version }}
         run: |
           if git ls-remote --tags origin "refs/tags/v$VERSION" | grep -q "v$VERSION"; then
-            echo "Tag v$VERSION already exists — skipping."
+            echo "ERROR — tag v$VERSION already exists. Bump the version before merging to main."
+            exit 1
           else
             git tag "v$VERSION"
             git push origin "v$VERSION"
