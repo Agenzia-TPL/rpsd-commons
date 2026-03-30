@@ -66,17 +66,7 @@ settings = StorageSettings()
 provider = get_storage_provider(settings)
 ```
 
-#### Option 2: Use RpsdSettings (All Packages)
-
-```python
-from rpsd_settings import RpsdSettings
-from rpsd_storage import get_storage_provider
-
-settings = RpsdSettings()
-provider = get_storage_provider(settings.storage)
-```
-
-#### Option 3: Custom Application Settings
+#### Option 2: Custom Application Settings
 
 ```python
 from rpsd_storage.settings import StorageSettings

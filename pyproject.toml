@@ -17,7 +17,6 @@ dependencies = [
     "rpsd-transport",
     "rpsd-storage",
     "rpsd-flow",
-    "rpsd-settings",
 ]
 
 [project.urls]
@@ -29,7 +28,6 @@ Issues = "https://github.com/Agenzia-TPL/rpsd-commons/issues"
 rpsd-transport = { workspace = true }
 rpsd-storage = { workspace = true }
 rpsd-flow = { workspace = true }
-rpsd-settings = { workspace = true }
 
 [tool.uv.workspace]
 members = ["packages/*", "examples/fastapi_ingest_app"]

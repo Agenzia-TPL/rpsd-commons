@@ -7,7 +7,6 @@ members = [
     "fastapi-ingest-app",
     "rpsd-commons",
     "rpsd-flow",
-    "rpsd-settings",
     "rpsd-storage",
     "rpsd-transport",
 ]
@@ -578,7 +577,7 @@ wheels = [
 
 [[package]]
 name = "fastapi-ingest-app"
-version = "0.1.0"
+version = "0.2.0"
 source = { editable = "examples/fastapi_ingest_app" }
 dependencies = [
     { name = "fastapi" },
@@ -1971,11 +1970,10 @@ wheels = [
 
 [[package]]
 name = "rpsd-commons"
-version = "0.1.0"
+version = "0.2.0"
 source = { editable = "." }
 dependencies = [
     { name = "rpsd-flow" },
-    { name = "rpsd-settings" },
     { name = "rpsd-storage" },
     { name = "rpsd-transport" },
 ]
@@ -1995,7 +1993,6 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "rpsd-flow", editable = "packages/rpsd-flow" },
-    { name = "rpsd-settings", editable = "packages/rpsd-settings" },
     { name = "rpsd-storage", editable = "packages/rpsd-storage" },
     { name = "rpsd-transport", editable = "packages/rpsd-transport" },
 ]
@@ -2014,7 +2011,7 @@ dev = [
 
 [[package]]
 name = "rpsd-flow"
-version = "0.1.0"
+version = "0.2.0"
 source = { editable = "packages/rpsd-flow" }
 dependencies = [
     { name = "prefect" },
@@ -2032,27 +2029,8 @@ requires-dist = [
 ]
 
 [[package]]
-name = "rpsd-settings"
-version = "0.1.0"
-source = { editable = "packages/rpsd-settings" }
-dependencies = [
-    { name = "pydantic" },
-    { name = "pydantic-settings" },
-    { name = "rpsd-storage" },
-    { name = "rpsd-transport" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "pydantic", specifier = ">=2.0.0" },
-    { name = "pydantic-settings", specifier = ">=2.0.0" },
-    { name = "rpsd-storage", editable = "packages/rpsd-storage" },
-    { name = "rpsd-transport", editable = "packages/rpsd-transport" },
-]
-
-[[package]]
 name = "rpsd-storage"
-version = "0.1.0"
+version = "0.2.0"
 source = { editable = "packages/rpsd-storage" }
 dependencies = [
     { name = "boto3" },

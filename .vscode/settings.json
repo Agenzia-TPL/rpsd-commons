@@ -12,6 +12,6 @@
     "python.analysis.extraPaths": [
         "${workspaceFolder}/packages/rpsd-storage/src",
         "${workspaceFolder}/packages/rpsd-transport/src",
-        "${workspaceFolder}/packages/rpsd-settings/src"
+        "${workspaceFolder}/packages/rpsd-flow/src"
     ]
 }
