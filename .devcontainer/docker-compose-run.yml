@@ -1,0 +1,7 @@
+services:
+  rpsd-commons:
+    extends:
+      file: ./docker-compose-base.yml
+      service: rpsd-commons
+    command: ["uv", "run", "--directory", "/workspaces/rpsd-commons", "app"]
+    #command: /bin/sh -c "sleep 0s; echo 'PIPPO!!!'"

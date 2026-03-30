@@ -1,0 +1,5 @@
+services:
+  rpsd-commons:
+    extends:
+      file: ./docker-compose-base.yml
+      service: rpsd-commons
