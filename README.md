@@ -7,7 +7,6 @@ Common libraries for the Rapsodia project, organized as a uv workspace with mult
 - **[rpsd-storage](packages/rpsd-storage/)** - Storage providers (S3, Filesystem, HTTP)
 - **[rpsd-transport](packages/rpsd-transport/)** - Data transport utilities
 - **[rpsd-flow](packages/rpsd-flow/)** - Prefect Flow and Task utilities
-- **[rpsd-settings](packages/rpsd-settings/)** - Composable settings system (optional convenience package)
 
 ## Installation
 
@@ -23,7 +22,6 @@ Or install specific packages in your application:
 uv add rpsd-storage
 uv add rpsd-transport
 uv add rpsd-flow      # optional, for Prefect-based workflows
-uv add rpsd-settings  # optional
 ```
 
 ## Configuration
@@ -108,7 +106,6 @@ rpsd-commons/
 │   ├── rpsd-storage/
 │   ├── rpsd-transport/
 │   ├── rpsd-flow/
-│   └── rpsd-settings/
 ├── src/rpsd_commons/       # Workspace root
 ├── pyproject.toml          # Workspace configuration
 └── .env.example            # Environment variable template
@@ -162,12 +159,6 @@ to define, serve, and execute Prefect flows and tasks within the rpsd-commons ec
 - `subprocess_task` decorator for wrapping CLI commands as Prefect tasks
 
 See [rpsd-flow README](packages/rpsd-flow/README.md) for details.
-
-### rpsd-settings
-
-**Optional** convenience package that composes settings from all packages. Applications can use this for quick setup or compose their own settings directly from individual packages.
-
-See [rpsd-settings README](packages/rpsd-settings/README.md) for details.
 
 ## Examples
 

@@ -14,15 +14,6 @@ Organized into packages (uv workspace project):
 
 # Workspace root
 
-## Composable settings
-__DONE__
-
-Replace dict-based config.py with Pydantic Settings. 
-Each package defines its own settings class (StorageSettings, TransportSettings). 
-Create optional rpsd-settings package that composes them via RpsdSettings. 
-Apps can use RpsdSettings or compose settings directly. 
-Env vars use double underscore: STORAGE__PROVIDER, STORAGE__S3__BUCKET_NAME, TRANSPORT__API_KEY.
-
 # rpsd-storage
 
 ## Refactoring

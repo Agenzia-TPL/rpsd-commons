@@ -27,7 +27,6 @@ jobs:
               Path("pyproject.toml"),
               Path("packages/rpsd-transport/pyproject.toml"),
               Path("packages/rpsd-storage/pyproject.toml"),
-              Path("packages/rpsd-settings/pyproject.toml"),
               Path("packages/rpsd-flow/pyproject.toml"),
           ]
 
