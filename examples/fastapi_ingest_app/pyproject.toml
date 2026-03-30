@@ -1,6 +1,6 @@
 [project]
 name = "fastapi-ingest-app"
-version = "0.2.0"
+version = "0.2.1"
 description = "Example FastAPI application using rpsd-transport, rpsd-storage and rpsd-flow"
 license = "BSD-3-Clause"
 authors = [
