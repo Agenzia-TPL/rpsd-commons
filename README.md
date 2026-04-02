@@ -129,6 +129,54 @@ uv run pytest -m "not s3"     # Skip S3 tests
 uv run pytest -m integration   # Only integration tests
 ```
 
+## Versioning
+
+All packages in this workspace share the same version number (**lock-step versioning**). When you bump the version, update the `version` field in every `pyproject.toml` (root + all `packages/*/pyproject.toml`).
+
+On merge to `main`, CI automatically creates a git tag `vX.Y.Z` matching the version. The tag is what consuming repositories reference.
+
+**Release workflow:**
+
+1. Create a branch: `git checkout -b release/vX.Y.Z`
+2. Bump `version` in all `pyproject.toml` files
+3. Commit, push, open a PR to `main`
+4. Merge — CI creates the tag automatically
+
+## Using in other repositories
+
+Consuming repositories reference individual packages via `[tool.uv.sources]` with local paths pointing to a sibling clone:
+
+```toml
+# pyproject.toml of the consuming repo
+[project]
+dependencies = [
+    "rpsd-transport[kafka,rabbitmq]",
+    "rpsd-storage",
+    "rpsd-flow",
+]
+
+[tool.uv.sources]
+rpsd-transport = { path = "../rpsd-commons/packages/rpsd-transport", editable = true }
+rpsd-storage = { path = "../rpsd-commons/packages/rpsd-storage", editable = true }
+rpsd-flow = { path = "../rpsd-commons/packages/rpsd-flow", editable = true }
+```
+
+In CI, check out rpsd-commons alongside your repository — the relative paths resolve identically:
+
+```yaml
+steps:
+  - name: Check out my-service
+    uses: actions/checkout@v4
+    with:
+      path: my-service
+
+  - name: Check out rpsd-commons
+    uses: actions/checkout@v4
+    with:
+      repository: Agenzia-TPL/rpsd-commons
+      path: rpsd-commons
+```
+
 ## Package Details
 
 ### rpsd-storage
