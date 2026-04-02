@@ -24,11 +24,6 @@ Homepage = "https://github.com/Agenzia-TPL/rpsd-commons"
 Repository = "https://github.com/Agenzia-TPL/rpsd-commons"
 Issues = "https://github.com/Agenzia-TPL/rpsd-commons/issues"
 
-[tool.uv.sources]
-# Internal workspace dependencies
-rpsd-storage = { workspace = true }
-rpsd-transport = { workspace = true }
-
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
