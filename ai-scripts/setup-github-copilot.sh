@@ -3,7 +3,7 @@
 # Setup script for GitHub Copilot CLI in devcontainer
 # This script installs GitHub CLI and the Copilot CLI extension
 # Note: This is different from the GitHub Copilot VS Code extension
-# Usage: ./ai-scripts/setup-github-copilot.sh
+# Usage: ./scripts/setup-github-copilot.sh
 
 set -e  # Exit on any error
 
