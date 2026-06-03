@@ -44,14 +44,26 @@ Serving:
 Execution:
   run_flow               Trigger a named deployment run with a TransportMessage (sync)
   run_flow_async         Async version of run_flow
+  get_flow_response      Build a FlowResponse for an already-triggered run (sync)
+  get_flow_response_async  Async version of get_flow_response
+
+Responses:
+  FlowResponse           Homogeneous response model returned by run_flow(_async)
+  TaskResult             Per-Task result carried by a FlowResponse
 
 Subprocess tasks:
   subprocess_task         Decorator factory that builds a @task running a CLI script
   SubprocessResult        Result model returned by subprocess tasks
 """
 
-from rpsd_flow.execute import run_flow, run_flow_async
+from rpsd_flow.execute import (
+    get_flow_response,
+    get_flow_response_async,
+    run_flow,
+    run_flow_async,
+)
 from rpsd_flow.flows import flow
+from rpsd_flow.responses import FlowResponse, TaskResult
 from rpsd_flow.serve import serve_flows, serve_tasks
 from rpsd_flow.settings import (
     FlowServeSettings,
@@ -77,6 +89,11 @@ __all__ = [
     # Execution
     "run_flow",
     "run_flow_async",
+    "get_flow_response",
+    "get_flow_response_async",
+    # Responses
+    "FlowResponse",
+    "TaskResult",
     # Subprocess tasks
     "subprocess_task",
     "SubprocessResult",

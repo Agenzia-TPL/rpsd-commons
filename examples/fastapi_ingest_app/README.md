@@ -425,8 +425,11 @@ curl -X POST http://localhost:8000/ingest \
   -d '{"data": "example"}'
 ```
 
-The response will include `"flow_invoked": true` and the flow
-execution will be visible in the Prefect UI at http://localhost:4200.
+The response will include `"flow_invoked": true` and a `"flow"` block
+projecting the `FlowResponse` (status, success, per-Task results); the
+flow execution will be visible in the Prefect UI at http://localhost:4200.
+See [POST /ingest → Response](#response) for the `flow` block details and
+how `APP__FLOW__TIMEOUT` shapes it.
 
 ## Quick Demo
 
@@ -525,6 +528,19 @@ curl -X POST http://localhost:8000/ingest \
   "deduplicated": false,
   "forwarded": true,
   "flow_invoked": true,
+  "flow": {
+    "deployment": "ingest-flow/ingest-deployment",
+    "flow_run_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+    "status": "COMPLETED",
+    "success": true,
+    "started_at": "2026-01-15T10:30:00+00:00",
+    "finished_at": "2026-01-15T10:30:04+00:00",
+    "task_results": [
+      {"task_name": "validate-message", "success": true, "duration": 0.01, "error": null},
+      {"task_name": "process-content", "success": true, "duration": 3.42, "error": null},
+      {"task_name": "finalize", "success": true, "duration": 0.01, "error": null}
+    ]
+  },
   "metadata": {
     "who": "alice",
     "what": "report",
@@ -547,6 +563,56 @@ curl -X POST http://localhost:8000/ingest \
   }
 }
 ```
+
+The `flow` block is a projection of the `FlowResponse` that
+`run_flow_async` now always returns. Its contents depend on
+`APP__FLOW__TIMEOUT`:
+
+- **`0` (fire-and-forget, default)** — the call returns before the flow
+  runs, so `status` is `"SCHEDULED"`, `success` is `null`, and
+  `task_results` is empty. Watch the run finish in the Prefect UI.
+- **`null` or a positive number (waits)** — `run_flow_async` waits for the
+  run and surfaces the flow's own `FlowResponse` verbatim: `success` is
+  `true`/`false` and `task_results` carries the per-Task outcome
+  (`success`, `duration`, and `error` on failure) built inside
+  `ingest_flow`. On a partial failure, the failing Task's `error` is set
+  and the downstream Task is skipped (so it won't appear).
+
+To see the populated `task_results`, either set `APP__FLOW__TIMEOUT=60` (and
+run the task server, `uv run sample-task`, so the subprocess Task can
+execute), **or** keep the default fire-and-forget and fetch the outcome later
+with [`GET /flow/{flow_run_id}`](#get-flowflow_run_id).
+
+### GET /flow/{flow_run_id}
+
+Retrieve the `FlowResponse` for a previously triggered run — the
+fire-and-forget → poll-later loop. Take the `flow_run_id` from a
+`POST /ingest` response's `flow` block and request it later:
+
+```bash
+curl http://localhost:8000/flow/096855da-862a-47ef-87bc-7501b0a98115
+```
+
+```json
+{
+  "deployment": null,
+  "flow_run_id": "096855da-862a-47ef-87bc-7501b0a98115",
+  "status": "COMPLETED",
+  "success": true,
+  "started_at": "2026-01-15T10:30:00+00:00",
+  "finished_at": "2026-01-15T10:30:04+00:00",
+  "task_results": [
+    {"task_name": "validate-message", "success": true, "duration": 0.01, "error": null},
+    {"task_name": "process-content", "success": true, "duration": 3.42, "error": null},
+    {"task_name": "finalize", "success": true, "duration": 0.01, "error": null}
+  ]
+}
+```
+
+While the run is still scheduled/running, `success` is `null` and
+`task_results` is empty — poll again until it goes terminal. This is backed by
+rpsd-flow's `get_flow_response_async`, which reconstructs the original message
+from the run's stored parameters, so the app keeps no per-run state.
 
 ### GET /health
 

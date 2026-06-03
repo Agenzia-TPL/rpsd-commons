@@ -6,6 +6,7 @@ This example shows how to:
 - Use IngestProcessor to save content to storage
 - Optionally forward to Kafka/RabbitMQ after storage
 - Optionally invoke a Prefect Flow after storage
+- Retrieve a flow run's FlowResponse later via GET /flow/{flow_run_id}
 - Support both inline (JSON) and outline (headers/query) metadata formats
 - Validate API keys
 - Configure storage providers (FS or S3) via settings
@@ -155,6 +156,37 @@ def resolve_flow_deployment(
     return default_deployment
 
 
+def _flow_summary(flow_response: Any, deployment: str | None = None) -> dict[str, Any]:
+    """Project a FlowResponse into a JSON-serialisable dict for the API.
+
+    ``task_results`` is populated only once the run has produced per-Task
+    detail; for a fire-and-forget invocation it is empty until the run runs.
+    """
+    return {
+        "deployment": deployment,
+        "flow_run_id": (
+            str(flow_response.flow_run_id) if flow_response.flow_run_id else None
+        ),
+        "status": flow_response.status,
+        "success": flow_response.success,
+        "started_at": (
+            flow_response.started_at.isoformat() if flow_response.started_at else None
+        ),
+        "finished_at": (
+            flow_response.finished_at.isoformat() if flow_response.finished_at else None
+        ),
+        "task_results": [
+            {
+                "task_name": tr.task_name,
+                "success": tr.success,
+                "duration": tr.duration,
+                "error": tr.error,
+            }
+            for tr in flow_response.task_results
+        ],
+    }
+
+
 # Create processor with optional forwarding and metadata enrichment
 processor = IngestProcessor(
     storage=storage_provider,
@@ -261,10 +293,11 @@ async def ingest_data(request: Request):
 
         # Optionally invoke a Prefect Flow deployment
         flow_invoked = False
+        flow_summary: dict[str, Any] | None = None
         t_flow = 0.0
         if settings.flow.deployment and not result.deduplicated:
             try:
-                from rpsd_flow import run_flow_async
+                from rpsd_flow import FlowResponse, run_flow_async
 
                 deployment = resolve_flow_deployment(
                     message.who,
@@ -286,23 +319,36 @@ async def ingest_data(request: Request):
                     },
                 )
 
-                # timeout=0 (default) is fire-and-forget: a single
-                # HTTP POST to the Prefect API; returns before the
-                # flow even starts. timeout=None waits indefinitely;
-                # a positive float waits up to that many seconds.
+                # run_flow_async always returns a FlowResponse. Its shape
+                # depends on the timeout:
+                #   timeout=0 (default, fire-and-forget) → returns before
+                #     the flow runs: success=None, status="SCHEDULED",
+                #     task_results=[].
+                #   timeout=None / positive → waits, then returns the
+                #     flow's own FlowResponse verbatim: success True/False
+                #     and the per-Task results built inside the flow.
                 t2 = time.perf_counter()
-                flow_run = await run_flow_async(
+                flow_response: FlowResponse = await run_flow_async(
                     deployment,
                     flow_message,
                     settings.flow.timeout,
                 )
                 t_flow = time.perf_counter() - t2
                 flow_invoked = True
+
+                # Project the FlowResponse into the HTTP body. task_results
+                # is populated only when we waited for completion; for the
+                # default fire-and-forget timeout it is empty here — the
+                # client can fetch it later via GET /flow/{flow_run_id}.
+                flow_summary = _flow_summary(flow_response, deployment)
+
                 logger.info(
-                    "Flow invoked: %s (run id=%s, state=%s)",
+                    "Flow invoked: %s (run id=%s, status=%s, success=%s, tasks=%d)",
                     deployment,
-                    flow_run.id,
-                    flow_run.state_name,
+                    flow_response.flow_run_id,
+                    flow_response.status,
+                    flow_response.success,
+                    len(flow_response.task_results),
                 )
                 logger.debug("run_flow_async: %.3fs", t_flow)
             except Exception as e:
@@ -319,6 +365,7 @@ async def ingest_data(request: Request):
             "deduplicated": result.deduplicated,
             "forwarded": result.forwarded,
             "flow_invoked": flow_invoked,
+            "flow": flow_summary,
             "metadata": {
                 "who": message.who,
                 "what": message.what,
@@ -367,6 +414,31 @@ async def ingest_data(request: Request):
     except Exception as e:
         logger.exception("Unexpected error processing request")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/flow/{flow_run_id}")
+async def get_flow(flow_run_id: str):
+    """Retrieve the FlowResponse for a previously triggered flow run.
+
+    Demonstrates the fire-and-forget → poll-later loop. With the default
+    ``APP__FLOW__TIMEOUT=0``, ``POST /ingest`` returns a ``flow_run_id`` but
+    no results yet (``success: null``, empty ``task_results``). The client
+    stores that id and calls this endpoint later: ``get_flow_response_async``
+    looks the run up and returns the populated ``FlowResponse`` once the run
+    has progressed — reconstructing the original message from the run's
+    stored parameters, so no extra state is needed on the app side.
+
+    Args:
+        flow_run_id: The id returned in the ``flow`` block of ``POST /ingest``.
+    """
+    try:
+        from rpsd_flow import get_flow_response_async
+
+        flow_response = await get_flow_response_async(flow_run_id)
+        return _flow_summary(flow_response)
+    except Exception as e:
+        logger.error("Failed to retrieve flow run %s: %s", flow_run_id, e)
+        raise HTTPException(status_code=404, detail=str(e))
 
 
 @app.get("/health")

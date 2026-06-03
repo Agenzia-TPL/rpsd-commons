@@ -385,6 +385,23 @@ Key design decisions:
 - Prefect's `run_deployment` uses `@async_dispatch`: calling it without `await` in a sync context works natively.
 - `run_flow_async` calls `run_deployment.aio(...)` directly (the attached coroutine function) rather than `await run_deployment(...)` to avoid type-checker errors from the sync return annotation on the dispatch wrapper.
 
+## Flow response
+__DONE__
+
+**Problem**: `rpsd-flow` has an input-side primitive (`TransportMessage`, passed to `run_flow`) but no symmetric output-side one. Each component that exposes Flow outcomes invents its own response shape, and `run_flow` / `run_flow_async` return a raw Prefect `FlowRun` typed as `Any` — leaking Prefect internals and offering no per-Task detail.
+
+**Proposed Solution**: Add a canonical `FlowResponse` / `TaskResult` pair (new `responses.py`, re-exported from the package), parallel to `TransportMessage`. `FlowResponse` carries `incoming` (required), optional `outgoing` (set by transformation Flows, unset by validation Flows), `flow_name`, `flow_run_id`, `status`, `success`, `started_at`, `finished_at`, and a list of `TaskResult` (`task_name`, `success`, `error`, `duration`). We'll change `run_flow` / `run_flow_async` to always return a `FlowResponse`.
+
+Key design decisions:
+- Homogeneous return: `run_flow` always returns a `FlowResponse`, never a raw `FlowRun`. Callers branch on `success`/`status`, not on the return type.
+- The outcome fields (`success`, `started_at`, `finished_at`) are optional so one type covers a run's whole lifecycle. Fire-and-forget (`timeout=0`) yields a "submitted / not-yet-known" response (`success=None`).
+- `success` (not `ok`) reuses the word already used by `SubprocessResult.success`.
+- `status` is a free-form `str` (the stringified Prefect state type) so the model stays Prefect-free and tolerant of new states; no enum.
+- Source of per-Task detail, in priority order: (1) the Flow's own returned `FlowResponse`, verbatim, when the run completed (requires deployment result persistence); (2) a synthesised response whose `task_results` are recovered by querying the run's Prefect task runs — so a partial failure still lists the Tasks that ran before it; (3) a "pending" response for fire-and-forget / still-running runs. `run_flow` never raises on a result-fetch problem.
+- Flows should return `FlowResponse(success=False, ...)` on handled failures (rather than a Prefect `Failed` state) to surface curated per-Task errors through the verbatim path.
+
+**Expected outcome**: A non-Python custom UI, monitoring component, or ingest pipeline can consume one typed, JSON-serialisable Flow outcome regardless of the Flow. The shape is Flow-agnostic (validation vs transformation) and needs no change when Tasks are added. The placeholder currently carried by rpsd-validator is superseded by this module; rpsd-validator will migrate its import in a separate step (renaming `ok` -> `success` and adding `status=`).
+
 ## Subprocess Task
 __DONE__
 
