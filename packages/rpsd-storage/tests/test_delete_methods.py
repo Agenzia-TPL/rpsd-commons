@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: BSD-3-Clause
+# SPDX-FileCopyrightText: 2026 AGENZIA TPL BACINO CITTA' METROPOLITANA MILANO,
+# MONZA E BRIANZA, LODI, PAVIA
 """
 Test file for the new delete methods.
 """

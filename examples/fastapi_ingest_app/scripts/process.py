@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: BSD-3-Clause
+# SPDX-FileCopyrightText: 2026 AGENZIA TPL BACINO CITTA' METROPOLITANA MILANO,
+# MONZA E BRIANZA, LODI, PAVIA
 """
 Sample processing script invoked by the subprocess task.
 

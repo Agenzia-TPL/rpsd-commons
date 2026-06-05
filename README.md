@@ -8,6 +8,19 @@ Common libraries for the Rapsodia project, organized as a uv workspace with mult
 - **[rpsd-transport](packages/rpsd-transport/)** - Data transport utilities
 - **[rpsd-flow](packages/rpsd-flow/)** - Prefect Flow and Task utilities
 
+## Prerequisites
+
+- **Python** 3.13 or newer
+- **[uv](https://docs.astral.sh/uv/)** for dependency management and running
+  the workspace (this project does not use `pip`, `poetry`, or `conda`)
+
+Optional, depending on which providers you use:
+
+- An S3-compatible object store (for the `rpsd-storage` S3 provider)
+- A message broker — RabbitMQ, Kafka, or Google Pub/Sub (for `rpsd-transport`
+  carriers)
+- A Prefect server or Prefect Cloud account (for `rpsd-flow`)
+
 ## Installation
 
 This is a workspace project. Install all packages:
@@ -268,14 +281,24 @@ Benefits:
 - Composable settings per package
 - No global state
 
+## Project Status
+
+**Stable.** All packages share the synchronized version **1.0.0** (see
+[Versioning](#versioning)) and are covered by an automated test suite and CI.
+
+Known limitations:
+
+- Integration tests (`-m integration`) require external services (broker,
+  object store, Prefect) and are skipped by default.
+- Optional carriers and providers are only exercised when their backing
+  service is configured.
+
 ## Contributing
 
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Run tests: `uv run pytest`
-5. Format code: `uv run ruff format`
-6. Submit a pull request
+Contributions are welcome. See **[CONTRIBUTING.md](CONTRIBUTING.md)** for the
+bug-reporting process, the fork → branch → pull-request workflow, coding
+standards, how to run the tests, the SPDX-header requirement for new source
+files, and the contributor licence terms.
 
 ## License
 
@@ -285,3 +308,11 @@ Copyright (c) 2026, AGENZIA TPL BACINO CITTA' METROPOLITANA MILANO,
 MONZA E BRIANZA, LODI, PAVIA
 
 See the [LICENSE](LICENSE) file for the full license text.
+
+## Maintainer
+
+Maintained by **AGENZIA TPL BACINO CITTA' METROPOLITANA MILANO, MONZA E
+BRIANZA, LODI, PAVIA** as part of the Rapsodia project.
+
+Report issues or request changes through the GitHub issue tracker:
+<https://github.com/Agenzia-TPL/rpsd-commons/issues>.

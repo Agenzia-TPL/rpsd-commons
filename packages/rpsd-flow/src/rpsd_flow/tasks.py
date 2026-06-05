@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: BSD-3-Clause
-# Copyright (C) 2026 AGENZIA TPL BACINO CITTA' METROPOLITANA MILANO,
+# SPDX-FileCopyrightText: 2026 AGENZIA TPL BACINO CITTA' METROPOLITANA MILANO,
 # MONZA E BRIANZA, LODI, PAVIA
 """
 Task decorator factory for rpsd-flow.

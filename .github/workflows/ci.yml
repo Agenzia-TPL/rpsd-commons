@@ -113,3 +113,18 @@ jobs:
           European Union Public License;\
           CeCILL-B;\
           CeCILL-C"
+
+  spdx-check:
+    name: SPDX Headers
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Check out rpsd-commons
+        uses: actions/checkout@v4
+
+      - name: Check SPDX headers
+        run: |
+          bash ai-skills/open-source-it-pa/scripts/check_headers.sh \
+            --check --ext py packages examples src
