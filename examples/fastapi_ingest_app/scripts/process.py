@@ -9,7 +9,11 @@ via RPSD_* environment variables set by
 The script:
 1. Reads RPSD_WHO, RPSD_WHAT, RPSD_WHERE, RPSD_CONTENT_TYPE
    from the environment.
-2. Simulates heavy processing with a short sleep.
+2. Simulates heavy processing with a sleep whose duration is
+   configurable via the ``RPSD_PROCESS_SLEEP`` environment
+   variable (seconds, default 3.0). Set it higher to make the
+   fire-and-forget / poll-later flow easy to observe, or lower
+   (even 0) to make the demo snappy.
 3. Prints a JSON summary to stdout.
 
 This is intentionally language-agnostic in spirit — any
@@ -22,6 +26,17 @@ import os
 import sys
 import time
 
+# Simulated processing time (seconds), tunable via RPSD_PROCESS_SLEEP.
+_DEFAULT_SLEEP = 3.0
+
+
+def _sleep_seconds() -> float:
+    """Read RPSD_PROCESS_SLEEP, falling back to the default if unset/invalid."""
+    try:
+        return float(os.environ.get("RPSD_PROCESS_SLEEP", _DEFAULT_SLEEP))
+    except ValueError:
+        return _DEFAULT_SLEEP
+
 
 def main() -> None:
     who = os.environ.get("RPSD_WHO", "<unknown>")
@@ -29,8 +44,9 @@ def main() -> None:
     where = os.environ.get("RPSD_WHERE", "")
     content_type = os.environ.get("RPSD_CONTENT_TYPE", "application/octet-stream")
 
+    sleep_seconds = _sleep_seconds()
     print(
-        f"Processing content for {who}/{what}...",
+        f"Processing content for {who}/{what} (sleep {sleep_seconds}s)...",
         file=sys.stderr,
     )
     if where:
@@ -40,7 +56,7 @@ def main() -> None:
         )
 
     # Simulate heavy processing
-    time.sleep(20)
+    time.sleep(sleep_seconds)
 
     # Emit result as JSON to stdout
     result = {

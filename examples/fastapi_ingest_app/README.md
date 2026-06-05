@@ -396,8 +396,15 @@ deployment, listening for triggered flow runs.
 
 The sample flow demonstrates a three-task pipeline:
 1. **validate-message** — fast task that checks metadata
-2. **process-content** — slow subprocess task calling `scripts/process.py`
+2. **process-content** — subprocess task calling `scripts/process.py`
 3. **finalize** — fast task that logs the processing result
+
+`scripts/process.py` simulates heavy processing with a sleep whose duration is
+tunable via the `RPSD_PROCESS_SLEEP` environment variable (seconds, default
+`3.0`). Set it in the environment of the task server, e.g.
+`RPSD_PROCESS_SLEEP=10 uv run sample-task`, to make the fire-and-forget →
+poll-later flow easy to observe, or `RPSD_PROCESS_SLEEP=0` to make runs
+instant. (`demo.sh` sets it to `5` by default.)
 
 ### 3. Configure Flow Invocation
 

@@ -12,6 +12,11 @@ Organized into packages (uv workspace project):
 - rpsd-transport
 - rpsd-flow
 
+This file is the decision log for the **core library packages** above.
+Examples and other sub-projects keep their own co-located `ai-project.md`; in
+particular the integration example is specified in
+`examples/fastapi_ingest_app/ai-project.md`.
+
 # Workspace root
 
 # rpsd-storage
@@ -400,7 +405,22 @@ Key design decisions:
 - Source of per-Task detail, in priority order: (1) the Flow's own returned `FlowResponse`, verbatim, when the run completed (requires deployment result persistence); (2) a synthesised response whose `task_results` are recovered by querying the run's Prefect task runs — so a partial failure still lists the Tasks that ran before it; (3) a "pending" response for fire-and-forget / still-running runs. `run_flow` never raises on a result-fetch problem.
 - Flows should return `FlowResponse(success=False, ...)` on handled failures (rather than a Prefect `Failed` state) to surface curated per-Task errors through the verbatim path.
 
-**Expected outcome**: A non-Python custom UI, monitoring component, or ingest pipeline can consume one typed, JSON-serialisable Flow outcome regardless of the Flow. The shape is Flow-agnostic (validation vs transformation) and needs no change when Tasks are added. The placeholder currently carried by rpsd-validator is superseded by this module; rpsd-validator will migrate its import in a separate step (renaming `ok` -> `success` and adding `status=`).
+**Expected outcome**: A non-Python custom UI, monitoring component, or ingest pipeline can consume one typed, JSON-serialisable Flow outcome regardless of the Flow. The shape is Flow-agnostic (validation vs transformation) and needs no change when Tasks are added.
+
+## Flow response retrieval (fire-and-forget → poll later)
+__DONE__
+
+**Problem**: `run_flow` with the default `timeout=0` (fire-and-forget) returns a "pending" `FlowResponse` (`success=None`, empty `task_results`) containing only `flow_run_id`. There is no way to retrieve the outcome later without reconstructing the Prefect-client logic — `FlowResponse` synthesis, task-run query, verbatim-result fetch — that already lives inside `run_flow`.
+
+**Proposed Solution**: Add a symmetric retrieval pair `get_flow_response(flow_run_id)` / `get_flow_response_async(flow_run_id)` to `execute.py`, re-exported from the package. Given a `flow_run_id` (UUID or str), they read the run from the Prefect client and apply the same three-tier response logic as `run_flow`: verbatim flow response when completed and persisted, synthesised-with-task-run-query otherwise, pending while not terminal. `run_flow` never raises; neither do these.
+
+Key design decisions:
+- `incoming` is reconstructed from the run's stored `parameters["message"]` (Prefect retains them), so callers keep no per-run state. An explicit `incoming=` kwarg overrides. Raises `ValueError` only if neither source is available.
+- Flow name is resolved via a `read_flow(flow_id)` client call (the only reliable source once we no longer have `deployment_name`); falls back to the run's `name` slug on failure.
+- Both helpers share `_to_flow_response` and `_query_task_results` with `run_flow`, keeping the response logic in one place. `get_flow_response` bridges to the async implementation via `run_coro_as_sync`, matching the pattern of `run_flow`.
+- `status` uses `state.type.value` (not `str(state.type)`): Prefect's `StateType` enum stringifies to `"StateType.SCHEDULED"` not `"SCHEDULED"`. Discovered via the integration demo; fixed across the synthesis path and the test fakes (which now use the real `StateType` enum so future regressions are caught).
+
+**Expected outcome**: `from rpsd_flow import get_flow_response, get_flow_response_async`. Callers can implement the fire-and-forget → poll-later loop without touching the Prefect client directly.
 
 ## Subprocess Task
 __DONE__

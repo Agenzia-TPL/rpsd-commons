@@ -47,6 +47,7 @@ echo "  • Fatheavy messages with file:// URLs"
 echo "  • Fatheavy messages with http:// URLs"
 echo "  • Fatheavy messages with https:// URLs"
 echo "  • Error handling (404, non-existent files)"
+echo "  • Fire-and-forget flow result retrieval (GET /flow/{id})"
 echo ""
 
 # Check if we're in the right directory
@@ -131,6 +132,12 @@ fi
 if [ "$PREFECT_AVAILABLE" = true ]; then
     export APP__FLOW__DEPLOYMENT="ingest-flow/ingest-deployment"
     export PREFECT_API_URL="http://host.docker.internal:4200/api"
+    # Keep the default fire-and-forget timeout (APP__FLOW__TIMEOUT=0) so we
+    # can demonstrate retrieving the result later via GET /flow/{id}. The
+    # simulated processing time is tunable (seconds); a few seconds keeps the
+    # demo snappy while still making the pending → completed transition
+    # observable when we poll.
+    export RPSD_PROCESS_SLEEP="${RPSD_PROCESS_SLEEP:-5}"
 fi
 
 # Backup existing .env and write complete config for demo
@@ -439,6 +446,55 @@ echo ""
 
 sleep 2
 
+# Test 8: Fire-and-forget flow result retrieval via GET /flow/{id}
+if [ "$PREFECT_AVAILABLE" = true ]; then
+    echo -e "${BLUE}Test 8: Fire-and-forget flow result retrieval (GET /flow/{id})${NC}"
+    echo -e "  With APP__FLOW__TIMEOUT=0 (default), POST /ingest returns before the"
+    echo -e "  flow runs. We capture flow_run_id, then poll GET /flow/{id} until it"
+    echo -e "  reaches a terminal state and reports per-Task results."
+    echo ""
+
+    RESPONSE=$(curl -s -X POST "http://localhost:8000/ingest" \
+      -H "Content-Type: application/json" \
+      -H "Authorization: Bearer ${APP__TRANSPORT__API_KEY:-demo-key-12345}" \
+      -d '{
+        "metadata": {
+          "who": "demo-user",
+          "what": "flow-retrieval-demo",
+          "content_type": "text/plain",
+          "filename": "retrieval.txt"
+        },
+        "content": "RmlyZS1hbmQtZm9yZ2V0IHJldHJpZXZhbCBkZW1vLg=="
+      }')
+    echo "$RESPONSE" | python3 -m json.tool
+    FLOW_RUN_ID=$(echo "$RESPONSE" | python3 -c "import sys, json; f=(json.load(sys.stdin).get('flow') or {}); print(f.get('flow_run_id') or '')")
+
+    if [ -z "$FLOW_RUN_ID" ]; then
+        echo -e "${YELLOW}⚠ No flow_run_id returned (flow not invoked); skipping retrieval${NC}"
+    else
+        echo ""
+        echo -e "  Captured flow_run_id: ${FLOW_RUN_ID}"
+        echo -e "${BLUE}  Immediate GET /flow/{id} (expect pending — success: null):${NC}"
+        curl -s "http://localhost:8000/flow/${FLOW_RUN_ID}" | python3 -m json.tool
+
+        echo -e "${BLUE}  Polling GET /flow/{id} until terminal...${NC}"
+        for attempt in $(seq 1 15); do
+            sleep 2
+            FRESP=$(curl -s "http://localhost:8000/flow/${FLOW_RUN_ID}")
+            STATUS=$(echo "$FRESP" | python3 -c "import sys, json; print(json.load(sys.stdin).get('status', ''))")
+            SUCCESS=$(echo "$FRESP" | python3 -c "import sys, json; v=json.load(sys.stdin).get('success'); print('null' if v is None else v)")
+            echo -e "  attempt ${attempt}: status=${STATUS} success=${SUCCESS}"
+            if [ "$SUCCESS" != "null" ]; then
+                echo -e "${GREEN}  ✓ Flow run terminal — final FlowResponse:${NC}"
+                echo "$FRESP" | python3 -m json.tool
+                break
+            fi
+        done
+    fi
+    echo ""
+    sleep 1
+fi
+
 # Show results
 echo -e "${YELLOW}Step 6: Verification${NC}"
 echo ""
@@ -475,6 +531,7 @@ echo "  ✓ Test 5:  Fatheavy with http:// URL  (what=http-content → None/defa
 echo "  ✓ Test 6:  Error handling - non-existent file:// URL"
 echo "  ✓ Test 7:  Error handling - HTTP 404"
 if [ "$PREFECT_AVAILABLE" = true ]; then
+    echo "  ✓ Test 8:  Fire-and-forget flow result retrieval (GET /flow/{id})"
     echo "  ✓ Prefect Flow invoked for each test (3-task pipeline)"
 fi
 echo ""
@@ -487,8 +544,10 @@ echo ""
 if [ "$PREFECT_AVAILABLE" = true ]; then
     echo "Prefect Flow pipeline demonstrated:"
     echo "  • validate-message — fast task checking metadata"
-    echo "  • process-content — subprocess task (scripts/process.py)"
+    echo "  • process-content — subprocess task (scripts/process.py,"
+    echo "    sleep tunable via RPSD_PROCESS_SLEEP=${RPSD_PROCESS_SLEEP:-5}s)"
     echo "  • finalize — fast task logging the result"
+    echo "  • GET /flow/{id} — retrieve a fire-and-forget run's FlowResponse later"
     echo ""
 fi
 echo "Error handling demonstrated:"
@@ -504,6 +563,7 @@ echo -e "${BLUE}============================================${NC}"
 echo ""
 echo -e "${GREEN}FastAPI App:${NC}      http://localhost:8000"
 echo -e "${GREEN}Health Check:${NC}     http://localhost:8000/health"
+echo -e "${GREEN}Flow result:${NC}      http://localhost:8000/flow/{flow_run_id}"
 echo ""
 
 if [ "$CARRIER" == "kafka" ]; then

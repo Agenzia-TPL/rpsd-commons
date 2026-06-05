@@ -5,6 +5,12 @@ This file provides context for AI development assistants (Claude Code, GitHub Co
 ## Project Overview
 See `ai-project.md` for project description and details.
 
+The root `ai-project.md` covers the **core library packages** only
+(rpsd-storage, rpsd-transport, rpsd-flow). Examples and other sub-projects may
+carry their own co-located `ai-project.md`, scoped to that sub-project (e.g.
+`examples/fastapi_ingest_app/ai-project.md`). When working inside a
+sub-project, read and update the `ai-project.md` nearest the work.
+
 ## Technology Stack
 - **Language:** Python 3.13+
 - **Package Manager:** uv
@@ -80,6 +86,11 @@ If this file exists:
 - Keep entries **succinct** - this is a decision log, not detailed documentation
 - This file captures **what** and **why**, not **how** (implementation details go in code/docs)
 - Think of it as: "This is what I'm asking the AI to build" rather than "This is what was built"
+- **Scope / location**: these planning docs may live per sub-project directory,
+  not only at the repo root. The root `ai-project.md` covers the core library;
+  a complex example or sub-project may have its own co-located `ai-project.md`
+  (e.g. `examples/fastapi_ingest_app/ai-project.md`). Read and update the one
+  nearest the work, and keep sub-project specifics out of the root file.
 
 #### `ARCHITECTURE.md` - Technical Architecture Documentation (Optional)
 If this file exists:
