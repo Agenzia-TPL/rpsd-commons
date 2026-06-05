@@ -79,3 +79,78 @@ class FlowResponse(BaseModel):
     started_at: datetime | None = None
     finished_at: datetime | None = None
     task_results: list[TaskResult] = Field(default_factory=list)
+
+    def add_subflow(
+        self,
+        child: "FlowResponse",
+        *,
+        detail: bool = False,
+        prefix: str | None = None,
+    ) -> "FlowResponse":
+        """Fold a child subflow's outcome into this response's ``task_results``.
+
+        A parent Flow that invokes a lower-level Flow as a subflow (via
+        ``run_flow_async(..., timeout=None)``) uses this to roll the child's
+        outcome into its own response. The result stays **flat**: the outer
+        caller sees one uniform list of :class:`TaskResult` and need not know a
+        subflow was involved. Returns ``self`` for chaining.
+
+        Does **not** modify ``self.success`` — the parent Flow owns its own
+        success semantic. The child's true ``success`` is carried verbatim in
+        the appended row(s), so it participates faithfully if the parent
+        computes ``success = all(r.success for r in self.task_results)``.
+
+        Precondition: ``child`` is terminal (the parent waited with
+        ``timeout=None``), i.e. ``child.success`` is ``True``/``False``, not
+        ``None``.
+
+        Args:
+            child: The :class:`FlowResponse` returned by the subflow.
+            detail: When ``False`` (default), append a single summary row
+                (``task_name = prefix or child.flow_name``,
+                ``success = child.success``, ``error`` = first failing child
+                row's error, ``duration`` from the child's
+                ``started_at``/``finished_at``). Robust — reflects
+                ``child.success`` even when the child reported no per-Task
+                detail. When ``True``, append every child :class:`TaskResult`,
+                each ``task_name`` prefixed
+                ``"<prefix or child.flow_name>/<task_name>"`` to guarantee
+                uniqueness; best when the child returns its own rich
+                ``task_results``.
+            prefix: Label used for the summary row name (``detail=False``) or as
+                the namespace prefix (``detail=True``). Defaults to
+                ``child.flow_name``. Pass an explicit value to disambiguate the
+                same subflow invoked more than once.
+
+        Returns:
+            ``self``, with the folded row(s) appended to ``task_results``.
+        """
+        label = prefix or child.flow_name
+        if detail:
+            self.task_results.extend(
+                TaskResult(
+                    task_name=f"{label}/{tr.task_name}",
+                    success=tr.success,
+                    error=tr.error,
+                    duration=tr.duration,
+                )
+                for tr in child.task_results
+            )
+            return self
+
+        duration = None
+        if child.started_at is not None and child.finished_at is not None:
+            duration = (child.finished_at - child.started_at).total_seconds()
+        error = next(
+            (tr.error for tr in child.task_results if not tr.success and tr.error),
+            None,
+        )
+        self.task_results.append(
+            TaskResult(
+                task_name=label,
+                success=bool(child.success),
+                error=error,
+                duration=duration,
+            )
+        )
+        return self

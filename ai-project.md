@@ -422,6 +422,23 @@ Key design decisions:
 
 **Expected outcome**: `from rpsd_flow import get_flow_response, get_flow_response_async`. Callers can implement the fire-and-forget → poll-later loop without touching the Prefect client directly.
 
+## Flow composition (subflows)
+__DONE__
+
+**Problem**: the platform needs Flow *composition* — a "higher-level" Flow defined by one service (e.g. ingest) that invokes one or more "lower-level" Flows defined by other services (e.g. a validator) as Prefect subflows, waits for them, and branches on the outcome. The apparent friction is the `timeout`: the outermost trigger (HTTP → ingest) must be fire-and-forget because validation can be slow, yet the parent Flow genuinely needs to *wait* for the child before branching. We also want the outer caller to keep seeing a single, flat `FlowResponse` — it must not need to know subflows were involved.
+
+**Proposed Solution**: no new execution API. `timeout` is per-invocation and the two calls live at different layers, so they never conflict — the external trigger uses `timeout=0` (fire-and-forget), while the parent → child call *inside* the Flow uses `timeout=None` (block until the child is terminal). `run_flow_async(..., timeout=None)` from inside a Flow is already a Prefect subflow: `run_deployment` auto-links the child run to the parent, so the tree is navigable in the Prefect UI regardless of the response shape. To keep the response flat, add one helper — `FlowResponse.add_subflow(child, *, detail=False, prefix=None)` — that folds a child `FlowResponse` into the parent's `task_results`: by default a single summary `TaskResult` (`task_name` = child flow name, `success` = `child.success`, first child error, child duration), or with `detail=True` every child row, each name prefixed `"<flow-name>/<task-name>"` for uniqueness.
+
+Key design decisions:
+- **No `run_subflow` helper.** Two near-identical names with opposite `timeout` defaults would confuse, and mixed long/fast parent/child cases need explicit per-call timeouts anyway. A subflow invocation is just `await run_flow_async(..., timeout=None)`.
+- **Method on `FlowResponse`, not a free function.** Folding is pure data-to-data (build `TaskResult`s from another `FlowResponse`), with no I/O or Prefect coupling, so it keeps `responses.py` Prefect-free; a method is idiomatic Pydantic and discoverable on the type. Returns `self` for chaining.
+- **Helper never touches `self.success`.** The parent owns its own success semantic; the child's true `success` is carried verbatim in the folded row, so it participates faithfully when the parent computes `success = all(r.success for r in task_results)` — no re-derivation.
+- **Summary mode is the robust default.** A flow-level failure with no per-Task detail still appends a `success=False` row, so a failure cannot silently vanish; `detail=True` (granular, prefixed rows) is best when the child returns its own rich `task_results`.
+- **Flat over nested.** A prefixed name like `validate-flow/syntax` just reads as a namespaced task name, so the caller branches on `success` over one uniform list and never interprets a subflow boundary. No `subflow_responses` nesting; if a UI ever needs to deep-link child runs from the response, the minimal future hook is an optional `flow_run_id` on `TaskResult` (noted, not built).
+- **Topology caveat (operational, not API).** A blocking parent holds a concurrency slot for the child's whole duration; parent and child must be served on **separate processes / work pools** or risk slot-starvation/deadlock. Native same-process subflows would avoid this but require importing the child's code, impossible across services.
+
+**Expected outcome**: services compose Flows across service boundaries with fire-and-forget at the edge and blocking-with-branch inside, while the outer caller consumes one flat `FlowResponse` and stays oblivious to the composition. Demonstrated by the `validate-flow` + `ingest-with-validation-flow` example in `examples/fastapi_ingest_app/subflow_example.py`.
+
 ## Subprocess Task
 __DONE__
 

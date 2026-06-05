@@ -184,6 +184,91 @@ def netex_validate(message: TransportMessage) -> FlowResponse:
     )
 ```
 
+## Composing Flows (subflows)
+
+A "higher-level" Flow can invoke a "lower-level" Flow (often defined by another
+service) as a **subflow** — wait for it, then branch on the outcome. There is **no
+special API**: a subflow is just `run_flow_async(..., timeout=None)` called from
+*inside* a running Flow. Prefect's `run_deployment` automatically links the triggered
+run as a child of the current run, so the parent→child relationship shows up in the
+Prefect UI for free.
+
+### `timeout` is per-call — and the two calls live at different layers
+
+The classic friction is "the outside HTTP POST must be fire-and-forget, but the parent
+Flow needs to *wait* for the child". These never conflict, because `timeout` belongs to
+each invocation independently:
+
+| Layer | Call | `timeout` |
+|-------|------|-----------|
+| External entry point (HTTP → ingest) | `run_flow_async(ingest, msg, timeout=0)` | `0` — fire-and-forget; returns a `flow_run_id`, the client polls later via `get_flow_response`. |
+| Parent Flow body → child deployment | `await run_flow_async(validate, msg, timeout=None)` | `None` — block *inside the parent worker* until the child is terminal, then branch. |
+
+The "wait" happens inside the parent worker; the external caller already left with its
+`flow_run_id`.
+
+### Folding a subflow into a flat response
+
+So the outer caller never has to know a subflow ran, the parent folds the child's
+outcome into its own `FlowResponse` with `add_subflow`, keeping `task_results` a single
+flat list:
+
+```python
+from rpsd_flow import flow, run_flow_async, FlowResponse, TaskResult
+from rpsd_transport.models import TransportMessage
+
+@flow(name="ingest-flow", log_prints=True)
+async def ingest_flow(message: TransportMessage) -> FlowResponse:
+    response = FlowResponse(incoming=message, flow_name="ingest-flow")
+    # ... save the file, append your own TaskResult(s) ...
+
+    # Subflow: invoke the validator deployment and WAIT (timeout=None).
+    child = await run_flow_async("validate-flow/prod", message, timeout=None)
+    response.add_subflow(child)              # one flat summary row
+    # response.add_subflow(child, detail=True)  # or: every child row, prefixed
+
+    if child.success:
+        dispatch_success.submit(message).result()
+    else:
+        handle_failure.submit(message).result()
+
+    response.status = "COMPLETED"
+    response.success = all(r.success for r in response.task_results)
+    return response
+```
+
+`add_subflow(child)` appends a single summary `TaskResult` (`task_name` = the child's
+flow name, `success` = `child.success`, `error` = the first failing child row, etc.).
+`detail=True` instead appends every child `TaskResult`, each name prefixed
+`"<flow-name>/<task-name>"` so names stay unique. Either way the caller sees one
+uniform, flat list and branches on `success` — a prefixed name like
+`validate-flow/syntax` just reads as a namespaced task name, not a subflow boundary.
+
+**Child success vs. parent success.** `add_subflow` never touches `response.success` —
+the parent owns its own success semantic. The *child's* true success is
+`child.success`, carried verbatim in the folded row; computing
+`success = all(r.success for r in response.task_results)` then folds the child in
+truthfully alongside the parent's own steps (or set `success` from explicit logic if a
+subflow is advisory and shouldn't fail the parent).
+
+> If you ever need to deep-link a child run from the response itself (e.g. a pipeline
+> UI), the minimal flat extension is an optional `flow_run_id` on `TaskResult` — not
+> built today, since the full tree is already navigable in the Prefect UI.
+
+### Serve parent and child on separate work pools
+
+The real cost of a blocking parent is **worker-slot occupancy**: while the parent waits
+on `timeout=None`, it holds a concurrency slot in its serve process for the child's
+whole duration. If parent and child share one process/work pool with a fixed `limit`,
+you can **deadlock** — every slot held by a parent waiting on a child that can never be
+scheduled. Serve them on **separate processes / work pools** (and consider a dedicated
+pool for single long-running Tasks too) so their concurrency budgets are independent.
+Native same-process subflows (a direct function call) avoid this but require importing
+the child's code, which is impossible across separate services.
+
+Use `run_flow_async` (not the sync `run_flow`) inside a Flow — calling the sync helper
+from within a running event loop is a documented Prefect sharp edge.
+
 ## Subprocess tasks
 
 `subprocess_task` builds a `@task` that runs an arbitrary CLI command via an

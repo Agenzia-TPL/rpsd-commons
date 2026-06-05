@@ -107,6 +107,36 @@ setting) and reaches the script because `subprocess_task` inherits the task
 server's environment. Raising it makes the fire-and-forget → poll-later
 transition easy to observe; lowering it keeps the demo snappy.
 
+## Subflow composition (`subflow_example.py`)
+
+**Problem**: the platform needs Flow *composition* — a "higher-level" Flow
+(e.g. ingest) that invokes one or more "lower-level" Flows defined by other
+services (e.g. a validator) as Prefect subflows, waits for them, and then
+branches on the result. The friction is the `timeout`: the outermost trigger
+(HTTP → ingest) must stay fire-and-forget because validation can be slow, yet
+the parent Flow genuinely needs to wait for the child before branching. We also
+want the outer caller to keep seeing a single, flat `FlowResponse` — it should
+not need to know subflows were involved.
+
+**Proposed Solution**: lean on the fact that `timeout` is per-invocation and
+the two calls live at different layers — the external trigger uses `timeout=0`,
+the parent → child call inside the Flow uses `timeout=None` (block until the
+child is terminal). No new execution API: `run_flow_async(..., timeout=None)`
+from inside a Flow is already a Prefect subflow (auto-linked parent→child). The
+parent folds the child's outcome into its own response with the new
+`FlowResponse.add_subflow(child)` helper, which appends a flat summary
+`TaskResult` carrying `child.success` (or, with `detail=True`, the child's rows
+prefixed by flow name). The parent owns its own `success`; the folded row makes
+the child participate in `all(...)` without re-derivation. We'll add
+`validate-flow` and `ingest-with-validation-flow`, served by separate
+`serve-validate` / `serve-ingest` entry points so the blocking parent and its
+child get independent concurrency budgets.
+
+**Expected outcome**: a runnable two-Flow example where the outer caller gets
+one flat `FlowResponse` (a `validate-flow` summary row alongside the parent's
+own tasks) and never sees the subflow; the parent→child tree remains navigable
+in the Prefect UI; and the separate-work-pool topology avoids slot-starvation.
+
 ## Consumer (`consumer.py`)
 __DONE__
 
@@ -127,3 +157,15 @@ always-write audit log, fat/heavy across URL schemes, error handling, and
 pending response, then poll `GET /flow/{id}` until terminal). Restores the
 original `.env` on exit. Sets `RPSD_PROCESS_SLEEP=5` so the retrieval loop is
 observable.
+
+When Prefect is available it also starts the composite-flow servers on
+**separate processes / work pools** — `serve-validate`
+(`validate-flow/validate-deployment`) and `serve-ingest`
+(`ingest-with-validation-flow/ingest-deployment`) — and runs **Test 9: composite
+flow with a subflow**: a small `run_flow` / `get_flow_response` snippet triggers
+the parent fire-and-forget (`timeout=0`) and polls until terminal, printing the
+single flat `FlowResponse` whose `task_results` carry the folded `validate-flow`
+summary row — demonstrating that the caller never sees the subflow. Both example
+flows set `persist_result=True` so the flow-authored (verbatim) response, with
+that folded row, survives retrieval. Composite PIDs are tracked and killed on
+cleanup; the test is skipped if the servers fail to start.

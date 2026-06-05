@@ -48,6 +48,7 @@ echo "  • Fatheavy messages with http:// URLs"
 echo "  • Fatheavy messages with https:// URLs"
 echo "  • Error handling (404, non-existent files)"
 echo "  • Fire-and-forget flow result retrieval (GET /flow/{id})"
+echo "  • Composite flow with a subflow (validate-flow inside parent, flat response)"
 echo ""
 
 # Check if we're in the right directory
@@ -193,6 +194,9 @@ fi
 # Start Prefect task worker and flow server if Prefect is available
 TASK_PID=""
 FLOW_PID=""
+VALIDATE_PID=""
+INGEST_PID=""
+COMPOSITE_AVAILABLE=false
 if [ "$PREFECT_AVAILABLE" = true ]; then
     echo -e "${YELLOW}Step 3a: Starting Prefect task server...${NC}"
     uv run sample-task > /tmp/sample-task.log 2>&1 &
@@ -224,6 +228,34 @@ if [ "$PREFECT_AVAILABLE" = true ]; then
             FLOW_PID=""
         else
             echo -e "${GREEN}✓ Sample flow server running (PID: $FLOW_PID)${NC}"
+        fi
+        echo ""
+    fi
+
+    # Composite (subflow) demo: serve the validator and the parent on SEPARATE
+    # processes / work pools. A blocking parent (timeout=None on the subflow)
+    # holds a concurrency slot for the child's whole duration, so sharing one
+    # pool risks slot-starvation/deadlock — separate servers keep their
+    # concurrency budgets independent.
+    if [ "$PREFECT_AVAILABLE" = true ]; then
+        echo -e "${YELLOW}Step 3b2: Starting composite flow servers (separate pools)...${NC}"
+        uv run serve-validate > /tmp/serve-validate.log 2>&1 &
+        VALIDATE_PID=$!
+        uv run serve-ingest > /tmp/serve-ingest.log 2>&1 &
+        INGEST_PID=$!
+        sleep 3
+
+        if kill -0 $VALIDATE_PID 2>/dev/null && kill -0 $INGEST_PID 2>/dev/null; then
+            COMPOSITE_AVAILABLE=true
+            echo -e "${GREEN}✓ Validator flow server running (PID: $VALIDATE_PID)${NC}"
+            echo -e "${GREEN}✓ Composite flow server running (PID: $INGEST_PID)${NC}"
+        else
+            echo -e "${YELLOW}⚠ Composite flow servers failed to start (skipping composite test)${NC}"
+            tail -5 /tmp/serve-validate.log 2>/dev/null || true
+            tail -5 /tmp/serve-ingest.log 2>/dev/null || true
+            kill $VALIDATE_PID $INGEST_PID 2>/dev/null || true
+            VALIDATE_PID=""
+            INGEST_PID=""
         fi
         echo ""
     fi
@@ -495,6 +527,60 @@ if [ "$PREFECT_AVAILABLE" = true ]; then
     sleep 1
 fi
 
+# Test 9: Composite Flow (subflow) — fire-and-forget + flat FlowResponse
+if [ "$COMPOSITE_AVAILABLE" = true ]; then
+    echo -e "${BLUE}Test 9: Composite Flow with a subflow${NC}"
+    echo -e "  ingest-with-validation-flow saves the file, then invokes validate-flow"
+    echo -e "  as a SUBFLOW (timeout=None → waits), folds the child outcome into a"
+    echo -e "  single FLAT FlowResponse, and branches. We trigger the PARENT"
+    echo -e "  fire-and-forget (timeout=0) and poll until it is terminal — the caller"
+    echo -e "  never sees the subflow, only one flat task list with a 'validate-flow' row."
+    echo ""
+
+    uv run python - <<'PY' || true
+import time
+
+from rpsd_flow import get_flow_response, run_flow
+from rpsd_transport.models import MessageMetadata, TransportMessage
+
+message = TransportMessage(
+    metadata=MessageMetadata(
+        who="demo-user",
+        what="composite-demo",
+        content_type="text/plain",
+        filename="composite.txt",
+    ),
+    content=b"Composite flow demo.",
+)
+
+deployment = "ingest-with-validation-flow/ingest-deployment"
+pending = run_flow(deployment, message)  # timeout=0 → fire-and-forget
+run_id = pending.flow_run_id
+print(f"  triggered {deployment} (run id={run_id}, status={pending.status})")
+
+final = None
+for attempt in range(1, 16):
+    time.sleep(2)
+    resp = get_flow_response(run_id)
+    print(f"  attempt {attempt}: status={resp.status} success={resp.success}")
+    if resp.success is not None:
+        final = resp
+        break
+
+if final is None:
+    print("  (composite flow did not reach a terminal state in time)")
+else:
+    print(f"  FLAT FlowResponse: flow_name={final.flow_name} success={final.success}")
+    print("  task_results (the subflow appears as ONE row, no nesting):")
+    for tr in final.task_results:
+        print(f"    - {tr.task_name}: success={tr.success} duration={tr.duration}")
+    print("  Complete final FlowResponse:")
+    print(final.model_dump_json(indent=2))
+PY
+    echo ""
+    sleep 1
+fi
+
 # Show results
 echo -e "${YELLOW}Step 6: Verification${NC}"
 echo ""
@@ -521,6 +607,17 @@ if [ "$PREFECT_AVAILABLE" = true ]; then
     echo ""
 fi
 
+if [ "$COMPOSITE_AVAILABLE" = true ]; then
+    echo -e "${BLUE}Composite flow logs (parent + validator subflow):${NC}"
+    echo ""
+    echo "Validator subflow (serve-validate):"
+    tail -30 /tmp/serve-validate.log 2>/dev/null | grep -E "(Metadata OK|validate-flow)" | tail -8 || echo "  (No validator log entries yet)"
+    echo ""
+    echo "Parent flow (serve-ingest):"
+    tail -30 /tmp/serve-ingest.log 2>/dev/null | grep -E "(Saving file|Validation succeeded|Validation failed|Flow response)" | tail -8 || echo "  (No parent log entries yet)"
+    echo ""
+fi
+
 echo -e "${BLUE}Summary of test scenarios:${NC}"
 echo "  ✓ Test 1:  Slimfast message (what=daily-report → compare_before_save=True)"
 echo "  ✓ Test 2:  Deduplication — identical daily-report skipped (True)"
@@ -533,6 +630,9 @@ echo "  ✓ Test 7:  Error handling - HTTP 404"
 if [ "$PREFECT_AVAILABLE" = true ]; then
     echo "  ✓ Test 8:  Fire-and-forget flow result retrieval (GET /flow/{id})"
     echo "  ✓ Prefect Flow invoked for each test (3-task pipeline)"
+fi
+if [ "$COMPOSITE_AVAILABLE" = true ]; then
+    echo "  ✓ Test 9:  Composite flow — validate-flow invoked as a subflow, flat response"
 fi
 echo ""
 echo "The consumer demonstrates rpsd-storage integration across all URL schemes:"
@@ -548,6 +648,16 @@ if [ "$PREFECT_AVAILABLE" = true ]; then
     echo "    sleep tunable via RPSD_PROCESS_SLEEP=${RPSD_PROCESS_SLEEP:-5}s)"
     echo "  • finalize — fast task logging the result"
     echo "  • GET /flow/{id} — retrieve a fire-and-forget run's FlowResponse later"
+    echo ""
+fi
+if [ "$COMPOSITE_AVAILABLE" = true ]; then
+    echo "Composite (subflow) Flow demonstrated:"
+    echo "  • validate-flow — lower-level Flow, served on its OWN pool (serve-validate)"
+    echo "  • ingest-with-validation-flow — parent, served on its OWN pool (serve-ingest);"
+    echo "    invokes validate-flow as a subflow (timeout=None), folds the child into a"
+    echo "    FLAT FlowResponse via add_subflow, then branches on child.success"
+    echo "  • External trigger is fire-and-forget (timeout=0); the wait happens inside"
+    echo "    the parent worker, not the caller"
     echo ""
 fi
 echo "Error handling demonstrated:"
@@ -587,6 +697,12 @@ fi
 if [ -n "$FLOW_PID" ]; then
     echo -e "  Flow:     tail -f /tmp/sample-flow.log"
 fi
+if [ -n "$VALIDATE_PID" ]; then
+    echo -e "  Validate: tail -f /tmp/serve-validate.log"
+fi
+if [ -n "$INGEST_PID" ]; then
+    echo -e "  Ingest:   tail -f /tmp/serve-ingest.log"
+fi
 echo ""
 echo -e "${YELLOW}Press Ctrl+C to stop demo and cleanup...${NC}"
 echo ""
@@ -601,6 +717,12 @@ cleanup() {
     fi
     if [ -n "$TASK_PID" ]; then
         kill $TASK_PID 2>/dev/null || true
+    fi
+    if [ -n "$INGEST_PID" ]; then
+        kill $INGEST_PID 2>/dev/null || true
+    fi
+    if [ -n "$VALIDATE_PID" ]; then
+        kill $VALIDATE_PID 2>/dev/null || true
     fi
 
     # Restore original .env
