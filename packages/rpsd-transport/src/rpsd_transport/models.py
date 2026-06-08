@@ -15,7 +15,7 @@ from collections.abc import Awaitable, Callable
 from typing import Any, Literal
 from urllib.parse import urlparse
 
-from pydantic import BaseModel, Field, PrivateAttr, field_validator
+from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, field_validator
 
 # Regex for valid identifier characters (alphanumeric, dashes, underscores)
 IDENTIFIER_PATTERN = re.compile(r"^[a-zA-Z0-9_-]+$")
@@ -99,7 +99,17 @@ class TransportMessage(BaseModel):
 
     PubSub carriers set _ack_fn / _nack_fn to allow consumers to
     acknowledge or reject messages after processing.
+
+    Note:
+        ``who``, ``what``, ``where`` and ``content_type`` live under
+        ``metadata`` and are exposed here only as read-only accessors. Set
+        them via ``metadata=MessageMetadata(...)``, not as top-level keyword
+        arguments — ``extra="forbid"`` makes a stray top-level kwarg (e.g.
+        ``TransportMessage(where=...)``) raise instead of being silently
+        ignored.
     """
+
+    model_config = ConfigDict(extra="forbid")
 
     metadata: MessageMetadata
     content: bytes | None = Field(

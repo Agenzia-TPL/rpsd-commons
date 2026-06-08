@@ -273,6 +273,39 @@ class TestTransportMessage:
 
         assert message.content is None
 
+    def test_top_level_where_kwarg_raises(self):
+        """A stray top-level 'where=' must raise, not be silently dropped.
+
+        Regression: 'where' is a read-only accessor over metadata.where, so
+        passing it at the top level used to be ignored (extra='ignore'),
+        leaving message.where as None. extra='forbid' now rejects it.
+        """
+        metadata = MessageMetadata(who="user123", what="document")
+        with pytest.raises(ValidationError) as exc_info:
+            TransportMessage(
+                where="file:///x",
+                metadata=metadata,
+            )
+        assert "where" in str(exc_info.value)
+        assert "extra" in str(exc_info.value).lower()
+
+    def test_other_unknown_top_level_kwarg_raises(self):
+        """Any unknown top-level field (e.g. who=) is rejected too."""
+        metadata = MessageMetadata(who="user123", what="document")
+        with pytest.raises(ValidationError):
+            TransportMessage(who="user123", metadata=metadata)
+
+    def test_where_must_be_set_via_metadata(self):
+        """The correct construction routes where through metadata."""
+        metadata = MessageMetadata(
+            who="user123",
+            what="document",
+            where="https://example.com/file",
+        )
+        message = TransportMessage(metadata=metadata)
+
+        assert message.where == "https://example.com/file"
+
 
 class TestTransportMessageAckNack:
     """Tests for TransportMessage ack/nack methods."""
