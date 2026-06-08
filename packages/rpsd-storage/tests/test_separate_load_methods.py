@@ -164,6 +164,28 @@ class TestSeparateLoadMethods:
         assert loaded_metadata.content_encoding == "gzip"
         assert loaded_metadata.provider == "http"
         assert loaded_metadata.headers is not None
+        # HEAD has no body, so the content hash is unknown — must be "" and
+        # NOT the fabricated md5 of an empty body (d41d8cd9...).
+        assert loaded_metadata.hash == ""
+
+    @respx.mock
+    def test_http_load_get_computes_real_hash(self):
+        """load() (GET) hashes the actual body, unlike HEAD-based metadata."""
+        import hashlib
+
+        test_url = "https://example.com/test-file.txt"
+        test_content = b"real body content for hashing"
+        respx.get(test_url).mock(
+            return_value=Response(
+                200,
+                content=test_content,
+                headers={"content-type": "text/plain"},
+            )
+        )
+        provider = HTTPStorageProvider()
+        _, metadata = provider.load(test_url)
+        assert metadata.hash == hashlib.md5(test_content).hexdigest()
+        assert metadata.hash != ""
 
     def test_static_load_content_from_url_s3(self):
         """Test static load_content_from_url method with S3 URL."""

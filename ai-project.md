@@ -134,6 +134,17 @@ Per provider: FS returns `open(path, "rb")` (its own CM); S3 yields `get_object(
 
 **Expected outcome:** consumers process arbitrarily large stored content with a bounded working set. rpsd-validator switches to it in a later PR. Demonstrated by `examples/fastapi_ingest_app/scripts/process.py` (streams the content at `where` in chunks and verifies its MD5 against the stored metadata).
 
+## HTTP metadata hash + conditional fetch
+__OPEN__
+
+**Problem:** the HTTP provider's `load_metadata()` uses a HEAD request (no body), but the metadata builder hashed `response.content`, which on a HEAD is empty — so `hash` was always `md5("")` (`d41d8cd9…`), a meaningless value identical for every URL, despite `StorageMetadata.hash` being "the MD5 of the content" and feeding `StorageMetadata.compare()`. Fixed for now by leaving `hash = ""` (the existing "unknown" sentinel) when there is no body; the GET path (`load`/`load_content`) still hashes the real body.
+
+This leaves a genuine need unaddressed: re-downloading an HTTP resource only when it actually changed. The rpsd-storage change model is MD5-hash equality, which HTTP cannot satisfy from a HEAD.
+
+**Proposed direction (not scheduled):** lean on HTTP's native validators instead of MD5 — store the resource's `ETag` (already captured in `metadata.etag`) and/or `Last-Modified`, and on re-fetch send `If-None-Match` / `If-Modified-Since`; a `304 Not Modified` means "unchanged, skip download", a `200` returns the new body. Today `load_metadata().etag` already enables a manual ETag compare; the open work is wiring conditional GET into `load()` and deciding how (or whether) HTTP participates in `compare()` / `compare_before_save`.
+
+**Expected outcome:** efficient "fetch-if-changed" for HTTP sources without abusing the MD5 hash field. Captured here so it isn't lost.
+
 # rpsd-transport
 
 ## Overview

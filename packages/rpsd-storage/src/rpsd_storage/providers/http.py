@@ -196,8 +196,11 @@ class HTTPStorageProvider(StorageProvider):
         elif "content-length" in response.headers:
             content_length = int(response.headers["content-length"])
 
-        # Calculate hash of content
-        content_hash = hashlib.md5(response.content).hexdigest()
+        # Hash the body when present (GET). A HEAD response has no body, so the
+        # content hash is unknown — leave it "" rather than fabricating md5("").
+        content_hash = (
+            hashlib.md5(response.content).hexdigest() if response.content else ""
+        )
 
         # Extract filename from URL or Content-Disposition header
         original_filename = "unknown"
@@ -338,6 +341,11 @@ class HTTPStorageProvider(StorageProvider):
     def load_metadata(self, url: str) -> StorageMetadata:
         """
         Load only metadata from an HTTP/HTTPS URL using HEAD request.
+
+        Note:
+            Because this uses HEAD (no body is downloaded), the returned
+            ``hash`` is "" — unlike the FS/S3 providers, the content MD5 is
+            unknown. Use ``load()`` if you need a content hash.
 
         Args:
             url: Complete HTTP or HTTPS URL to retrieve metadata from
