@@ -5,7 +5,10 @@ import hashlib
 import json
 import logging
 import os
+from collections.abc import Iterator
+from contextlib import contextmanager
 from datetime import UTC, datetime
+from typing import BinaryIO
 from urllib.parse import urlparse
 
 import boto3
@@ -311,6 +314,29 @@ class S3StorageProvider(StorageProvider):
 
         logger.info(f"Loaded content from S3: {s3_key}")
         return content
+
+    @contextmanager
+    def open_content(self, url: str) -> Iterator[BinaryIO]:
+        """
+        Opens the content at the given URL as a binary stream.
+
+        Yields botocore's StreamingBody (supports .read(n), iteration). The
+        stream is NOT seekable. The caller must NOT close it; the context
+        manager closes it on exit.
+        """
+        bucket_name, s3_key = self._parse_and_validate_url(url)
+
+        try:
+            response = self.s3_client.get_object(Bucket=bucket_name, Key=s3_key)
+        except Exception as e:
+            self._handle_s3_exception(e, url, "get S3 object")
+
+        body = response["Body"]
+        logger.info(f"Opened content stream from S3: {s3_key}")
+        try:
+            yield body
+        finally:
+            body.close()
 
     def load_metadata(self, url: str) -> StorageMetadata:
         """

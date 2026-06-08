@@ -107,6 +107,42 @@ setting) and reaches the script because `subprocess_task` inherits the task
 server's environment. Raising it makes the fire-and-forget → poll-later
 transition easy to observe; lowering it keeps the demo snappy.
 
+## Streaming content read in the subprocess
+__DONE__
+
+**Problem**: `scripts/process.py` received the storage URL via `RPSD_WHERE` but
+never read the content, so the example didn't show how a real processor consumes
+the ingested payload — and nothing exercised rpsd-storage's new streaming
+`open_content` API.
+
+**Proposed Solution**: for fat/heavy messages, have `process.py` stream the
+content at `where` via `StorageProvider.open_content_from_url(...)` in 64 KB
+chunks (bounded memory, the validator pattern for large XML), compute a running
+MD5, and verify it against `StorageProvider.load_metadata_from_url(...).hash` —
+demonstrating the content-only pairing (streaming bytes + a separate metadata
+call, since there is no streaming metadata twin). The byte/chunk counts and MD5
+result go into the script's JSON output under `"content"`. It stays best-effort:
+a slim/fast message (no `where`) or an unreachable URL is logged and skipped so a
+run never breaks, and the existing `RPSD_PROCESS_SLEEP` sleep is kept as the
+simulated heavy work.
+
+**Expected outcome**: the example shows the motivating rpsd-validator scenario
+end to end — a subprocess streaming stored content by URL without buffering it —
+and the new `open_content` API gains a discoverable caller.
+
+**Visibility**: `process.py` runs inside the `process-content` Prefect deployment
+subprocess, and application-level output from that subprocess (module logger and
+even `print()` under `log_prints`) is not forwarded to the served-flow log
+(`/tmp/sample-flow.log`) or the Prefect UI — only Prefect's own orchestration
+logs are. To make the streaming observable, `process.py` appends its one-line
+summary to the file named by the opt-in `RPSD_STREAM_LOG` env var; `demo.sh` sets
+it (`/tmp/rpsd-stream.log`), and the final report tails it under a dedicated
+"Streaming read" panel. This side channel is the reliable sink given the
+deployment-subprocess log routing; outside the demo the var is unset and nothing
+is written. (The earlier `Recent Flow Activity` grep over `sample-flow.log` for
+app-logger phrases never matched for the same routing reason and was replaced
+with an orchestration-only tail plus the streaming panel.)
+
 ## Subflow composition (`subflow_example.py`)
 
 **Problem**: the platform needs Flow *composition* — a "higher-level" Flow

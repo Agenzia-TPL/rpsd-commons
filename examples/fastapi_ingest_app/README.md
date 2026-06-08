@@ -399,6 +399,29 @@ The sample flow demonstrates a three-task pipeline:
 2. **process-content** — subprocess task calling `scripts/process.py`
 3. **finalize** — fast task that logs the processing result
 
+For fat/heavy messages, `scripts/process.py` also **streams** the stored content
+at `RPSD_WHERE` via `StorageProvider.open_content_from_url(...)`, reading it in
+64 KB chunks so the whole payload is never buffered in memory — the same pattern
+a validator uses on large XML files. It computes a running MD5 while streaming and
+verifies it against `StorageProvider.load_metadata_from_url(...).hash` (the
+streaming API is content-only, so the expected hash comes from a separate
+metadata call). The byte/chunk counts and MD5 result are emitted under a
+`"content"` key in the script's JSON output.
+
+**Where to see it:** `process.py` runs inside the `process-content` Prefect
+deployment subprocess, whose application-level logs are not forwarded to the
+served-flow log or the Prefect UI. So, when the `RPSD_STREAM_LOG` environment
+variable is set, the script also appends a one-line streaming summary to that
+file. `demo.sh` sets `RPSD_STREAM_LOG=/tmp/rpsd-stream.log` and prints its tail in
+the final report under "Streaming read (process-content subprocess …)", e.g.:
+
+```
+16:55:53 Streamed 36 bytes in 1 chunk(s) via open_content for demo-user/daily-report (md5 ok).
+```
+
+Outside the demo (variable unset) nothing extra is written; the summary still
+goes to the script's stderr and JSON stdout.
+
 `scripts/process.py` simulates heavy processing with a sleep whose duration is
 tunable via the `RPSD_PROCESS_SLEEP` environment variable (seconds, default
 `3.0`). Set it in the environment of the task server, e.g.

@@ -3,17 +3,53 @@
 # MONZA E BRIANZA, LODI, PAVIA
 from __future__ import annotations
 
+import io
 import logging
+from collections.abc import Iterator
+from contextlib import contextmanager
+from typing import TYPE_CHECKING, BinaryIO
 from urllib.parse import urlparse
 
 import httpx
 
 from rpsd_storage.metadata import StorageMetadata
 
+if TYPE_CHECKING:
+    from _typeshed import WriteableBuffer
+
 logger = logging.getLogger(__name__)
 
 # Import StorageProvider after other imports to avoid circular dependency
 from rpsd_storage.providers.base import StorageProvider  # noqa: E402
+
+
+class _HttpxStreamReader(io.RawIOBase):
+    """Adapt an httpx byte-chunk iterator into a readable BinaryIO.
+
+    httpx exposes streamed bodies as an iterator of byte chunks rather than a
+    file object with .read(n). This wraps that iterator so consumers (e.g.
+    lxml's etree.parse) get a real readable stream. Wrap in io.BufferedReader
+    for a buffered .read(n) on top of readinto().
+    """
+
+    def __init__(self, response: httpx.Response) -> None:
+        # iter_bytes() transparently decodes content-encoding (gzip/deflate).
+        self._chunks = response.iter_bytes()
+        self._leftover = b""
+
+    def readable(self) -> bool:
+        return True
+
+    def readinto(self, b: WriteableBuffer) -> int:
+        if not self._leftover:
+            self._leftover = next(self._chunks, b"")
+            if not self._leftover:
+                return 0
+        buffer = memoryview(b)
+        n = min(len(buffer), len(self._leftover))
+        buffer[:n] = self._leftover[:n]
+        self._leftover = self._leftover[n:]
+        return n
 
 
 class HTTPStorageProvider(StorageProvider):
@@ -273,6 +309,31 @@ class HTTPStorageProvider(StorageProvider):
         except Exception as e:
             self._handle_http_exceptions(e, url, "loading content")
             raise  # This line should never be reached, but satisfies type checker
+
+    @contextmanager
+    def open_content(self, url: str) -> Iterator[BinaryIO]:
+        """
+        Open content from an HTTP/HTTPS URL as a binary stream.
+
+        Streams the response body without buffering it all in memory. The
+        yielded stream is NOT seekable. The caller must NOT close it; the
+        context manager closes the response and client on exit.
+
+        Args:
+            url: Complete HTTP or HTTPS URL to retrieve
+
+        Raises:
+            ValueError: If URL scheme is not http or https
+            FileNotFoundError: If HTTP response status is 404
+            Exception: For other HTTP errors or network issues
+        """
+        self._validate_url_scheme(url)
+
+        with httpx.Client(timeout=self.timeout) as client:
+            with client.stream("GET", url) as response:
+                self._handle_http_response(response, url)
+                logger.info(f"Opened content stream from {url}")
+                yield io.BufferedReader(_HttpxStreamReader(response))
 
     def load_metadata(self, url: str) -> StorageMetadata:
         """

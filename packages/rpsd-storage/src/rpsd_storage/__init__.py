@@ -51,3 +51,4 @@ def get_storage_provider(settings: StorageSettings | None = None):
 
 # Export static methods for convenience
 load_from_url = StorageProvider.load_from_url
+open_content_from_url = StorageProvider.open_content_from_url

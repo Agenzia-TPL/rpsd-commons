@@ -123,6 +123,17 @@ A `live_s3` pytest marker and session-scoped fixtures (`s3_live_settings`, `s3_l
 
 **Expected outcome:** Developers can place S3 credentials in a git-ignored `.env` at the repo root and run `uv run pytest packages/rpsd-storage/ -m live_s3 -v` to verify behaviour on real infrastructure, without affecting normal CI.
 
+## Streaming read
+__DONE__
+
+**Problem:** the only content reader is `load_content(url) -> bytes`, which pulls the entire payload into memory. Validators/importers consume NeTEx/SIRI XML from a few MB up to multi-GB; lxml's `etree.parse(stream)` can parse from a file-like object without buffering, and S3 already returns a streaming body that we discard by calling `.read()`. rpsd-validator needs to read large files without sizing pods for the worst case.
+
+**Proposed solution:** add a streaming, content-only reader symmetric with the `load_content` family (swap `load` → `open`): `open_content(url)`, `open_content_by_parts(who, what, object_id)`, and a static `open_content_from_url(url)` (exported from the package). Each returns a context manager yielding a readable `BinaryIO`; the caller does NOT close it. Binary only, not necessarily seekable (FS is, S3/HTTP are forward-only), raises `FileNotFoundError` when missing. There is deliberately no `open` (both) or `open_metadata` twin — metadata isn't streamable, so callers needing it call `load_metadata(url)`.
+
+Per provider: FS returns `open(path, "rb")` (its own CM); S3 yields `get_object(...)["Body"]` (botocore `StreamingBody`) under a `@contextmanager` that closes it; HTTP streams via `httpx` `client.stream("GET", url)`. The plan doc assumed `requests` (`response.raw`), but this codebase uses `httpx`, whose streaming API yields a byte *iterator*, not a `.read(n)` object — so HTTP wraps `response.iter_bytes()` in a small `io.RawIOBase` adapter (`_HttpxStreamReader`) under `io.BufferedReader` to expose the `.read(n)` lxml needs.
+
+**Expected outcome:** consumers process arbitrarily large stored content with a bounded working set. rpsd-validator switches to it in a later PR. Demonstrated by `examples/fastapi_ingest_app/scripts/process.py` (streams the content at `where` in chunks and verifies its MD5 against the stored metadata).
+
 # rpsd-transport
 
 ## Overview

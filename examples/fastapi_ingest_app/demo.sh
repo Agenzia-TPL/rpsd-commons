@@ -139,6 +139,12 @@ if [ "$PREFECT_AVAILABLE" = true ]; then
     # demo snappy while still making the pending → completed transition
     # observable when we poll.
     export RPSD_PROCESS_SLEEP="${RPSD_PROCESS_SLEEP:-5}"
+    # Where process.py records its streaming-read summary. The task server
+    # inherits this env, so the process-content subprocess writes here; the
+    # final report tails it to show open_content actually ran. Deployment
+    # subprocess logs don't reach the served-flow log, hence this side channel.
+    export RPSD_STREAM_LOG="${RPSD_STREAM_LOG:-/tmp/rpsd-stream.log}"
+    : > "$RPSD_STREAM_LOG"
 fi
 
 # Backup existing .env and write complete config for demo
@@ -603,9 +609,17 @@ tail -60 /tmp/consumer.log 2>/dev/null | grep -E "(Content not found|Failed to f
 echo ""
 
 if [ "$PREFECT_AVAILABLE" = true ]; then
-    echo -e "${BLUE}Flow server log (Prefect task execution):${NC}"
+    echo -e "${BLUE}Flow server log (Prefect orchestration):${NC}"
     echo ""
-    tail -30 /tmp/sample-flow.log 2>/dev/null | grep -E "(Validating|Finalising|Flow completed|Subprocess|Processing)" | tail -15 || echo "  (No flow log entries yet)"
+    tail -30 /tmp/sample-flow.log 2>/dev/null | grep -E "Flow run '.*' (- Beginning|- Finished|- View)" | tail -10 || echo "  (No flow log entries yet)"
+    echo ""
+    echo -e "${BLUE}Streaming read (process-content subprocess, via open_content):${NC}"
+    echo ""
+    tail -10 "${RPSD_STREAM_LOG:-/tmp/rpsd-stream.log}" 2>/dev/null | sed 's/^/  /' \
+        || echo "  (No streaming reads recorded)"
+    if [ ! -s "${RPSD_STREAM_LOG:-/tmp/rpsd-stream.log}" ]; then
+        echo "  (No streaming reads recorded — only fat/heavy messages stream)"
+    fi
     echo ""
 fi
 

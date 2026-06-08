@@ -5,7 +5,9 @@ import hashlib
 import json
 import logging
 import os
+from contextlib import AbstractContextManager
 from datetime import UTC, datetime
+from typing import BinaryIO
 from urllib.parse import urlparse
 
 from rpsd_storage.metadata import StorageMetadata
@@ -214,6 +216,22 @@ class FSStorageProvider(StorageProvider):
 
         logger.info(f"Loaded content from file system: {file_path}")
         return content
+
+    def open_content(self, url: str) -> AbstractContextManager[BinaryIO]:
+        """
+        Opens the content at the given URL as a binary stream.
+
+        Returns a seekable file handle. The caller must NOT close it; the
+        context manager owns the lifecycle.
+        """
+        file_path = self._parse_and_validate_url(url)
+        try:
+            stream = open(file_path, "rb")
+        except FileNotFoundError:
+            raise FileNotFoundError(f"Content file not found: {file_path}")
+
+        logger.info(f"Opened content stream from file system: {file_path}")
+        return stream
 
     def load_metadata(self, url: str) -> StorageMetadata:
         """

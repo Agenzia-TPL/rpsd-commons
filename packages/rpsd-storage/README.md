@@ -37,6 +37,41 @@ settings = StorageSettings()
 When `StorageSettings` is embedded inside a parent settings class (e.g. `AppSettings`),
 the parent is responsible for loading the `.env` file and passing down the nested values.
 
+## Reading content
+
+Every provider exposes two ways to read content, both keyed by the complete URL
+returned by `save()`:
+
+- **Buffered** — `load_content(url) -> bytes` loads the whole payload into
+  memory. Fine for small files.
+- **Streaming** — `open_content(url)` returns a context manager yielding a
+  readable binary stream, so large files (multi-GB NeTEx/SIRI XML) can be
+  processed without buffering the whole content in memory:
+
+```python
+with provider.open_content(url) as stream:
+    doc = XmlDocument(model, stream)  # lxml streams the parse
+    doc.validate(xsd=True)
+```
+
+The streaming family mirrors the buffered one:
+
+| Buffered | Streaming |
+|---|---|
+| `load_content(url)` | `open_content(url)` |
+| `load_content_by_parts(who, what, object_id)` | `open_content_by_parts(who, what, object_id)` |
+| `StorageProvider.load_content_from_url(url)` | `StorageProvider.open_content_from_url(url)` |
+
+Notes on `open_content`:
+
+- It is **content-only** — there is no streaming twin for metadata. Callers who
+  also need metadata call `load_metadata(url)` separately.
+- The **caller must NOT close** the stream; the context manager owns its
+  lifecycle and closes it on exit (including on exceptions).
+- The stream is **seekable only for the FS provider**. The S3 and HTTP providers
+  yield forward-only streams; callers needing seek can read into `io.BytesIO`.
+- Raises `FileNotFoundError` when the object at the URL does not exist.
+
 ## Running tests
 
 ### Mocked tests (default)

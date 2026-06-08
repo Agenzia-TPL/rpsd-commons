@@ -3,6 +3,8 @@
 # MONZA E BRIANZA, LODI, PAVIA
 import mimetypes
 from abc import ABC, abstractmethod
+from contextlib import AbstractContextManager
+from typing import BinaryIO
 from urllib.parse import urlparse
 
 from rpsd_storage.metadata import StorageMetadata
@@ -122,6 +124,34 @@ class StorageProvider(ABC):
         pass
 
     @abstractmethod
+    def open_content(self, url: str) -> AbstractContextManager[BinaryIO]:
+        """
+        Open the content at *url* as a binary stream (content only).
+
+        Streaming counterpart of load_content(): instead of returning the full
+        payload as bytes, this returns a context manager yielding a readable
+        binary file-like object, so large files can be processed without
+        buffering the whole content in memory (e.g. lxml's etree.parse(stream)).
+
+        The stream is closed when the context exits; callers must NOT close it
+        themselves.
+
+        Args:
+            url: The complete URL returned by the save() method
+
+        Returns:
+            AbstractContextManager[BinaryIO]: Context manager yielding a readable
+            binary stream (supports .read(n), iteration). The stream is NOT
+            seekable for the HTTP and S3 providers; the FS provider returns a
+            seekable file handle. Callers needing seek can read into io.BytesIO.
+
+        Raises:
+            FileNotFoundError: If the object at the given URL does not exist
+            Exception: For other storage-related errors
+        """
+        pass
+
+    @abstractmethod
     def load_metadata(self, url: str) -> StorageMetadata:
         """
         Loads only the metadata from the storage provider using the URL.
@@ -185,6 +215,26 @@ class StorageProvider(ABC):
         """
         url = self._build_url(who, what, object_id)
         return self.load_content(url)
+
+    def open_content_by_parts(
+        self, who: str, what: str, object_id: str
+    ) -> AbstractContextManager[BinaryIO]:
+        """
+        Convenience method to open a content stream using separate parameters.
+
+        Streaming counterpart of load_content_by_parts().
+
+        Args:
+            who: The "who" value
+            what: The "what" value
+            object_id: The object ID (UUID)
+
+        Returns:
+            AbstractContextManager[BinaryIO]: Context manager yielding a readable
+            binary stream. The caller must NOT close the stream itself.
+        """
+        url = self._build_url(who, what, object_id)
+        return self.open_content(url)
 
     def load_metadata_by_parts(
         self, who: str, what: str, object_id: str
@@ -285,6 +335,49 @@ class StorageProvider(ABC):
 
             provider = HTTPStorageProvider()
             return provider.load_content(url)
+        else:
+            raise ValueError(f"Unsupported URL scheme: {scheme}")
+
+    @staticmethod
+    def open_content_from_url(url: str) -> AbstractContextManager[BinaryIO]:
+        """
+        Static method to open a content stream using URL, auto-selecting the
+        provider.
+
+        Streaming counterpart of load_content_from_url().
+
+        Args:
+            url: The complete URL (e.g., s3://bucket/path or file:///path)
+
+        Returns:
+            AbstractContextManager[BinaryIO]: Context manager yielding a readable
+            binary stream. The caller must NOT close the stream itself.
+        """
+        parsed = urlparse(url)
+        scheme = parsed.scheme.lower()
+
+        if scheme == "s3":
+            from rpsd_storage.providers.s3 import S3StorageProvider
+
+            bucket_name = parsed.netloc
+            provider = S3StorageProvider(bucket_name)
+            return provider.open_content(url)
+        elif scheme == "file":
+            import tempfile
+
+            from rpsd_storage.providers.fs import FSStorageProvider
+
+            # The returned stream targets the URL's own absolute path, so the
+            # temp base dir is irrelevant to the stream and its teardown here
+            # is harmless (mirrors load_content_from_url's idiom).
+            with tempfile.TemporaryDirectory() as temp_dir:
+                provider = FSStorageProvider(temp_dir)
+                return provider.open_content(url)
+        elif scheme in ("http", "https"):
+            from rpsd_storage.providers.http import HTTPStorageProvider
+
+            provider = HTTPStorageProvider()
+            return provider.open_content(url)
         else:
             raise ValueError(f"Unsupported URL scheme: {scheme}")
 
