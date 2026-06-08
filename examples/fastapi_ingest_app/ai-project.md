@@ -137,6 +137,13 @@ one flat `FlowResponse` (a `validate-flow` summary row alongside the parent's
 own tasks) and never sees the subflow; the parent→child tree remains navigable
 in the Prefect UI; and the separate-work-pool topology avoids slot-starvation.
 
+Both flows also publish their `FlowResponse` as a Markdown artifact via
+`publish_flow_artifact` and end with `to_terminal_state` (green on success, red
+`Failed` on failure). The example carries **no `persist_result`**: `Test 9`'s
+`get_flow_response` reads the flat response — folded `validate-flow` row included
+— back from the artifact, and a failing message would show a RED run still
+carrying the curated detail.
+
 ## Consumer (`consumer.py`)
 __DONE__
 

@@ -3,8 +3,11 @@
 # MONZA E BRIANZA, LODI, PAVIA
 """Tests for run_flow / run_flow_async return-shape behavior.
 
-Prefect's ``run_deployment`` and the task-run query are mocked so the
-homogeneous ``FlowResponse`` contract can be exercised without a server.
+Prefect's ``run_deployment``, the task-run query, and the artifact read are
+mocked so the homogeneous ``FlowResponse`` contract can be exercised without a
+server. The rich, flow-authored response is recovered from the run's published
+artifact (``_read_response_from_artifact_async``); when absent, the response is
+synthesised from a task-run query.
 """
 
 from datetime import UTC, datetime
@@ -21,8 +24,6 @@ from rpsd_flow.execute import (
 )
 from rpsd_flow.responses import FlowResponse, TaskResult
 from rpsd_transport.models import MessageMetadata, TransportMessage
-
-_NO_RESULT = object()
 
 
 @pytest.fixture
@@ -49,38 +50,15 @@ class _FakeState:
         StateType.CANCELLED,
     }
 
-    def __init__(
-        self,
-        type_name: str,
-        *,
-        result: object = _NO_RESULT,
-        raises: bool = False,
-        message: str | None = None,
-    ) -> None:
+    def __init__(self, type_name: str, *, message: str | None = None) -> None:
         self.type = StateType[type_name]
         self.message = message
-        self._result = result
-        self._raises = raises
-        self.result_called = False
-        self.aresult_called = False
 
     def is_completed(self) -> bool:
         return self.type == StateType.COMPLETED
 
     def is_final(self) -> bool:
         return self.type in self._TERMINAL
-
-    def result(self, raise_on_failure: bool = False, _sync: bool | None = None):
-        self.result_called = True
-        if self._raises:
-            raise RuntimeError("result not persisted")
-        return self._result
-
-    async def aresult(self, raise_on_failure: bool = False):
-        self.aresult_called = True
-        if self._raises:
-            raise RuntimeError("result not persisted")
-        return self._result
 
 
 class _FakeFlowRun:
@@ -104,8 +82,8 @@ class _FakeFlowRun:
         self.parameters = parameters if parameters is not None else {}
 
 
-def _install(monkeypatch, flow_run, query_results, calls, capture=None):
-    """Patch run_deployment (sync + .aio) and the task-run query."""
+def _install(monkeypatch, flow_run, query_results, artifact, calls, capture=None):
+    """Patch run_deployment (sync + .aio), the task-run query, and the read."""
 
     def fake_run_deployment(**kwargs):
         if capture is not None:
@@ -126,6 +104,14 @@ def _install(monkeypatch, flow_run, query_results, calls, capture=None):
 
     monkeypatch.setattr("rpsd_flow.execute._query_task_results", fake_query)
 
+    async def fake_artifact(_run_id, _flow_name):
+        calls["artifact"] = True
+        return artifact
+
+    monkeypatch.setattr(
+        "rpsd_flow.execute._read_response_from_artifact_async", fake_artifact
+    )
+
 
 _QUERY_RESULTS = [
     TaskResult(task_name="syntax", success=True, duration=0.5),
@@ -136,20 +122,20 @@ _STARTED = datetime(2026, 6, 3, 10, 0, 0, tzinfo=UTC)
 _FINISHED = datetime(2026, 6, 3, 10, 0, 5, tzinfo=UTC)
 
 
-def _verbatim_response() -> FlowResponse:
+def _verbatim_response(*, success: bool = True) -> FlowResponse:
     return FlowResponse(
         incoming=_message(),
         flow_name="verbatim-flow",
-        status="COMPLETED",
-        success=True,
+        status="COMPLETED" if success else "FAILED",
+        success=success,
         task_results=[
             TaskResult(task_name="a", success=True),
-            TaskResult(task_name="b", success=True),
+            TaskResult(task_name="b", success=success, error=None if success else "x"),
         ],
     )
 
 
-def _check_scheduled(response, flow_run, state, calls) -> None:
+def _check_scheduled(response, flow_run, calls) -> None:
     assert response.status == "SCHEDULED"
     assert response.success is None
     assert response.started_at is None
@@ -157,101 +143,108 @@ def _check_scheduled(response, flow_run, state, calls) -> None:
     assert response.task_results == []
     assert response.flow_name == "my-flow"
     assert response.flow_run_id == flow_run.id
-    assert not state.result_called and not state.aresult_called
+    assert "artifact" not in calls
     assert "query" not in calls
 
 
-def _check_verbatim(response, flow_run, state, calls) -> None:
-    assert response.flow_name == "verbatim-flow"  # not synthesized "my-flow"
+def _check_verbatim(response, flow_run, calls) -> None:
+    # The flow's own artifact response is returned verbatim (not synthesised).
+    assert response.flow_name == "verbatim-flow"
     assert response.success is True
     assert len(response.task_results) == 2
-    assert state.result_called or state.aresult_called
+    assert calls.get("artifact") is True
     assert "query" not in calls
 
 
-def _check_completed_non_flowresponse(response, flow_run, state, calls) -> None:
+def _check_failed_verbatim(response, flow_run, calls) -> None:
+    # A FAILED run still returns the curated response from its artifact.
+    assert response.flow_name == "verbatim-flow"
+    assert response.success is False
+    assert response.task_results[-1].error == "x"
+    assert calls.get("artifact") is True
+    assert "query" not in calls
+
+
+def _check_completed_no_artifact(response, flow_run, calls) -> None:
     assert response.success is True
     assert response.status == "COMPLETED"
     assert response.started_at == _STARTED
     assert response.finished_at == _FINISHED
     assert response.task_results == _QUERY_RESULTS
-    assert state.result_called or state.aresult_called
+    assert calls.get("artifact") is True
     assert calls.get("query") is True
 
 
-def _check_failed(response, flow_run, state, calls) -> None:
+def _check_failed_no_artifact(response, flow_run, calls) -> None:
     assert response.success is False
     assert response.status == "FAILED"
     assert response.task_results == _QUERY_RESULTS
-    assert not state.result_called and not state.aresult_called
+    assert calls.get("artifact") is True
     assert calls.get("query") is True
 
 
-def _check_result_raises(response, flow_run, state, calls) -> None:
-    # Result fetch raised but was caught: still a FlowResponse, falls back
-    # to the task-run query.
-    assert response.success is True
-    assert response.status == "COMPLETED"
-    assert response.task_results == _QUERY_RESULTS
-    assert state.result_called or state.aresult_called
-    assert calls.get("query") is True
-
-
-def _check_none_flow_run(response, flow_run, state, calls) -> None:
+def _check_none_flow_run(response, flow_run, calls) -> None:
     assert response.status == "UNKNOWN"
     assert response.success is None
     assert response.flow_run_id is None
     assert response.task_results == []
+    assert "artifact" not in calls
     assert "query" not in calls
 
 
-# name, flow_run factory, query_results, checker
+# name, flow_run factory, query_results, artifact, checker
 SCENARIOS = [
     (
         "fire_and_forget_scheduled",
         lambda: _FakeFlowRun(_FakeState("SCHEDULED")),
         None,
+        None,
         _check_scheduled,
     ),
     (
-        "completed_verbatim",
-        lambda: _FakeFlowRun(_FakeState("COMPLETED", result=_verbatim_response())),
+        "completed_verbatim_artifact",
+        lambda: _FakeFlowRun(_FakeState("COMPLETED")),
         None,
+        _verbatim_response(),
         _check_verbatim,
     ),
     (
-        "completed_non_flowresponse",
+        "failed_verbatim_artifact",
         lambda: _FakeFlowRun(
-            _FakeState("COMPLETED", result="hello"),
+            _FakeState("FAILED", message="boom"),
+            start_time=_STARTED,
+            end_time=_FINISHED,
+        ),
+        None,
+        _verbatim_response(success=False),
+        _check_failed_verbatim,
+    ),
+    (
+        "completed_no_artifact",
+        lambda: _FakeFlowRun(
+            _FakeState("COMPLETED"),
             start_time=_STARTED,
             end_time=_FINISHED,
         ),
         _QUERY_RESULTS,
-        _check_completed_non_flowresponse,
+        None,
+        _check_completed_no_artifact,
     ),
     (
-        "failed",
+        "failed_no_artifact",
         lambda: _FakeFlowRun(
             _FakeState("FAILED", message="boom"),
             start_time=_STARTED,
             end_time=_FINISHED,
         ),
         _QUERY_RESULTS,
-        _check_failed,
-    ),
-    (
-        "completed_result_raises",
-        lambda: _FakeFlowRun(
-            _FakeState("COMPLETED", raises=True),
-            start_time=_STARTED,
-            end_time=_FINISHED,
-        ),
-        _QUERY_RESULTS,
-        _check_result_raises,
+        None,
+        _check_failed_no_artifact,
     ),
     (
         "none_flow_run",
         lambda: None,
+        None,
         None,
         _check_none_flow_run,
     ),
@@ -260,38 +253,42 @@ SCENARIOS = [
 _IDS = [name for name, *_ in SCENARIOS]
 
 
-@pytest.mark.parametrize("name,factory,query_results,check", SCENARIOS, ids=_IDS)
-def test_run_flow_sync(name, factory, query_results, check, monkeypatch):
+@pytest.mark.parametrize(
+    "name,factory,query_results,artifact,check", SCENARIOS, ids=_IDS
+)
+def test_run_flow_sync(name, factory, query_results, artifact, check, monkeypatch):
     flow_run = factory()
-    state = flow_run.state if flow_run is not None else None
     calls: dict[str, bool] = {}
-    _install(monkeypatch, flow_run, query_results, calls)
+    _install(monkeypatch, flow_run, query_results, artifact, calls)
 
     response = run_flow("my-flow/my-dep", _message())
 
     assert isinstance(response, FlowResponse)
-    check(response, flow_run, state, calls)
+    check(response, flow_run, calls)
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("name,factory,query_results,check", SCENARIOS, ids=_IDS)
-async def test_run_flow_async(name, factory, query_results, check, monkeypatch):
+@pytest.mark.parametrize(
+    "name,factory,query_results,artifact,check", SCENARIOS, ids=_IDS
+)
+async def test_run_flow_async(
+    name, factory, query_results, artifact, check, monkeypatch
+):
     flow_run = factory()
-    state = flow_run.state if flow_run is not None else None
     calls: dict[str, bool] = {}
-    _install(monkeypatch, flow_run, query_results, calls)
+    _install(monkeypatch, flow_run, query_results, artifact, calls)
 
     response = await run_flow_async("my-flow/my-dep", _message())
 
     assert isinstance(response, FlowResponse)
-    check(response, flow_run, state, calls)
+    check(response, flow_run, calls)
 
 
 def test_run_flow_forwards_parameters(monkeypatch):
     flow_run = _FakeFlowRun(_FakeState("SCHEDULED"))
     calls: dict[str, bool] = {}
     capture: dict[str, object] = {}
-    _install(monkeypatch, flow_run, None, calls, capture=capture)
+    _install(monkeypatch, flow_run, None, None, calls, capture=capture)
 
     message = _message()
     run_flow("my-flow/my-dep", message, timeout=12.5)
@@ -306,7 +303,7 @@ async def test_run_flow_async_forwards_parameters(monkeypatch):
     flow_run = _FakeFlowRun(_FakeState("SCHEDULED"))
     calls: dict[str, bool] = {}
     capture: dict[str, object] = {}
-    _install(monkeypatch, flow_run, None, calls, capture=capture)
+    _install(monkeypatch, flow_run, None, None, calls, capture=capture)
 
     message = _message()
     await run_flow_async("my-flow/my-dep", message, timeout=12.5)
@@ -344,7 +341,9 @@ class _FakeClient:
         return _FakeFlow(self._flow_name)
 
 
-def _install_get_client(monkeypatch, flow_run, query_results, calls, flow_name):
+def _install_get_client(
+    monkeypatch, flow_run, query_results, artifact, calls, flow_name
+):
     monkeypatch.setattr(
         "prefect.client.orchestration.get_client",
         lambda: _FakeClient(flow_run, flow_name),
@@ -356,6 +355,14 @@ def _install_get_client(monkeypatch, flow_run, query_results, calls, flow_name):
 
     monkeypatch.setattr("rpsd_flow.execute._query_task_results", fake_query)
 
+    async def fake_artifact(_run_id, _flow_name):
+        calls["artifact"] = True
+        return artifact
+
+    monkeypatch.setattr(
+        "rpsd_flow.execute._read_response_from_artifact_async", fake_artifact
+    )
+
 
 @pytest.mark.anyio
 async def test_get_flow_response_pending(monkeypatch):
@@ -364,7 +371,7 @@ async def test_get_flow_response_pending(monkeypatch):
         _FakeState("SCHEDULED"), parameters={"message": msg.model_dump()}
     )
     calls: dict[str, bool] = {}
-    _install_get_client(monkeypatch, flow_run, None, calls, "ingest-flow")
+    _install_get_client(monkeypatch, flow_run, None, None, calls, "ingest-flow")
 
     resp = await get_flow_response_async(flow_run.id)
 
@@ -374,19 +381,36 @@ async def test_get_flow_response_pending(monkeypatch):
     assert resp.flow_run_id == flow_run.id
     assert resp.incoming == msg  # reconstructed from parameters
     assert resp.task_results == []
+    assert "artifact" not in calls
     assert "query" not in calls
 
 
 @pytest.mark.anyio
-async def test_get_flow_response_verbatim(monkeypatch):
+async def test_get_flow_response_verbatim_from_artifact(monkeypatch):
     verbatim = _verbatim_response()
-    flow_run = _FakeFlowRun(_FakeState("COMPLETED", result=verbatim))
+    flow_run = _FakeFlowRun(_FakeState("COMPLETED"))
     calls: dict[str, bool] = {}
-    _install_get_client(monkeypatch, flow_run, None, calls, "ingest-flow")
+    _install_get_client(monkeypatch, flow_run, None, verbatim, calls, "ingest-flow")
 
     resp = await get_flow_response_async(flow_run.id)
 
-    assert resp is verbatim  # returned untouched
+    assert resp is verbatim  # returned untouched, carries its own incoming
+    assert "query" not in calls
+
+
+@pytest.mark.anyio
+async def test_get_flow_response_failed_verbatim_from_artifact(monkeypatch):
+    # A FAILED run with no stored 'message' parameter still resolves, because
+    # the artifact response carries its own incoming.
+    verbatim = _verbatim_response(success=False)
+    flow_run = _FakeFlowRun(_FakeState("FAILED", message="boom"), parameters={})
+    calls: dict[str, bool] = {}
+    _install_get_client(monkeypatch, flow_run, None, verbatim, calls, "ingest-flow")
+
+    resp = await get_flow_response_async(flow_run.id)
+
+    assert resp is verbatim
+    assert resp.success is False
     assert "query" not in calls
 
 
@@ -400,7 +424,9 @@ async def test_get_flow_response_synthesized_with_task_query(monkeypatch):
         parameters={"message": msg.model_dump()},
     )
     calls: dict[str, bool] = {}
-    _install_get_client(monkeypatch, flow_run, _QUERY_RESULTS, calls, "ingest-flow")
+    _install_get_client(
+        monkeypatch, flow_run, _QUERY_RESULTS, None, calls, "ingest-flow"
+    )
 
     resp = await get_flow_response_async(flow_run.id)
 
@@ -416,7 +442,7 @@ async def test_get_flow_response_incoming_override(monkeypatch):
     override = _message(who="bob", what="audit")
     flow_run = _FakeFlowRun(_FakeState("SCHEDULED"), parameters={})
     calls: dict[str, bool] = {}
-    _install_get_client(monkeypatch, flow_run, None, calls, "ingest-flow")
+    _install_get_client(monkeypatch, flow_run, None, None, calls, "ingest-flow")
 
     resp = await get_flow_response_async(flow_run.id, incoming=override)
 
@@ -427,7 +453,7 @@ async def test_get_flow_response_incoming_override(monkeypatch):
 async def test_get_flow_response_no_message_raises(monkeypatch):
     flow_run = _FakeFlowRun(_FakeState("SCHEDULED"), parameters={})
     calls: dict[str, bool] = {}
-    _install_get_client(monkeypatch, flow_run, None, calls, "ingest-flow")
+    _install_get_client(monkeypatch, flow_run, None, None, calls, "ingest-flow")
 
     with pytest.raises(ValueError, match="no 'message' parameter"):
         await get_flow_response_async(flow_run.id)
@@ -436,13 +462,15 @@ async def test_get_flow_response_no_message_raises(monkeypatch):
 def test_get_flow_response_sync(monkeypatch):
     msg = _message()
     flow_run = _FakeFlowRun(
-        _FakeState("COMPLETED", result="not-a-flowresponse"),
+        _FakeState("COMPLETED"),
         start_time=_STARTED,
         end_time=_FINISHED,
         parameters={"message": msg.model_dump()},
     )
     calls: dict[str, bool] = {}
-    _install_get_client(monkeypatch, flow_run, _QUERY_RESULTS, calls, "ingest-flow")
+    _install_get_client(
+        monkeypatch, flow_run, _QUERY_RESULTS, None, calls, "ingest-flow"
+    )
 
     resp = get_flow_response(str(flow_run.id))  # accepts str id
 

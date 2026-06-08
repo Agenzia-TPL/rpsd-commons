@@ -532,9 +532,11 @@ if [ "$COMPOSITE_AVAILABLE" = true ]; then
     echo -e "${BLUE}Test 9: Composite Flow with a subflow${NC}"
     echo -e "  ingest-with-validation-flow saves the file, then invokes validate-flow"
     echo -e "  as a SUBFLOW (timeout=None → waits), folds the child outcome into a"
-    echo -e "  single FLAT FlowResponse, and branches. We trigger the PARENT"
-    echo -e "  fire-and-forget (timeout=0) and poll until it is terminal — the caller"
-    echo -e "  never sees the subflow, only one flat task list with a 'validate-flow' row."
+    echo -e "  single FLAT FlowResponse, publishes it as a Prefect artifact, and branches."
+    echo -e "  We trigger the PARENT fire-and-forget (timeout=0) and poll until terminal."
+    echo -e "  get_flow_response reads the published artifact back (no result persistence),"
+    echo -e "  so the caller sees one flat task list with a 'validate-flow' row and never"
+    echo -e "  the subflow. A failing message would show a RED run still carrying the detail."
     echo ""
 
     uv run python - <<'PY' || true
@@ -656,6 +658,8 @@ if [ "$COMPOSITE_AVAILABLE" = true ]; then
     echo "  • ingest-with-validation-flow — parent, served on its OWN pool (serve-ingest);"
     echo "    invokes validate-flow as a subflow (timeout=None), folds the child into a"
     echo "    FLAT FlowResponse via add_subflow, then branches on child.success"
+    echo "  • Each flow publishes a Markdown artifact; get_flow_response reads it back"
+    echo "    (no result persistence), and a failed run is RED but keeps its detail"
     echo "  • External trigger is fire-and-forget (timeout=0); the wait happens inside"
     echo "    the parent worker, not the caller"
     echo ""

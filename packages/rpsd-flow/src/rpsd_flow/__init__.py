@@ -51,11 +51,23 @@ Responses:
   FlowResponse           Homogeneous response model returned by run_flow(_async)
   TaskResult             Per-Task result carried by a FlowResponse
 
+Artifacts:
+  publish_flow_artifact  Publish a FlowResponse as a Prefect Markdown artifact
+  to_terminal_state      Pick a Flow's terminal return (FlowResponse | Failed)
+  render_flow_markdown   Low-level: render a FlowResponse as artifact markdown
+  parse_flow_artifact_json  Low-level: parse a FlowResponse from artifact markdown
+
 Subprocess tasks:
   subprocess_task         Decorator factory that builds a @task running a CLI script
   SubprocessResult        Result model returned by subprocess tasks
 """
 
+from rpsd_flow.artifacts import (
+    parse_flow_artifact_json,
+    publish_flow_artifact,
+    render_flow_markdown,
+    to_terminal_state,
+)
 from rpsd_flow.execute import (
     get_flow_response,
     get_flow_response_async,
@@ -94,6 +106,11 @@ __all__ = [
     # Responses
     "FlowResponse",
     "TaskResult",
+    # Artifacts
+    "publish_flow_artifact",
+    "to_terminal_state",
+    "render_flow_markdown",
+    "parse_flow_artifact_json",
     # Subprocess tasks
     "subprocess_task",
     "SubprocessResult",

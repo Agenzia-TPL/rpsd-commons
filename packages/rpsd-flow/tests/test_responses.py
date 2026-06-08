@@ -43,7 +43,6 @@ def test_flowresponse_full_roundtrip() -> None:
     finished = datetime(2026, 6, 3, 10, 0, 5, tzinfo=UTC)
     response = FlowResponse(
         incoming=_message(),
-        outgoing=_message(what="result"),
         flow_name="netex-validate",
         flow_run_id=run_id,
         status="COMPLETED",
@@ -59,7 +58,6 @@ def test_flowresponse_full_roundtrip() -> None:
     restored = FlowResponse.model_validate_json(response.model_dump_json())
     assert restored == response
     assert restored.flow_run_id == run_id
-    assert restored.outgoing is not None
     assert len(restored.task_results) == 2
 
 
@@ -72,7 +70,6 @@ def test_flowresponse_pending_minimal() -> None:
     assert response.success is None
     assert response.started_at is None
     assert response.finished_at is None
-    assert response.outgoing is None
     assert response.task_results == []
 
     restored = FlowResponse.model_validate_json(response.model_dump_json())

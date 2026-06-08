@@ -61,8 +61,11 @@ class FlowResponse(BaseModel):
     Parallel to ``TransportMessage`` on the input side. Always returned by
     ``run_flow`` / ``run_flow_async``.
 
-    Composition over inheritance: validation Flows leave ``outgoing``
-    unset; transformation Flows populate it with the produced message.
+    An outcome *report*: it records what happened to ``incoming``, not a
+    produced message. A Flow that emits a new message does so as a
+    side-effect (e.g. a final Task publishes to a broker) or records a
+    storage URL in a ``TaskResult`` — the produced artifact is not carried
+    back inline here.
 
     For fire-and-forget (``timeout=0``) or still-running runs,
     ``success``/``started_at``/``finished_at`` are ``None`` and ``status``
@@ -71,7 +74,6 @@ class FlowResponse(BaseModel):
     """
 
     incoming: TransportMessage
-    outgoing: TransportMessage | None = None
     flow_name: str
     flow_run_id: UUID | None = None
     status: str = UNKNOWN_STATUS

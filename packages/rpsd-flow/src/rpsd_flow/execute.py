@@ -8,17 +8,42 @@ Provides ``run_flow`` (sync) and ``run_flow_async`` (async) — thin wrappers
 around Prefect's ``run_deployment`` that serialise a ``TransportMessage`` as
 deployment parameters, trigger a named deployment run programmatically, and
 return a homogeneous :class:`FlowResponse` describing the run.
+
+For a terminal run, the rich, flow-authored ``FlowResponse`` is recovered from
+the **Markdown artifact** the Flow published (see ``artifacts.py``) — no result
+persistence required, and it works for failed runs too. When no artifact is
+present, the response is synthesised from a Prefect task-run query.
 """
 
 from typing import Any
 from uuid import UUID
 
+from rpsd_flow.artifacts import _read_response_from_artifact_async
 from rpsd_flow.responses import UNKNOWN_STATUS, FlowResponse, TaskResult
 from rpsd_transport.models import TransportMessage
 
 # Sentinel distinguishing "no flow result was fetched" from a flow that
 # legitimately returned ``None``.
 _UNSET = object()
+
+
+async def _verbatim_or_synthesised(
+    flow_run: Any,
+    flow_name: str,
+) -> tuple[Any, list[TaskResult] | None]:
+    """Resolve a terminal run's outcome detail.
+
+    Prefers the verbatim ``FlowResponse`` the Flow published as its Markdown
+    artifact; falls back to a synthesised task-run query. Returns ``(result,
+    task_results)`` for :func:`_to_flow_response`: ``result`` is the verbatim
+    response or ``_UNSET``; ``task_results`` is the synthesised list or ``None``.
+    """
+    run_id = getattr(flow_run, "id", None)
+    if run_id is not None:
+        verbatim = await _read_response_from_artifact_async(run_id, flow_name)
+        if isinstance(verbatim, FlowResponse):
+            return verbatim, None
+    return _UNSET, await _query_task_results(flow_run)
 
 
 def _build_task_result(task_run: Any) -> TaskResult:
@@ -161,10 +186,10 @@ def run_flow(
         - Fire-and-forget / still-running: ``success`` is ``None``,
           ``status`` reflects the current Prefect state (e.g.
           ``"SCHEDULED"``) and ``task_results`` is empty.
-        - Completed run whose flow returned a :class:`FlowResponse`
-          (requires deployment result persistence): that rich response is
-          returned verbatim, with the flow's own ``task_results``.
-        - Completed/failed run otherwise: a synthesised response with
+        - Terminal run whose Flow published its :class:`FlowResponse` as a
+          Markdown artifact (see ``publish_flow_artifact``): that rich
+          response is returned verbatim — for completed *and* failed runs.
+        - Terminal run otherwise: a synthesised response with
           ``task_results`` recovered from a Prefect task-run query.
 
     Raises:
@@ -201,23 +226,19 @@ def run_flow(
         timeout=timeout,
     )
 
+    flow_name = deployment_name.split("/", 1)[0]
     result: Any = _UNSET
     task_results: list[TaskResult] | None = None
     state = getattr(flow_run, "state", None)
-    if state is not None and state.is_completed():
-        try:
-            result = state.result(raise_on_failure=False, _sync=True)
-        except Exception:
-            result = _UNSET
-        if not isinstance(result, FlowResponse):
-            task_results = run_coro_as_sync(_query_task_results(flow_run))
-    elif state is not None and state.is_final():
-        task_results = run_coro_as_sync(_query_task_results(flow_run))
+    if state is not None and state.is_final():
+        result, task_results = run_coro_as_sync(
+            _verbatim_or_synthesised(flow_run, flow_name)
+        )
 
     return _to_flow_response(
         flow_run,
         message,
-        deployment_name.split("/", 1)[0],
+        flow_name,
         result=result,
         task_results=task_results,
     )
@@ -290,23 +311,17 @@ async def run_flow_async(
         timeout=timeout,
     )
 
+    flow_name = deployment_name.split("/", 1)[0]
     result: Any = _UNSET
     task_results: list[TaskResult] | None = None
     state = getattr(flow_run, "state", None)
-    if state is not None and state.is_completed():
-        try:
-            result = await state.aresult(raise_on_failure=False)
-        except Exception:
-            result = _UNSET
-        if not isinstance(result, FlowResponse):
-            task_results = await _query_task_results(flow_run)
-    elif state is not None and state.is_final():
-        task_results = await _query_task_results(flow_run)
+    if state is not None and state.is_final():
+        result, task_results = await _verbatim_or_synthesised(flow_run, flow_name)
 
     return _to_flow_response(
         flow_run,
         message,
-        deployment_name.split("/", 1)[0],
+        flow_name,
         result=result,
         task_results=task_results,
     )
@@ -362,9 +377,9 @@ async def get_flow_response_async(
 
     Returns:
         A :class:`FlowResponse` describing the run, with the same three shapes
-        as ``run_flow`` (verbatim flow response when completed and persisted,
-        synthesised with a task-run query otherwise, or "pending" while the
-        run is not yet terminal).
+        as ``run_flow`` (verbatim flow response recovered from the published
+        artifact — for completed *and* failed runs, synthesised with a task-run
+        query otherwise, or "pending" while the run is not yet terminal).
 
     Raises:
         ValueError: If the run has no usable ``message`` parameter and no
@@ -376,22 +391,18 @@ async def get_flow_response_async(
 
     async with get_client() as client:
         flow_run = await client.read_flow_run(run_id)
-
-        result: Any = _UNSET
-        task_results: list[TaskResult] | None = None
-        state = getattr(flow_run, "state", None)
-        if state is not None and state.is_completed():
-            try:
-                result = await state.aresult(raise_on_failure=False)
-            except Exception:
-                result = _UNSET
-            if isinstance(result, FlowResponse):
-                return result
-            task_results = await _query_task_results(flow_run)
-        elif state is not None and state.is_final():
-            task_results = await _query_task_results(flow_run)
-
         flow_name = await _resolve_flow_name(client, flow_run)
+
+    result: Any = _UNSET
+    task_results: list[TaskResult] | None = None
+    state = getattr(flow_run, "state", None)
+    if state is not None and state.is_final():
+        result, task_results = await _verbatim_or_synthesised(flow_run, flow_name)
+
+    # A verbatim artifact response already carries its own ``incoming``, so
+    # return it without requiring the run's stored ``message`` parameter.
+    if isinstance(result, FlowResponse):
+        return result
 
     resolved_incoming = incoming or _incoming_from_flow_run(flow_run)
     if resolved_incoming is None:
@@ -404,7 +415,7 @@ async def get_flow_response_async(
         flow_run,
         resolved_incoming,
         flow_name,
-        result=_UNSET,
+        result=result,
         task_results=task_results,
     )
 

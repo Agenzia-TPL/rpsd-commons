@@ -395,24 +395,23 @@ __DONE__
 
 **Problem**: `rpsd-flow` has an input-side primitive (`TransportMessage`, passed to `run_flow`) but no symmetric output-side one. Each component that exposes Flow outcomes invents its own response shape, and `run_flow` / `run_flow_async` return a raw Prefect `FlowRun` typed as `Any` — leaking Prefect internals and offering no per-Task detail.
 
-**Proposed Solution**: Add a canonical `FlowResponse` / `TaskResult` pair (new `responses.py`, re-exported from the package), parallel to `TransportMessage`. `FlowResponse` carries `incoming` (required), optional `outgoing` (set by transformation Flows, unset by validation Flows), `flow_name`, `flow_run_id`, `status`, `success`, `started_at`, `finished_at`, and a list of `TaskResult` (`task_name`, `success`, `error`, `duration`). We'll change `run_flow` / `run_flow_async` to always return a `FlowResponse`.
+**Proposed Solution**: Add a canonical `FlowResponse` / `TaskResult` pair (new `responses.py`, re-exported from the package), parallel to `TransportMessage`. `FlowResponse` carries `incoming` (required), `flow_name`, `flow_run_id`, `status`, `success`, `started_at`, `finished_at`, and a list of `TaskResult` (`task_name`, `success`, `error`, `duration`). We'll change `run_flow` / `run_flow_async` to always return a `FlowResponse`. (An `outgoing` field was considered for transformation Flows but **dropped**: unused, and a produced message is a side-effect — a final Task publishes to a broker — or a storage URL, not carried back inline. Re-adding later is additive.)
 
 Key design decisions:
 - Homogeneous return: `run_flow` always returns a `FlowResponse`, never a raw `FlowRun`. Callers branch on `success`/`status`, not on the return type.
 - The outcome fields (`success`, `started_at`, `finished_at`) are optional so one type covers a run's whole lifecycle. Fire-and-forget (`timeout=0`) yields a "submitted / not-yet-known" response (`success=None`).
 - `success` (not `ok`) reuses the word already used by `SubprocessResult.success`.
 - `status` is a free-form `str` (the stringified Prefect state type) so the model stays Prefect-free and tolerant of new states; no enum.
-- Source of per-Task detail, in priority order: (1) the Flow's own returned `FlowResponse`, verbatim, when the run completed (requires deployment result persistence); (2) a synthesised response whose `task_results` are recovered by querying the run's Prefect task runs — so a partial failure still lists the Tasks that ran before it; (3) a "pending" response for fire-and-forget / still-running runs. `run_flow` never raises on a result-fetch problem.
-- Flows should return `FlowResponse(success=False, ...)` on handled failures (rather than a Prefect `Failed` state) to surface curated per-Task errors through the verbatim path.
+- Source of per-Task detail, in priority order: (1) the Flow's own `FlowResponse`, recovered verbatim from the **Markdown artifact** it published (see "Flow artifacts + failure UX") — for completed *and* failed runs, no result persistence; (2) a synthesised response whose `task_results` are recovered by querying the run's Prefect task runs — so a partial failure still lists the Tasks that ran before it; (3) a "pending" response for fire-and-forget / still-running runs. `run_flow` never raises on a result-fetch problem.
 
-**Expected outcome**: A non-Python custom UI, monitoring component, or ingest pipeline can consume one typed, JSON-serialisable Flow outcome regardless of the Flow. The shape is Flow-agnostic (validation vs transformation) and needs no change when Tasks are added.
+**Expected outcome**: A non-Python custom UI, monitoring component, or ingest pipeline can consume one typed, JSON-serialisable Flow outcome regardless of the Flow. The shape is Flow-agnostic and needs no change when Tasks are added.
 
 ## Flow response retrieval (fire-and-forget → poll later)
 __DONE__
 
 **Problem**: `run_flow` with the default `timeout=0` (fire-and-forget) returns a "pending" `FlowResponse` (`success=None`, empty `task_results`) containing only `flow_run_id`. There is no way to retrieve the outcome later without reconstructing the Prefect-client logic — `FlowResponse` synthesis, task-run query, verbatim-result fetch — that already lives inside `run_flow`.
 
-**Proposed Solution**: Add a symmetric retrieval pair `get_flow_response(flow_run_id)` / `get_flow_response_async(flow_run_id)` to `execute.py`, re-exported from the package. Given a `flow_run_id` (UUID or str), they read the run from the Prefect client and apply the same three-tier response logic as `run_flow`: verbatim flow response when completed and persisted, synthesised-with-task-run-query otherwise, pending while not terminal. `run_flow` never raises; neither do these.
+**Proposed Solution**: Add a symmetric retrieval pair `get_flow_response(flow_run_id)` / `get_flow_response_async(flow_run_id)` to `execute.py`, re-exported from the package. Given a `flow_run_id` (UUID or str), they read the run from the Prefect client and apply the same three-tier response logic as `run_flow`: verbatim flow response read back from the run's published artifact (completed *or* failed), synthesised-with-task-run-query otherwise, pending while not terminal. `run_flow` never raises; neither do these.
 
 Key design decisions:
 - `incoming` is reconstructed from the run's stored `parameters["message"]` (Prefect retains them), so callers keep no per-run state. An explicit `incoming=` kwarg overrides. Raises `ValueError` only if neither source is available.
@@ -438,6 +437,21 @@ Key design decisions:
 - **Topology caveat (operational, not API).** A blocking parent holds a concurrency slot for the child's whole duration; parent and child must be served on **separate processes / work pools** or risk slot-starvation/deadlock. Native same-process subflows would avoid this but require importing the child's code, impossible across services.
 
 **Expected outcome**: services compose Flows across service boundaries with fire-and-forget at the edge and blocking-with-branch inside, while the outer caller consumes one flat `FlowResponse` and stays oblivious to the composition. Demonstrated by the `validate-flow` + `ingest-with-validation-flow` example in `examples/fastapi_ingest_app/subflow_example.py`.
+
+## Flow artifacts + failure UX
+__DONE__
+
+**Problem**: the original `run_flow` recovered a Flow's rich `FlowResponse` via Prefect `state.result()`, which only works on a `Completed` state and only with deployment result persistence (`persist_result=True`). That forced two bad trade-offs: (1) to surface curated per-Task detail on failure we'd have to end failed business runs as `Completed` (green) — operationally misleading in the Prefect UI, not alertable, not retried; and (2) result persistence needs shared result storage and bloats it with the inline message. rpsd-validator had independently solved this better, by publishing the `FlowResponse` as a Prefect **Markdown artifact** and returning a `Failed` state on failure (red run).
+
+**Proposed Solution**: upstream that pattern into rpsd-flow as `artifacts.py`. A Flow publishes its `FlowResponse` as a Markdown artifact (✅/❌ summary + a fenced `json` block of `model_dump_json()`) on every run via `publish_flow_artifact(response)`, then `return to_terminal_state(response)` (the response on success → green run; a Prefect `Failed` on failure → red run). The **artifact, not result persistence, is the durable carrier**: `run_flow` / `get_flow_response` recover the verbatim `FlowResponse` for any *terminal* run (completed *or* failed) by reading the artifact — `execute.py` replaces its `state.result()` branch with an internal artifact read, falling back to the synthesised task-run query when no artifact exists. Low-level `render_flow_markdown` / `parse_flow_artifact_json` are exposed for raw-artifact consumers (e.g. a custom UI).
+
+Key design decisions:
+- **No caller-facing artifact/key API.** The artifact key is derived by convention from the flow name on both the publish and read sides, so callers keep using plain `get_flow_response(flow_run_id)` and never see an artifact or key.
+- **No `persist_result`, no `FLOW__PERSIST_RESULT` setting.** Adding our own setting would let developers enable it without configuring shared result storage; instead we lean on the artifact and leave Prefect's native `PREFECT_RESULTS_PERSIST_BY_DEFAULT` as an optional footnote for anyone wanting verbatim programmatic `state.result()`.
+- **Failed runs carry curated detail automatically.** Because the artifact (published before the `Failed` return) is the verbatim source, `get_flow_response` returns the curated `FlowResponse(success=False, …)` for red runs too — the earlier "failed runs lose detail" gap disappears.
+- **`to_terminal_state` hides `prefect.states.Failed`** so flow authors don't import Prefect state constructors.
+
+**Expected outcome**: failed business runs are honest (red, alertable, retry-eligible) in the Prefect UI while still exposing curated per-Task detail; consumers read one homogeneous `FlowResponse` with no persistence setup; and rpsd-validator's private artifact helpers collapse into the shared rpsd-flow ones. Demonstrated by `subflow_example.py` + `demo.sh` Test 9.
 
 ## Subprocess Task
 __DONE__

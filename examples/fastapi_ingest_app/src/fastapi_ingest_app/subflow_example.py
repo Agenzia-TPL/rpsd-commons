@@ -48,15 +48,18 @@ import warnings
 from datetime import UTC, datetime
 from typing import Any
 
+from prefect.client.schemas.objects import State
 from prefect.runtime import flow_run as flow_run_runtime
 
 from rpsd_flow import (
     FlowResponse,
     TaskResult,
     flow,
+    publish_flow_artifact,
     run_flow_async,
     serve_flows,
     task,
+    to_terminal_state,
 )
 from rpsd_transport.models import TransportMessage
 
@@ -89,16 +92,15 @@ def check_metadata(message: TransportMessage) -> None:
     logger.info("Metadata OK for %s/%s", message.who, message.what)
 
 
-# persist_result=True so run_flow_async / get_flow_response can return the Flow's
-# own rich FlowResponse verbatim (the "flow-authored" path) rather than degrading
-# to a synthesised task-run query — see the README "Result-persistence caveat".
-@flow(name="validate-flow", log_prints=True, persist_result=True)
-def validate_flow(message: TransportMessage) -> FlowResponse:
-    """Validate an ingested message and return a rich ``FlowResponse``.
+@flow(name="validate-flow", log_prints=True)
+def validate_flow(message: TransportMessage) -> FlowResponse | State:
+    """Validate an ingested message; publish its outcome as an artifact.
 
-    Returns a ``FlowResponse`` (with ``success=False`` on failure) rather than
-    raising, so the parent Flow gets the child's ``success`` and per-Task detail
-    verbatim through ``run_flow_async``.
+    Builds a ``FlowResponse``, publishes it as a Markdown artifact (so the
+    parent Flow / callers can read the curated outcome back via
+    ``run_flow_async`` / ``get_flow_response`` — even on failure), then returns
+    it green on success or a Prefect ``Failed`` state (red run) on failure via
+    ``to_terminal_state``. No result persistence needed.
     """
     started_at = datetime.now(UTC)
     task_results: list[TaskResult] = []
@@ -123,16 +125,19 @@ def validate_flow(message: TransportMessage) -> FlowResponse:
             )
         )
 
-    return FlowResponse(
+    success = all(r.success for r in task_results)
+    response = FlowResponse(
         incoming=message,
         flow_name="validate-flow",
         flow_run_id=flow_run_runtime.id,
-        status="COMPLETED",
-        success=all(r.success for r in task_results),
+        status="COMPLETED" if success else "FAILED",
+        success=success,
         started_at=started_at,
         finished_at=datetime.now(UTC),
         task_results=task_results,
     )
+    publish_flow_artifact(response)
+    return to_terminal_state(response)
 
 
 # --- Higher-level Flow: invokes the validator as a subflow ---
@@ -159,8 +164,10 @@ def handle_failure(message: TransportMessage) -> None:
     logger.warning("Validation failed — running failure handler.")
 
 
-@flow(name="ingest-with-validation-flow", log_prints=True, persist_result=True)
-async def ingest_with_validation_flow(message: TransportMessage) -> FlowResponse:
+@flow(name="ingest-with-validation-flow", log_prints=True)
+async def ingest_with_validation_flow(
+    message: TransportMessage,
+) -> FlowResponse | State:
     """Save the file, validate it via a subflow, then branch on the result.
 
     Invokes ``validate-flow`` as a Prefect subflow with ``timeout=None`` (waits
@@ -168,8 +175,10 @@ async def ingest_with_validation_flow(message: TransportMessage) -> FlowResponse
     ``task_results`` with ``add_subflow``, then runs ``dispatch-success`` or
     ``handle-failure`` depending on ``child.success``.
 
-    The returned ``FlowResponse`` is flat: the caller sees one uniform list of
-    ``TaskResult`` and need not know a subflow ran.
+    Publishes the flat ``FlowResponse`` as a Markdown artifact (the caller reads
+    it back via ``get_flow_response`` — incl. the folded ``validate-flow`` row,
+    with no result persistence) and ends the run green/red via
+    ``to_terminal_state``.
     """
     started_at = datetime.now(UTC)
     response = FlowResponse(
@@ -216,13 +225,15 @@ async def ingest_with_validation_flow(message: TransportMessage) -> FlowResponse
     # The parent owns its own success: the folded child row participates in the
     # all(...) rollup through child.success, with no re-derivation.
     response.success = all(r.success for r in response.task_results)
+    response.status = "COMPLETED" if response.success else "FAILED"
     response.finished_at = datetime.now(UTC)
     logger.info(
         "Flow response: success=%s, tasks=%d",
         response.success,
         len(response.task_results),
     )
-    return response
+    publish_flow_artifact(response)
+    return to_terminal_state(response)
 
 
 # --- Serving (separate processes / work pools) ---

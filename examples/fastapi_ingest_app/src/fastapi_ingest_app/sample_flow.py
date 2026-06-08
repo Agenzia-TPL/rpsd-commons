@@ -196,8 +196,7 @@ def ingest_flow(message: TransportMessage) -> FlowResponse:
             The ``where`` field contains the storage URL.
 
     Returns:
-        A populated ``FlowResponse`` (``outgoing`` left ``None`` — this is a
-        processing Flow, not a transformation that emits a new message).
+        A populated ``FlowResponse`` describing the run's per-Task outcome.
     """
     started_at = datetime.now(UTC)
     task_results: list[TaskResult] = []

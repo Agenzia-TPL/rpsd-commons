@@ -19,6 +19,9 @@ canonical, transport-aligned response model.
   `TransportMessage` and get back a homogeneous **`FlowResponse`**.
 - **`FlowResponse` / `TaskResult`** — the output-side primitive, parallel to
   `TransportMessage` on the input side.
+- **`publish_flow_artifact` / `to_terminal_state`** — record a Flow's outcome as
+  a Prefect Markdown artifact and end the run green (success) or red (failure);
+  the artifact is the durable carrier `run_flow` / `get_flow_response` read back.
 - **`subprocess_task` / `SubprocessResult`** — build a `@task` that runs a CLI
   command, feeding message data through env vars, stdin, args, or file I/O.
 
@@ -103,8 +106,8 @@ else:
     ...  # terminal: response.success + response.task_results
 ```
 
-It returns the same homogeneous `FlowResponse` (verbatim flow response when
-completed and persisted, synthesised with a task-run query otherwise, pending
+It returns the same homogeneous `FlowResponse` (verbatim flow response read back
+from the run's artifact, synthesised with a task-run query otherwise, pending
 while not terminal). The original `incoming` message is reconstructed from the
 run's stored parameters, so no caller-side state is needed; pass
 `incoming=...` to override.
@@ -117,7 +120,6 @@ A single, homogeneous type is **always** returned, parallel to
 | Field          | Type                      | Notes |
 |----------------|---------------------------|-------|
 | `incoming`     | `TransportMessage`        | The message passed to `run_flow`. Always present. |
-| `outgoing`     | `TransportMessage \| None`| Set by transformation Flows that produce a new message; `None` for validation Flows. |
 | `flow_name`    | `str`                     | The flow name (first segment of the deployment name, or authored by the Flow). |
 | `flow_run_id`  | `UUID \| None`            | The Prefect flow-run id. |
 | `status`       | `str`                     | Stringified Prefect state type: `"SCHEDULED"`, `"RUNNING"`, `"COMPLETED"`, `"FAILED"`, … (or `"UNKNOWN"`). |
@@ -137,35 +139,41 @@ A single, homogeneous type is **always** returned, parallel to
 
 ### Where the response comes from
 
-`run_flow` returns one of three shapes, in priority order:
+`run_flow` / `get_flow_response` return one of three shapes, in priority order:
 
-1. **The Flow's own response (verbatim).** If the run completed and the Flow
-   returned a `FlowResponse`, that rich object is returned as-is — with the
-   curated per-Task `error` messages and `outgoing` the Flow set. *Requires
-   the deployment to enable Prefect result persistence.*
-2. **A synthesised response with recovered task detail.** If the run finished
-   (or failed) but no `FlowResponse` was available, `run_flow` queries the
-   run's Prefect task runs and builds one `TaskResult` per Task that ran
-   (`success`/`duration` from each task's state, `error` from its state
-   message). This is how a **partial failure still reports the Tasks that ran
-   before it**.
+1. **The Flow's own response (verbatim).** For any **terminal** run — completed
+   *or* failed — that published its `FlowResponse` as a Markdown artifact (see
+   [Result artifacts](#result-artifacts)), that rich object is read back and
+   returned as-is, with the Flow's curated per-Task `error` messages and any
+   folded subflow rows. **No result persistence required.**
+2. **A synthesised response with recovered task detail.** If a terminal run
+   published no artifact, `run_flow` queries the run's Prefect task runs and
+   builds one `TaskResult` per Task that ran (`success`/`duration` from each
+   task's state, `error` from its state message). This is how a **partial
+   failure still reports the Tasks that ran before it**.
 3. **A "pending" response.** For fire-and-forget or a still-running run,
    `success`/`started_at`/`finished_at` are `None`, `status` reflects the
    current Prefect state, and `task_results` is empty.
 
 `run_flow` never raises on a result-fetch problem — it always returns a
-`FlowResponse`.
+`FlowResponse`. Callers never touch artifacts or keys; this all happens
+internally.
 
-### Authoring a Flow that returns a `FlowResponse`
+## Result artifacts
 
-A Flow gets the richest result (shape 1) by building and returning a
-`FlowResponse` itself. To make a *failure* surface its per-Task detail through
-`run_flow`, return a `FlowResponse(success=False, …)` rather than a Prefect
-`Failed` state:
+A Flow records its outcome by **publishing a Markdown artifact** carrying a
+human ✅/❌ summary *and* a fenced `json` block with the full `FlowResponse`. The
+artifact — not result persistence — is the durable, UI-visible, machine-readable
+carrier: it is published on success **and** failure, so the outcome survives
+regardless of run state, and a failed run still shows **red** in the Prefect UI.
+
+Author a Flow with two helpers:
 
 ```python
 from datetime import UTC, datetime
-from rpsd_flow import flow, FlowResponse, TaskResult
+from rpsd_flow import (
+    flow, FlowResponse, TaskResult, publish_flow_artifact, to_terminal_state,
+)
 from rpsd_transport.models import TransportMessage
 
 @flow(name="netex-validate")
@@ -173,7 +181,7 @@ def netex_validate(message: TransportMessage) -> FlowResponse:
     started = datetime.now(UTC)
     results: list[TaskResult] = []
     # ... run tasks, appending TaskResult(...) for each ...
-    return FlowResponse(
+    response = FlowResponse(
         incoming=message,
         flow_name="netex-validate",
         status="COMPLETED",
@@ -182,7 +190,22 @@ def netex_validate(message: TransportMessage) -> FlowResponse:
         finished_at=datetime.now(UTC),
         task_results=results,
     )
+    publish_flow_artifact(response)          # always, before returning
+    return to_terminal_state(response)       # FlowResponse (green) | Failed (red)
 ```
+
+- `publish_flow_artifact(response)` derives the artifact key from the flow name,
+  so `get_flow_response` finds it again with **no caller-side key handling**.
+  Call it inside the running Flow, once per run.
+- `to_terminal_state(response)` returns the `response` when `success` is truthy
+  (run ends *Completed* / green) or a Prefect `Failed` state otherwise (run ends
+  *Failed* / red, so the UI is honest and retries can fire). The curated detail
+  still reaches consumers through the artifact, so `get_flow_response` returns
+  the rich `FlowResponse` even for the failed run.
+
+`render_flow_markdown(response)` and `parse_flow_artifact_json(markdown)` are
+low-level helpers for code that deliberately works with the raw artifact (e.g. a
+custom UI rendering the markdown); normal flow authors and callers need neither.
 
 ## Composing Flows (subflows)
 
@@ -214,7 +237,9 @@ outcome into its own `FlowResponse` with `add_subflow`, keeping `task_results` a
 flat list:
 
 ```python
-from rpsd_flow import flow, run_flow_async, FlowResponse, TaskResult
+from rpsd_flow import (
+    flow, run_flow_async, FlowResponse, publish_flow_artifact, to_terminal_state,
+)
 from rpsd_transport.models import TransportMessage
 
 @flow(name="ingest-flow", log_prints=True)
@@ -234,7 +259,8 @@ async def ingest_flow(message: TransportMessage) -> FlowResponse:
 
     response.status = "COMPLETED"
     response.success = all(r.success for r in response.task_results)
-    return response
+    publish_flow_artifact(response)
+    return to_terminal_state(response)
 ```
 
 `add_subflow(child)` appends a single summary `TaskResult` (`task_name` = the child's
@@ -326,19 +352,25 @@ covers a run's whole lifecycle (submitted → running → terminal). A
 fire-and-forget invocation returns a meaningful "submitted / not-yet-known"
 response instead of forcing fabricated values.
 
-### Failure detail: Flow first, query fallback
+### Failure detail: artifact first, query fallback
 
 The Flow is the authoritative source of curated per-Task errors, so its own
-`FlowResponse` is preferred. When only a Prefect `Failed` state is available,
-`run_flow` falls back to a task-run query so the Tasks that ran before the
-failure are still listed — at the cost of one extra Prefect API call and
-Prefect's generic state messages instead of curated ones.
+`FlowResponse` — published as a Markdown artifact — is preferred, for failed runs
+too. When a terminal run published no artifact, `run_flow` falls back to a
+task-run query so the Tasks that ran before the failure are still listed, at the
+cost of one extra Prefect API call and Prefect's generic state messages instead
+of curated ones.
 
-### Result-persistence caveat
+### Why the artifact (not result persistence) carries the outcome
 
-The "verbatim Flow response" path requires the deployment to persist results
-(`persist_result=True`); without it, `run_flow` degrades to the synthesised
-task-run-query response.
+The rich `FlowResponse` is published as a Prefect **artifact** rather than
+relying on Prefect *result persistence* (`persist_result`). The artifact needs
+no result-storage configuration, is visible in the Prefect UI, is published on
+**failure** as well as success, and is read back by `run_flow` /
+`get_flow_response` with no caller-side key handling. (If you separately want
+verbatim *programmatic* results from `state.result()`, Prefect's
+`PREFECT_RESULTS_PERSIST_BY_DEFAULT` + a shared result-storage block remain
+available, but the package no longer relies on them.)
 
 ## Known warnings
 
